@@ -48,6 +48,7 @@ try {
     return result.result.value;
   };
   const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
+  const customCourseOption = '__custom_course__';
   const change = (selector,value) => evaluate(`(()=>{const input=document.querySelector(${JSON.stringify(selector)});input.value=${JSON.stringify(value)};input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
   const submit = (selector,fields) => evaluate(`(()=>{const form=document.querySelector(${JSON.stringify(selector)});for(const [key,value] of Object.entries(${JSON.stringify(fields)})){form.elements[key].value=value;}form.requestSubmit();})()`);
   const nav = target => click(`[data-action="nav"][data-page="${target}"]`);
@@ -93,7 +94,7 @@ try {
   await screenshot('pending.png');
   await click('#pending-confirm-button');
   assert(await evaluate('(()=>{const e=document.querySelector("form[data-mode=pending] .error"),r=e.getBoundingClientRect(),s=document.querySelector(".detail-scroll").getBoundingClientRect();return !e.hidden && r.top>=s.top && r.bottom<=s.bottom && items.find(i=>i.id==="p2").state==="pending";})()'),'Incomplete confirmation reveals an error inside the visible scroll area without creating a task');
-  await evaluate('document.querySelector("form[data-mode=pending]").elements.course.value="专业发展";document.querySelector("form[data-mode=pending]").elements.due.value="2026-10-14"');
+  await evaluate('document.querySelector("form[data-mode=pending]").elements.course.value="校园通知";document.querySelector("form[data-mode=pending]").elements.due.value="2026-10-14"');
   const confirmPoint = await evaluate('(()=>{const r=document.querySelector("#pending-confirm-button").getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()');
   await call('Input.dispatchMouseEvent',{type:'mousePressed',...confirmPoint,button:'left',buttons:1,clickCount:1});
   await call('Input.dispatchMouseEvent',{type:'mouseReleased',...confirmPoint,button:'left',buttons:0,clickCount:1});
@@ -225,6 +226,59 @@ try {
   await evaluate('document.querySelector("#search").value="程序设计课程群";document.querySelector("#search").dispatchEvent(new Event("input",{bubbles:true}))');
   assert(await evaluate('document.querySelectorAll(".task-row").length === 1 && document.querySelector(".task-row").dataset.id === "t4"'),'Search also matches source group');
 
+  await reset(); await nav('tasks'); await select('t1');
+  await click('#detail-pane details summary');
+  await change('form[data-mode=save] select[name=course]','大学英语');
+  await change('form[data-mode=save] select[name=course]',customCourseOption);
+  await click('#course-dialog [data-action="close-modal"]');
+  assert(await evaluate('document.querySelector("form[data-mode=save] select[name=course]").value === "大学英语" && items.find(i=>i.id==="t1").course === "数据结构"'),'Cancelling custom course creation restores the prior unsaved selection');
+  await change('form[data-mode=save] select[name=course]',customCourseOption);
+  assert(await evaluate('document.querySelector("#course-dialog").open && document.querySelector("#course-dialog").textContent.includes("同步到课程筛选")'),'Course selector exposes a custom option with synchronization guidance');
+  await submit('#course-dialog form',{courseName:'   '});
+  assert(await evaluate('document.querySelector("#course-dialog").open && !document.querySelector("#course-dialog .error").hidden && !courseOptions().includes("   ")'),'Blank custom course is rejected with a visible error');
+  await submit('#course-dialog form',{courseName:'离散数学'});
+  const courseSync = await evaluate('(()=>{const options=[...document.querySelectorAll("select[data-course-select]")].map(s=>[...s.options].filter(o=>o.value!==""&&o.value!=="__custom_course__").map(o=>o.value).sort());return {open:document.querySelector("#course-dialog").open,itemCourse:items.find(i=>i.id==="t1").course,formCourse:document.querySelector("form[data-mode=save] select[name=course]")?.value,options};})()');
+  assert(!courseSync.open && courseSync.itemCourse==='数据结构' && courseSync.formCourse==='离散数学' && JSON.stringify(courseSync.options[0])===JSON.stringify(courseSync.options[1]) && courseSync.options[0].includes('离散数学'),'Custom course added from the detail form synchronizes both dropdowns without changing the saved item');
+  await change('form[data-mode=save] select[name=course]','离散数学');
+  await submit('form[data-mode=save]',{course:'离散数学'});
+  assert(await evaluate('items.find(i=>i.id==="t1").course === "离散数学" && filters.course === ""'),'Selecting a course in an item does not silently change the list filter');
+  await change('#course-filter',customCourseOption);
+  await submit('#course-dialog form',{courseName:'人工智能导论'});
+  assert(await evaluate('filters.course === "" && document.querySelector("#course-filter").value === "" && document.querySelector("#course-filter").textContent.includes("人工智能导论") && document.querySelector("form[data-mode=save] select[name=course]").textContent.includes("人工智能导论")'),'Custom course added from the filter synchronizes both dropdowns without changing the active filter');
+  await reload(); await nav('tasks');
+  assert(await evaluate('courseOptions().includes("离散数学") && courseOptions().includes("人工智能导论") && document.querySelector("#course-filter").textContent.includes("人工智能导论")'),'Custom course options persist across refresh');
+  await select('t2');
+  await change('form[data-mode=save] select[name=course]',customCourseOption);
+  await submit('#course-dialog form',{courseName:' 离散数学 '});
+  assert(await evaluate('courseOptions().filter(c=>c==="离散数学").length === 1 && document.querySelector("form[data-mode=save] select[name=course]").value === "离散数学"'),'Duplicate name reuses the existing course and trims surrounding whitespace');
+  await change('#course-filter','高等数学');
+  await change('#course-filter',customCourseOption);
+  await click('#course-dialog [data-action="close-modal"]');
+  assert(await evaluate('filters.course === "高等数学" && document.querySelector("#course-filter").value === "高等数学"'),'Cancelling from filter preserves its active course');
+
+  await reset();
+  assert(await evaluate('document.querySelector("select[name=course]").value === "大学物理" && document.querySelector("#course-filter").textContent.includes("离散数学")'),'Reset retains custom course options and preserves the example item course');
+  await evaluate('(()=>{const form=document.querySelector("form[data-mode=pending]");form.elements.title.value="物理预习草稿";form.elements.due.value="2026-10-12";form.elements.time.value="18:00";form.elements.imageConfirmed.checked=true;})()');
+  await change('form[data-mode=pending] select[name=course]',customCourseOption);
+  await submit('#course-dialog form',{courseName:' 工程实践 '});
+  assert(await evaluate('(()=>{const f=document.querySelector("form[data-mode=pending]");return f.elements.title.value==="物理预习草稿" && f.elements.due.value==="2026-10-12" && f.elements.time.value==="18:00" && f.elements.imageConfirmed.checked && f.elements.course.value==="工程实践" && document.querySelector("#course-filter").textContent.includes("工程实践");})()'),'Adding a course preserves unsaved pending title, date, time and image confirmation');
+  await evaluate('document.querySelector("select[name=course]").scrollIntoView({block:"center"})');
+  await screenshot('courses.png');
+  await click('#pending-confirm-button');
+  assert(await evaluate('items.find(i=>i.id==="p1").course === "工程实践" && items.find(i=>i.id==="p1").state === "active"'),'Pending item can be confirmed using a custom course');
+  await change('#course-filter','工程实践');
+  assert(await evaluate('document.querySelectorAll(".task-row").length === 1 && document.querySelector(".task-row").dataset.id === "p1"'),'Custom course filter finds its assigned task');
+
+  await reset(); await click('[data-action="new"]');
+  await evaluate('(()=>{const form=document.querySelector("#new-dialog form");form.elements.title.value="自定义课程作业";form.elements.due.value="2026-10-15";})()');
+  await change('#new-dialog select[name=course]',customCourseOption);
+  await submit('#course-dialog form',{courseName:'数据库原理'});
+  assert(await evaluate('document.querySelector("#new-dialog").open && document.querySelector("#new-dialog input[name=title]").value === "自定义课程作业" && document.querySelector("#new-dialog input[name=due]").value === "2026-10-15" && document.querySelector("#new-dialog select[name=course]").value === "数据库原理" && document.querySelector("#course-filter").textContent.includes("数据库原理")'),'Nested custom course dialog preserves manual-task draft and updates all course choices');
+  await submit('#new-dialog form',{});
+  assert(await evaluate('items.some(i=>i.manual && i.course==="数据库原理" && i.title==="自定义课程作业")'),'Manual task can use a newly added custom course');
+  await reload();
+  assert(await evaluate('items.some(i=>i.manual && i.course==="数据库原理") && document.querySelector("#course-filter").textContent.includes("数据库原理")'),'Assigned custom course and its task survive refresh together');
+
   await reset(); await click('[data-action="new"]');
   await submit('#new-dialog form',{});
   assert(await evaluate('document.querySelector("#new-dialog .error").textContent.includes("标题") && pageItems("tasks").length === 4'),'Manual creation validates missing fields before creating an item');
@@ -326,7 +380,7 @@ try {
   await call('Input.dispatchMouseEvent',{type:'mouseMoved',x:reducedMotionCard.x,y:reducedMotionCard.y});
   assert(await evaluate('getComputedStyle(document.querySelector(".task-row")).transitionDuration === "0s" && getComputedStyle(document.querySelector(".task-row")).transform === "none" && getComputedStyle(document.querySelector(".task-row")).boxShadow === "none" && getComputedStyle(document.querySelector(".button")).transitionDuration === "0s" && getComputedStyle(document.querySelector(".app")).transitionDuration === "0s"'),'Reduced-motion preference disables transitions and hover animation');
   assert(errors.length === 0,'No JavaScript runtime exceptions');
-  console.log(JSON.stringify({passed:checks.length,checks,screenshots:captureScreenshots ? ['prototype/previews/pending.png','prototype/previews/main.png','prototype/previews/main-dark.png','prototype/previews/desktop.png','prototype/previews/desktop-dark.png'] : []},null,2));
+  console.log(JSON.stringify({passed:checks.length,checks,screenshots:captureScreenshots ? ['prototype/previews/courses.png','prototype/previews/pending.png','prototype/previews/main.png','prototype/previews/main-dark.png','prototype/previews/desktop.png','prototype/previews/desktop-dark.png'] : []},null,2));
 } finally {
   if (socket?.readyState === WebSocket.OPEN) socket.close();
   if (browser.pid) spawn('taskkill',['/PID',String(browser.pid),'/T','/F'],{windowsHide:true,stdio:'ignore'});

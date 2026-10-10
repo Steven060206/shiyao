@@ -15,16 +15,18 @@ const seed = [
   {id:'n2',kind:'notice',state:'active',title:'校园摄影比赛报名',course:'校园活动',group:'学校综合群',due:'',time:'',sender:'学生事务老师',sent:'10月8日 12:30',text:'校园摄影比赛开始报名，主题是“我眼中的校园”。\n自愿参加，报名截止日期为10月20日。'}
 ];
 const defaultSettings = {theme:'system',sound:true,motion:'system',autostart:true,close:'tray',guideDone:false};
+const customCourseKey = '__custom_course__';
 const $ = id => document.getElementById(id);
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 const freshItems = () => structuredClone(seed).map(item => ({...item,unread:true,timeType:'deadline',taskType:item.kind === 'task' ? 'homework' : 'other',reminder:{mode:'default'},history:[]}));
-let items = freshItems(), settings = {...defaultSettings}, widgetLayout = null;
+let items = freshItems(), settings = {...defaultSettings}, widgetLayout = null, customCourses = [];
 try {
   const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
   if (saved?.version === 2 && Array.isArray(saved.items)) {
     items = saved.items;
     settings = {...defaultSettings,...saved.settings};
     widgetLayout = saved.widgetLayout;
+    customCourses = Array.isArray(saved.customCourses) ? saved.customCourses.filter(Boolean) : [];
   }
 } catch {}
 let page = items.some(i => i.state === 'pending') ? 'pending' : 'tasks';
@@ -36,8 +38,42 @@ const timePast = item => Boolean(item.due && (item.time ? Date.parse(item.due+'T
 const overdue = item => item.timeType !== 'start' && timePast(item);
 const timeName = item => item.timeType === 'start' ? '开始时间' : '截止时间';
 function persist() {
-  try { localStorage.setItem(STORAGE_KEY,JSON.stringify({version:2,items,settings,widgetLayout})); }
+  try { localStorage.setItem(STORAGE_KEY,JSON.stringify({version:2,items,settings,widgetLayout,customCourses})); }
   catch { $('storage-status').textContent = '浏览器无法保存，刷新后进度可能丢失'; }
+}
+function courseOptions() {
+  return [...new Set([...items.map(item => item.course).filter(Boolean),...customCourses])].sort((a,b) => a.localeCompare(b,'zh-CN'));
+}
+function courseSelectHTML(selected = '', {filter = false} = {}) {
+  const first = filter ? '<option value="">全部课程</option>' : '<option value="">请选择课程或分类</option>';
+  return `${first}${courseOptions().map(value => `<option value="${escapeHTML(value)}" ${value === selected ? 'selected' : ''}>${escapeHTML(value)}</option>`).join('')}<option value="${customCourseKey}">＋ 自定义课程或分类…</option>`;
+}
+function syncCourseSelects() {
+  document.querySelectorAll('select[data-course-select]').forEach(select => {
+    const selected = select.value === customCourseKey ? '' : select.value;
+    select.innerHTML = courseSelectHTML(selected,{filter:select.id === 'course-filter'});
+    select.value = selected;
+    select.dataset.courseValue = selected;
+  });
+}
+function openCourseDialog(source) {
+  const previous = source.value === customCourseKey ? (source.id === 'course-filter' ? filters.course : source.dataset.courseValue || '') : source.value;
+  source.value = previous;
+  const dialog = $('course-dialog');
+  dialog._courseSource = source;
+  dialog.innerHTML = '<h2>新增课程或分类</h2><p>新增后会同步到课程筛选、待确认、编辑和手动新增任务。已有事项不会被自动改名。</p><form data-mode="course" class="form" novalidate><label class="field">名称<input name="courseName" maxlength="80" placeholder="例如：数据库原理" required autofocus></label><p class="error" role="alert" hidden></p><div class="modal-actions"><button class="button" type="button" data-action="close-modal">取消</button><button class="button primary" type="submit">'+(source.id === 'course-filter' ? '添加' : '添加并使用')+'</button></div></form>';
+  dialog.showModal();
+  dialog.querySelector('input[name=courseName]').focus();
+}
+function addCourse(name) {
+  const normalized = name.trim();
+  if (!normalized) return {error:'请填写课程或分类名称。'};
+  if (normalized.length > 80) return {error:'名称不能超过 80 个字符。'};
+  if (normalized === customCourseKey) return {error:'请换一个课程或分类名称。'};
+  const existing = courseOptions().find(value => value.toLocaleLowerCase() === normalized.toLocaleLowerCase());
+  if (existing) return {existing};
+  customCourses.push(normalized);
+  return {value:normalized};
 }
 function priority(item) {
   if (item.manualPriority) return item.manualPriority;
@@ -95,9 +131,8 @@ function renderNav() {
   }).join('');
 }
 function filterHTML() {
-  const courses = [...new Set(items.map(i => i.course).filter(Boolean))];
   const states = page === 'tasks' ? {active:'待办',archived:'已归档',cancelled:'已取消'} : page === 'pending' ? {active:'待确认',ignored:'最近忽略'} : {active:'全部状态'};
-  return `<div class="filters"><input type="search" id="search" aria-label="搜索事项" placeholder="搜索标题、课程或来源群" value="${escapeHTML(filters.search)}"><select id="course-filter" aria-label="筛选课程"><option value="">全部课程</option>${courses.map(c => `<option ${c === filters.course ? 'selected' : ''}>${escapeHTML(c)}</option>`).join('')}</select><select id="state-filter" aria-label="筛选状态">${Object.entries(states).map(([key,label]) => `<option value="${key}" ${key === filters.state ? 'selected' : ''}>${label}</option>`).join('')}</select></div>`;
+  return `<div class="filters"><input type="search" id="search" aria-label="搜索事项" placeholder="搜索标题、课程或来源群" value="${escapeHTML(filters.search)}"><select id="course-filter" data-course-select aria-label="筛选课程">${courseSelectHTML(filters.course,{filter:true})}</select><select id="state-filter" aria-label="筛选状态">${Object.entries(states).map(([key,label]) => `<option value="${key}" ${key === filters.state ? 'selected' : ''}>${label}</option>`).join('')}</select></div>`;
 }
 function renderList() {
   if (page === 'settings') { renderSettings(); return; }
@@ -107,7 +142,7 @@ function renderList() {
 }
 function editForm(item, mode) {
   const task = mode === 'convert' || item.kind === 'task';
-  return `<form class="form" data-id="${item.id || ''}" data-mode="${mode}" novalidate>${mode === 'pending' ? `<label class="field">事项类型<select name="kind"><option value="task" ${task ? 'selected' : ''}>任务</option><option value="notice" ${!task ? 'selected' : ''}>通知</option></select></label>` : ''}<label class="field">事项标题<input name="title" value="${escapeHTML(item.title)}" required maxlength="150"></label><label class="field">课程或分类<input name="course" value="${escapeHTML(item.course)}" placeholder="例如：大学物理" required maxlength="80"></label><label class="field">事项类别<select name="taskType">${Object.entries({homework:'作业',exam:'考试',submission:'需要提交的任务',activity:'活动',other:'其他'}).map(([key,label]) => `<option value="${key}" ${key === (item.taskType || 'homework') ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="field">时间用途<select name="timeType"><option value="deadline">提交截止</option><option value="start" ${item.timeType === 'start' ? 'selected' : ''}>考试 / 活动开始</option></select></label><div class="form-grid"><label class="field">日期<input type="date" name="due" value="${item.due || ''}"></label><label class="field">具体时刻（可不填）<input type="time" name="time" value="${item.time || ''}"></label></div><p class="hint">只明确日期时，前一天中午 12:00 提醒。普通通知无需填写日期。</p>${item.image ? `<label class="check"><input type="checkbox" name="imageConfirmed" ${item.imageConfirmed ? 'checked' : ''}><span>我已查看原图并确认所填写的日期和时刻</span></label>` : ''}<label class="field">优先级<select name="priority"><option value="">自动计算</option>${['P0','P1','P2','P3'].map(p => `<option ${item.manualPriority === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label><p class="error" role="alert" hidden></p><button class="button primary" type="submit">${mode === 'pending' ? '确认事项' : mode === 'convert' ? '加入任务' : mode === 'new' ? '创建任务' : '保存修改'}</button></form>`;
+  return `<form class="form" data-id="${item.id || ''}" data-mode="${mode}" novalidate>${mode === 'pending' ? `<label class="field">事项类型<select name="kind"><option value="task" ${task ? 'selected' : ''}>任务</option><option value="notice" ${!task ? 'selected' : ''}>通知</option></select></label>` : ''}<label class="field">事项标题<input name="title" value="${escapeHTML(item.title)}" required maxlength="150"></label><label class="field">课程或分类<select name="course" data-course-select data-course-value="${escapeHTML(item.course)}" required>${courseSelectHTML(item.course)}</select></label><label class="field">事项类别<select name="taskType">${Object.entries({homework:'作业',exam:'考试',submission:'需要提交的任务',activity:'活动',other:'其他'}).map(([key,label]) => `<option value="${key}" ${key === (item.taskType || 'homework') ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="field">时间用途<select name="timeType"><option value="deadline">提交截止</option><option value="start" ${item.timeType === 'start' ? 'selected' : ''}>考试 / 活动开始</option></select></label><div class="form-grid"><label class="field">日期<input type="date" name="due" value="${item.due || ''}"></label><label class="field">具体时刻（可不填）<input type="time" name="time" value="${item.time || ''}"></label></div><p class="hint">只明确日期时，前一天中午 12:00 提醒。普通通知无需填写日期。</p>${item.image ? `<label class="check"><input type="checkbox" name="imageConfirmed" ${item.imageConfirmed ? 'checked' : ''}><span>我已查看原图并确认所填写的日期和时刻</span></label>` : ''}<label class="field">优先级<select name="priority"><option value="">自动计算</option>${['P0','P1','P2','P3'].map(p => `<option ${item.manualPriority === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label><p class="error" role="alert" hidden></p><button class="button primary" type="submit">${mode === 'pending' ? '确认事项' : mode === 'convert' ? '加入任务' : mode === 'new' ? '创建任务' : '保存修改'}</button></form>`;
 }
 function reminderForm(item) {
   const rule = item.reminder || {mode:'default'};
@@ -318,15 +353,30 @@ document.addEventListener('input',event => {
 });
 document.addEventListener('change',event => {
   const input = event.target;
+  if (input.id === 'course-filter' && input.value === customCourseKey) { openCourseDialog(input); return; }
   if (input.id === 'course-filter' || input.id === 'state-filter') { filters[input.id === 'course-filter' ? 'course' : 'state'] = input.value; render(); return; }
   if (input.dataset.setting) { settings[input.dataset.setting] = input.type === 'checkbox' ? input.checked : input.value; applyPreferences(); persist(); return; }
   if (input.name === 'reminderMode') input.form.querySelectorAll('[data-rule]').forEach(el => el.hidden = el.dataset.rule !== input.value);
   if (input.name === 'kind' && input.form.dataset.mode === 'pending') updatePendingAction(input.form);
   if (input.name === 'taskType') input.form.elements.timeType.value = ['exam','activity'].includes(input.value) ? 'start' : 'deadline';
+  if (input.name === 'course' && input.value === customCourseKey) openCourseDialog(input);
+  else if (input.name === 'course') input.dataset.courseValue = input.value;
 });
 document.addEventListener('submit',event => {
   const form = event.target.closest('form[data-mode]'); if (!form) return; event.preventDefault();
   const data = new FormData(form), mode = form.dataset.mode;
+  if (mode === 'course') {
+    const result = addCourse(data.get('courseName') || ''), dialog = $('course-dialog'), error = form.querySelector('.error');
+    if (result.error) { error.textContent = result.error; error.hidden = false; return; }
+    const value = result.value || result.existing, source = dialog._courseSource;
+    syncCourseSelects();
+    if (source?.isConnected && source.id !== 'course-filter') {
+      source.value = value; source.dataset.courseValue = value;
+    }
+    dialog.close();
+    persist();
+    return;
+  }
   const item = items.find(i => i.id === form.dataset.id);
   const error = message => { const notice = form.querySelector('.error'); notice.textContent = message; notice.hidden = false; notice.scrollIntoView({block:'nearest'}); };
   if (mode === 'reminder') {

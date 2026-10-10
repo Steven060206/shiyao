@@ -6,12 +6,21 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**新版 demo 已根据体验反馈修复详情栏滚动与待确认入口，完成 86 项浏览器验证，继续供用户体验。用户已确认 demo 先行；整体设计已确认、实施计划已写入，真实应用代码尚未开始。主要使用行为及七项复核补充继续有效，真实 WPF、QQ、OCR、Windows 桌面驻留和系统提醒尚未开发。先收集 demo 体验反馈，再接续正式应用阶段。**
-- 当前可交付产物：`AGENTS.md`、`docs/requirements.md`、`docs/HANDOFF.md`、`docs/superpowers/specs/2026-10-10-windows-app-design.md`，以及 `prototype/index.html`、`prototype/app.js`、`prototype/README.md`、`prototype/previews/pending.png`、`prototype/previews/main.png`、`prototype/previews/main-dark.png`、`prototype/previews/desktop.png`、`prototype/previews/desktop-dark.png`；可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
-- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。没有安装或接入本项目所需的 NapCat/OCR，没有登录或连接真实 QQ，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
+- 当前阶段：**新版 demo 已根据体验反馈修复详情栏滚动与待确认入口，并支持课程／分类下拉选项同步及自定义，完成 102 项浏览器验证，继续供用户体验。用户已确认 demo 先行；整体设计已确认、实施计划已写入，真实应用代码尚未开始。主要使用行为及七项复核补充继续有效，真实 WPF、QQ、OCR、Windows 桌面驻留和系统提醒尚未开发。先收集 demo 体验反馈，再接续正式应用阶段。**
+- 当前可交付产物：`AGENTS.md`、`docs/requirements.md`、`docs/HANDOFF.md`、`docs/superpowers/specs/2026-10-10-windows-app-design.md`，以及 `prototype/index.html`、`prototype/app.js`、`prototype/README.md`、`prototype/previews/courses.png`、`prototype/previews/pending.png`、`prototype/previews/main.png`、`prototype/previews/main-dark.png`、`prototype/previews/desktop.png`、`prototype/previews/desktop-dark.png`；可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
+- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。没有安装或接入本项目所需的 NapCat/OCR，没有登录或连接真实 QQ，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
-### 本轮 demo 体验修复
+### 本轮课程／分类选项同步
+
+- 用户要求列表课程筛选与详情的“课程或分类”同步下拉内容并支持自定义。右侧原自由文本输入已替换为下拉框，筛选、待确认、编辑和手动新增任务共用已有课程／分类及自定义名称。
+- 各课程下拉框提供“＋ 自定义课程或分类…”入口。右侧新增后自动选中名称，提交事项后才更新所属课程；左侧新增只同步选项，保留当前筛选。取消新增恢复原选择，空白名称显示错误，重复名称复用已有选项并去除首尾空格。同步选项不重建表单，保留未提交的标题、日期、时刻及图片确认。
+- 自定义名称保存在原有 `message-purify-demo-v2` 浏览器本地存储的 `customCourses` 字段，兼容未含该字段的旧保存数据；刷新及“重置示例”后保留。本轮支持新增名称，未实现重命名／删除管理或真实课程／群关联修复。
+- 实际执行 `node tests/prototype-qa.mjs --screenshots`，退出码 0、102 项检查通过、无 JavaScript 异常；新增 16 项课程交互检查，覆盖两处入口、同步、取消、重复／空白名称、草稿保留、刷新、重置、待确认／手动任务及筛选。实际执行 `node --test tests/project-rules.test.mjs`，退出码 0、8 项通过；`node --check prototype/app.js`、`node --check tests/prototype-qa.mjs`、`git diff --check` 均退出码 0。
+- 接续收尾时将课程预览纳入交付文件存在检查，实际重跑 `node tests/prototype-qa.mjs`、`node --test tests/project-rules.test.mjs`，均退出码 0，分别 102 项和 8 项通过；`node --check prototype/app.js`、`node --check tests/prototype-qa.mjs`、`node --check tests/project-rules.test.mjs`、`git diff --check` 均退出码 0。
+- 六张预览已生成，新增并查看 `prototype/previews/courses.png`，确认课程下拉框与固定确认按钮布局正常。需求、交接、体验说明、测试说明及实际文件已人工核对一致；本机技能目录仍未找到 `maintain-context-hygiene`，按项目规则完成核对。对应提交说明为 `feat: sync course selectors and support custom courses`，标识以 Git 日志为准。下一步继续收集 demo 体验反馈，真实应用代码尚未开始。
+
+### 上轮 demo 体验修复
 
 - 用户反馈右侧详情被裁切、滚轮不生效，以及无法找到待确认的编辑确认入口。已复现并定位：`.main` 的 Grid 子项默认最小高度被长详情撑大，上层 `.app` 隐藏溢出，详情本身无滚动空间；确认按钮在裁切区域的表单底部。
 - 1100×800 复现时详情高 1169px、底部坐标约 1254px、滚动高度等于可视高度。新增高度回归检查首次执行 `node tests/prototype-qa.mjs` 退出码 1，证明原问题；只加入 `.main { min-height:0 }` 后，详情可视高度为 694px、滚动高度 1169px、底部 779px，复跑退出码 0、79 项通过。
@@ -35,7 +44,7 @@
 - 每次改动后，都必须编写或更新相关测试，并在交付给用户前，确保所有测试和验证全部通过。小任务同样适用，不强制测试先行。
 - 现有 `AGENTS.md` 已加入“注意事项”，原有接续、文档同步、讨论和阶段规则保留；需求文档同步新增要求。
 - 上轮在项目根目录执行 `git init`，建立本地 Git 仓库，并创建首次基线提交 `ff16b4b`，包含现有文档、浏览器原型及规则和测试改动。提交作者仅在本仓库配置为 `Codex <codex@localhost>`，未修改全局作者设置；后续提交见 Git 日志。本轮没有应用实现改动，也未配置远程仓库。
-- 已有 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs` 和 `tests/README.md`。早期 27 项浏览器检查先扩充为 78 项，本轮修复后为 86 项；文档检查为 8 项。默认测试不覆盖已有预览图，可用 `--screenshots` 主动更新五张预览；测试范围与命令见 `tests/README.md`。
+- 已有 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs` 和 `tests/README.md`。早期 27 项浏览器检查先扩充为 78 项，详情修复后为 86 项，本轮课程功能后为 102 项；文档检查为 8 项。默认测试不覆盖已有预览图，可用 `--screenshots` 主动更新六张预览；测试范围与命令见 `tests/README.md`。
 - 上轮实际执行 `node --test tests/project-rules.test.mjs`，退出码 0，6 项通过、0 失败；执行 `node tests/prototype-qa.mjs`，最终退出码 0，27 项通过、无 JavaScript 异常。首次浏览器检查及诊断复跑均在按钮动画断言处退出码 1：诊断显示本机 `prefers-reduced-motion: reduce` 为真、按钮过渡为 `0s`，符合界面现有规则；测试随后显式模拟普通与减少动画两种偏好，不依赖 Windows 设置，未改原型代码。
 - 上轮实际执行 `node --check tests/prototype-qa.mjs` 和 `node --check tests/project-rules.test.mjs`，均退出码 0。全部现有测试的命令及环境要求见 `tests/README.md`；验证范围为文档和浏览器原型，真实应用代码尚未开始。本轮更新阶段相关检查并重新验证后记录结果。
 - 上轮实际执行 `git diff --cached --check`、`git commit -m 'chore: add project rules and repeatable checks'`、`git log -1 --format='%h %s'` 和 `git status --short`，均退出码 0；首次提交成功、状态输出为空。提交包含 12 个文件，没有个人凭据配置。核对需求、交接与实际产物一致；本机仍未找到 `maintain-context-hygiene` 技能，按项目规则人工完成交接核对。
@@ -178,6 +187,7 @@
 - **普通通知仅在软件主界面的通知列表中展示**，不增加第三张桌面通知卡片，也不混入提醒事项卡片。
 - **主界面采用左侧导航**：包含“任务、待确认、通知、已完成、设置”，右侧显示所选页面的内容；用户已选择 A（左侧导航）。
 - **事项详情采用主界面右侧详情栏**：点击事项后保留事项列表，在右侧查看原文、图片，并修改截止时间等信息，方便连续处理；用户已选择 A（右侧详情栏）。
+- **课程／分类选项同步和自定义**：课程筛选与详情／新增表单共用下拉选项，可从各下拉框新增名称，保存后立即同步并在刷新后保留；同步不丢失未提交表单。筛选选择与事项所属课程独立，编辑课程不自动切换筛选。本轮已在示例数据 demo 实现并验证，真实应用实现仍按正式计划执行。
 - **主题切换**：用户已要求支持浅色模式与深色模式自由切换，主界面和桌面卡片统一主题，切换时有柔和的过渡动画。
 - **深色主题视觉**：用户进一步明确深色模式使用纯黑背景；面板允许使用接近黑色的层次和边框来保持可读性。
 
@@ -196,6 +206,7 @@
 | 逾期后每天中午弹一次通知的建议 | 用户选择仅保留卡片高亮，不重复弹通知 |
 | 明确延期一律覆盖手动正式时间 | 与手动字段冲突时保留旧值和当前提醒，接受差异后才替换；取消仍独立生效 |
 | 自定义提醒在所有延期中都能保持原间隔 | 时间精度兼容时保留；小时规则遇到仅日期的新正式时间时临时使用对应默认提醒，并提示重新设置 |
+| 课程筛选根据事项生成选项，右侧课程用自由文本输入 | 筛选与详情／新增表单共用下拉选项，支持新增自定义名称并立即同步、刷新保留 |
 
 ## 5. 调研结论及边界
 
@@ -312,3 +323,4 @@
 | 2026-10-10 | 用户询问是否应先看 demo | 核对现有原型后建议先补齐后续交互再供体验；只记为待决定建议，整体设计确认不回退，不把旧原型写成新版完整 demo。强化当前阶段检查，要求需求、交接与设计均明确应用实现尚未开始。实际执行 `node --test tests/project-rules.test.mjs`，退出码 0、7 项通过；`node tests/prototype-qa.mjs` 退出码 0、27 项通过；`node --check tests/project-rules.test.mjs`、`git diff --check` 均退出码 0。本轮不修改应用或原型代码，验证仅为文档和既有浏览器原型 |
 | 2026-10-10 | 用户选择 A，补齐新版 demo 供体验 | demo 先行由建议转为有效顺序；新增普通脚本、体验说明及撤销／归档／提醒／变更／搜索／新增／图片／设置等示例交互，演示进度改为浏览器本地保存，刷新不重置撤销计时。更新实际测试为 8 项文档与 78 项浏览器检查，全部通过，四张预览已生成并查看；具体命令及范围见第 1 节。真实应用代码尚未开始，下一步先收集体验反馈，再接续 M1 |
 | 2026-10-10 | 用户反馈右栏无法滚动、找不到待确认提交入口 | 复现并修复 Grid 最小高度造成的裁切，独立滚动详情内容，固定底部确认按钮并明确任务／通知去向，验证失败时提示可见。最终 86 项浏览器与 8 项文档检查通过，脚本语法及 diff 检查通过；新增待确认预览并查看。普通刷新可加载修复且保留已有演示数据，真实 QQ／Windows 功能尚未接入 |
+| 2026-10-10 | 用户要求两处课程下拉内容同步并支持自定义 | 筛选、待确认、编辑及手动新增任务共用课程／分类选项，新增后同步、刷新及重置保留，取消和同步不丢失草稿。新增 16 项相关浏览器检查及课程预览，最终 102 项浏览器与 8 项文档检查通过，脚本语法及 diff 检查通过；需求、交接和说明已同步。真实应用代码尚未开始，继续供用户体验 |
