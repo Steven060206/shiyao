@@ -54,6 +54,10 @@ test('新版演示交付链接可用，保存说明与真实集成阶段一致',
 });
 
 test('需求、交接及设计的当前状态一致记录整体设计已确认', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
+    assert.match(read(file).split('## 2.')[0], /demo 基本满足要求/, `${file} 需同步用户的演示反馈`);
+    assert.match(read(file).split('## 2.')[0], /M1/, `${file} 需明确下一步核心基础阶段`);
+  }
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
     const current = read(file).split('## 1.')[0] + (file.endsWith('HANDOFF.md') ? read(file).match(/^- 当前阶段：.*$/m)?.[0] : '');
     assert.match(current, /整体设计已确认/, file);
