@@ -46,6 +46,7 @@ test('需求、交接及设计的当前状态一致记录整体设计已确认',
     const current = read(file).split('## 1.')[0] + (file.endsWith('HANDOFF.md') ? read(file).match(/^- 当前阶段：.*$/m)?.[0] : '');
     assert.match(current, /整体设计已确认/, file);
     assert.match(current, /实施(?:总)?计划/, file);
+    assert.match(current, /应用(?:代码|实现)尚未开始/, `${file} 不得把计划或 demo 误记为真实应用已实现`);
     assert.doesNotMatch(current, /整体设计尚未确认|完整设计仍待整体核对/, file);
   }
 });
