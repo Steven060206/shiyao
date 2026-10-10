@@ -83,10 +83,10 @@ public static class PriorityCalculator
 
 ## Task 3：合成样本与可重复基线
 
-- [ ] 写 JSON 样本，包含短消息、疑问、否定、转述、多行动、报名／开始、跨群重复、催交、延期、取消、完成新要求、归档新要求及图片建议。每项记录期待去向、行动、正式／建议时间和目标，不仅检查候选数量。
-- [ ] 编写共享 fixture runner 与 xUnit 批量检查；评估 CLI 消费同一 runner，不复制分类规则。CLI 失败时非零退出；报告列出样本类别数量、正式任务准确率、含待确认召回、直接自动覆盖率、待确认占比与高影响错误数，分母为 0 时标明不适用。
-- [ ] CLI 项目只引用 Core 并链接测试 runner 源文件，不添加新包；依赖锁写入。示例命令：`& ./.tools/dotnet/dotnet.exe run --project tools/MessagePurify.RuleBaseline -- --output docs/verification/rule-baseline.md`。
-- [ ] 执行 Release 核心全量、Node 文档、浏览器、CLI 和 diff 验证；独立只读复核新增规则与具体边界，同步交接、需求、设计及总计划实际状态。提交 `test: add synthetic rule corpus and baseline report`。
+- [x] 写 JSON 样本，包含短消息、疑问、否定、转述、多行动、报名／开始、跨群重复、催交、延期、取消、完成新要求、归档新要求及图片建议。每项记录期待去向、行动、正式／建议时间和目标，不仅检查候选数量。
+- [x] 编写共享 fixture runner 与 xUnit 批量检查；评估 CLI 消费同一 runner，不复制分类规则。CLI 失败时非零退出；报告列出样本类别数量、正式任务准确率、含待确认召回、直接自动覆盖率、待确认占比与高影响错误数，分母为 0 时标明不适用。
+- [x] CLI 项目只引用 Core 并链接测试 runner 源文件，不添加新包；依赖锁写入。示例命令：`& ./.tools/dotnet/dotnet.exe run --project tools/MessagePurify.RuleBaseline -- --output docs/verification/rule-baseline.md`。
+- [x] 执行 Release 核心全量、Node 文档、浏览器、CLI 和 diff 验证；独立只读复核新增规则与具体边界，同步交接、需求、设计及总计划实际状态。提交 `test: add synthetic rule corpus and baseline report`。
 
 ## 验证命令
 

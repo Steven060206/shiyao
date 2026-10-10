@@ -1,0 +1,1887 @@
+{
+  "synthetic": true,
+  "description": "M2 合成调试样本；不是独立真实群消息验收，默认发送及评估时间为北京时间 2026-10-10 10:00。跨群副本保留同集合独立消息键。",
+  "cases": [
+    {
+      "id": "short-submit",
+      "category": "short-action",
+      "message": {
+        "text": "明天交作业"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "short-complete",
+      "category": "short-action",
+      "message": {
+        "text": "今天18点完成练习"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Complete",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-10",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "date-only-report",
+      "category": "absolute-date",
+      "message": {
+        "text": "10月12日提交实验报告"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "explicit-year-paper",
+      "category": "absolute-date",
+      "message": {
+        "text": "2026年10月15日18点提交课程论文"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-15",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "slash-date",
+      "category": "absolute-date",
+      "message": {
+        "text": "10/16交习题册"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-16",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "full-width",
+      "category": "normalization",
+      "message": {
+        "text": "１０月１２日１８点提交作业"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "tomorrow-evening",
+      "category": "relative-date",
+      "message": {
+        "text": "明天晚上8点提交预习笔记"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": "20:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "after-tomorrow-exam",
+      "category": "relative-date",
+      "message": {
+        "text": "后天上午9点参加考试"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Attend",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": "09:00",
+          "timeKind": "Start",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "this-week-sunday",
+      "category": "relative-date",
+      "message": {
+        "text": "本周日交课程作业"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "next-week-monday",
+      "category": "relative-date",
+      "message": {
+        "text": "下周一提交课后练习"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "historical-relative",
+      "category": "sending-context",
+      "message": {
+        "text": "明天18点提交实验记录",
+        "sentAt": "2026-10-01T21:00:00+08:00"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-02",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "year-boundary-relative",
+      "category": "sending-context",
+      "message": {
+        "text": "明天18点交报告",
+        "sentAt": "2026-12-31T23:30:00+08:00"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2027-01-01",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "no-year-does-not-roll",
+      "category": "sending-context",
+      "message": {
+        "text": "9月30日提交作业"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-09-30",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "question-submit",
+      "category": "question",
+      "message": {
+        "text": "明天交作业吗？"
+      },
+      "context": {},
+      "expectedCandidates": []
+    },
+    {
+      "id": "question-cancel",
+      "category": "question",
+      "message": {
+        "text": "实验报告是不是取消了？"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": []
+    },
+    {
+      "id": "negated-submit",
+      "category": "negation",
+      "message": {
+        "text": "不需要交作业"
+      },
+      "context": {},
+      "expectedCandidates": []
+    },
+    {
+      "id": "negated-exam",
+      "category": "negation",
+      "message": {
+        "text": "今天不用参加考试"
+      },
+      "context": {},
+      "expectedCandidates": []
+    },
+    {
+      "id": "ordinary-chat",
+      "category": "chat",
+      "message": {
+        "text": "今天游戏打得很开心，晚点一起吃饭"
+      },
+      "context": {},
+      "expectedCandidates": []
+    },
+    {
+      "id": "hope-is-not-requirement",
+      "category": "chat",
+      "message": {
+        "text": "希望明天不用交作业"
+      },
+      "context": {},
+      "expectedCandidates": []
+    },
+    {
+      "id": "next-week-ambiguous",
+      "category": "uncertain-time",
+      "message": {
+        "text": "下周交课程作业"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "tonight-no-clock",
+      "category": "uncertain-time",
+      "message": {
+        "text": "今晚提交学习总结"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "missing-date",
+      "category": "uncertain-time",
+      "message": {
+        "text": "请提交实验报告"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "invalid-date",
+      "category": "invalid-time",
+      "message": {
+        "text": "2月30日交学习总结"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "invalid-clock",
+      "category": "invalid-time",
+      "message": {
+        "text": "明天25点提交报告"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "conflicting-deadlines",
+      "category": "conflicting-time",
+      "message": {
+        "text": "实验报告10月12日截止，10月13日截止"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "date-alternative",
+      "category": "conflicting-time",
+      "message": {
+        "text": "10月12日或13日交作业"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "unconfirmed-course",
+      "category": "course-context",
+      "message": {
+        "text": "明天交作业"
+      },
+      "context": {
+        "confirmedCourse": null
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": null,
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "restricted-audience",
+      "category": "audience",
+      "message": {
+        "text": "补考同学明天参加考试"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Attend",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Start",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "excluded-course",
+      "category": "course-context",
+      "message": {
+        "text": "明天交作业"
+      },
+      "context": {
+        "courseExcluded": true
+      },
+      "expectedCandidates": []
+    },
+    {
+      "id": "excluded-sender",
+      "category": "sender-context",
+      "message": {
+        "text": "明天交作业",
+        "senderId": "confirmed-bot"
+      },
+      "context": {
+        "excludedSenders": [
+          "confirmed-bot"
+        ]
+      },
+      "expectedCandidates": []
+    },
+    {
+      "id": "private-message",
+      "category": "sender-context",
+      "message": {
+        "text": "明天交作业",
+        "isPrivate": true
+      },
+      "context": {},
+      "expectedCandidates": []
+    },
+    {
+      "id": "context-group-mismatch",
+      "category": "sender-context",
+      "message": {
+        "text": "明天交作业"
+      },
+      "context": {
+        "groupId": "another-group"
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": null,
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "student-ordinary-task",
+      "category": "sender-context",
+      "message": {
+        "text": "明天提交习题答案",
+        "senderId": "student"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "optional-registration",
+      "category": "optional",
+      "message": {
+        "text": "自愿报名数学竞赛，10月12日18点截止"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Register",
+          "disposition": "Notice",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "optional-lecture",
+      "category": "optional",
+      "message": {
+        "text": "欢迎自愿参加讲座，10月14日14点开始"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Attend",
+          "disposition": "Notice",
+          "course": "高等数学",
+          "date": "2026-10-14",
+          "clock": "14:00",
+          "timeKind": "Start",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "registration-and-start",
+      "category": "multiple-actions",
+      "message": {
+        "text": "自愿报名数学竞赛，10月12日18点截止；自愿参加数学竞赛，10月20日9点开始"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Register",
+          "disposition": "Notice",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        },
+        {
+          "requiresAction": false,
+          "action": "Attend",
+          "disposition": "Notice",
+          "course": "高等数学",
+          "date": "2026-10-20",
+          "clock": "09:00",
+          "timeKind": "Start",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "mandatory-meeting",
+      "category": "audience",
+      "message": {
+        "text": "全体同学10月13日14点必须参加班会"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Attend",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": "14:00",
+          "timeKind": "Start",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "two-deliverables",
+      "category": "multiple-actions",
+      "message": {
+        "text": "明天18点交实验报告；下周一交课程论文"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        },
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "format-one-deliverable",
+      "category": "multiple-actions",
+      "message": {
+        "text": "明天交实验报告，使用PDF格式"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "background-date",
+      "category": "time-kind",
+      "message": {
+        "text": "10月8日布置的作业，10月12日提交"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "exam-start",
+      "category": "time-kind",
+      "message": {
+        "text": "10月14日上午9点考试"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Attend",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-14",
+          "clock": "09:00",
+          "timeKind": "Start",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "reminder-known-report",
+      "category": "reminder",
+      "message": {
+        "text": "再次提醒，实验报告明天交"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Remind",
+          "disposition": "Change",
+          "course": "高等数学",
+          "date": "2026-10-11",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "trusted-postpone",
+      "category": "postpone",
+      "message": {
+        "text": "实验报告延期至10月13日18点"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Change",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "trusted-cancel",
+      "category": "cancel",
+      "message": {
+        "text": "实验报告取消"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Cancel",
+          "disposition": "Change",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "completed-new-requirement",
+      "category": "new-requirement",
+      "message": {
+        "text": "实验报告需要重新提交，10月13日18点截止"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Completed",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "NewRequirement",
+          "disposition": "Change",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "archived-new-requirement",
+      "category": "new-requirement",
+      "message": {
+        "text": "实验报告需要重新提交，10月13日18点截止"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Archived",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "NewRequirement",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "untrusted-postpone",
+      "category": "postpone",
+      "message": {
+        "text": "实验报告延期至10月13日18点",
+        "senderId": "student"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "untrusted-cancel",
+      "category": "cancel",
+      "message": {
+        "text": "实验报告取消",
+        "senderId": "student"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Cancel",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "untrusted-new-requirement",
+      "category": "new-requirement",
+      "message": {
+        "text": "实验报告需要重新提交，10月13日18点截止",
+        "senderId": "student"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Completed",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "NewRequirement",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": "18:00",
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "cancel-without-target",
+      "category": "association",
+      "message": {
+        "text": "实验报告取消"
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Cancel",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "ambiguous-target",
+      "category": "association",
+      "message": {
+        "text": "实验报告延期至10月13日"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report-one",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          },
+          {
+            "id": "report-two",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "rumoured-postpone",
+      "category": "reported-source",
+      "message": {
+        "text": "听说实验报告延期至10月13日",
+        "senderId": "student"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "nickname-is-not-trust",
+      "category": "reported-source",
+      "message": {
+        "text": "实验报告延期至10月13日",
+        "senderId": "nickname-teacher"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "original-publisher-quoted-postpone",
+      "category": "quote-source",
+      "message": {
+        "segments": [
+          {
+            "kind": "Quote",
+            "text": "明天交实验报告",
+            "reference": {
+              "accountId": "a",
+              "groupId": "g",
+              "messageId": "original-report"
+            }
+          },
+          {
+            "kind": "Text",
+            "text": "实验报告延期至10月13日"
+          }
+        ]
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ],
+        "trustedSenders": []
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Change",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "other-sender-quoted-postpone",
+      "category": "quote-source",
+      "message": {
+        "senderId": "student",
+        "segments": [
+          {
+            "kind": "Quote",
+            "text": "明天交实验报告",
+            "reference": {
+              "accountId": "a",
+              "groupId": "g",
+              "messageId": "original-report"
+            }
+          },
+          {
+            "kind": "Text",
+            "text": "实验报告延期至10月13日"
+          }
+        ]
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": "2026-10-13",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "old-quote-only",
+      "category": "old-quote",
+      "message": {
+        "segments": [
+          {
+            "kind": "Quote",
+            "text": "明天18点交实验报告",
+            "reference": {
+              "accountId": "a",
+              "groupId": "g",
+              "messageId": "original-report"
+            }
+          }
+        ]
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": []
+    },
+    {
+      "id": "quote-target-cancel",
+      "category": "quote-source",
+      "message": {
+        "segments": [
+          {
+            "kind": "Quote",
+            "text": "明天交实验报告",
+            "reference": {
+              "accountId": "a",
+              "groupId": "g",
+              "messageId": "original-report"
+            }
+          },
+          {
+            "kind": "Text",
+            "text": "这项任务取消"
+          }
+        ]
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Cancel",
+          "disposition": "Change",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    },
+    {
+      "id": "ocr-only-deadline",
+      "category": "ocr",
+      "message": {
+        "segments": [
+          {
+            "kind": "Image",
+            "text": "10月12日18点交实验报告",
+            "assetId": "synthetic-image-1"
+          }
+        ]
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": "2026-10-12",
+          "suggestedClock": "18:00",
+          "suggestedTimeKind": "Deadline",
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "text-with-ocr-date",
+      "category": "ocr",
+      "message": {
+        "segments": [
+          {
+            "kind": "Text",
+            "text": "10月12日交实验报告"
+          },
+          {
+            "kind": "Image",
+            "text": "10月13日交实验报告",
+            "assetId": "synthetic-image-2"
+          }
+        ]
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "ocr-fuzzy-date",
+      "category": "ocr",
+      "message": {
+        "segments": [
+          {
+            "kind": "Image",
+            "text": "下周提交实验报告",
+            "assetId": "synthetic-image-3"
+          }
+        ]
+      },
+      "context": {},
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "cross-group-copy-a",
+      "category": "cross-group",
+      "message": {
+        "text": "10月12日提交统一课程作业",
+        "groupId": "g"
+      },
+      "context": {
+        "groupId": "g"
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "cross-group-copy-b",
+      "category": "cross-group",
+      "message": {
+        "text": "10月12日提交统一课程作业",
+        "groupId": "g2"
+      },
+      "context": {
+        "groupId": "g2"
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Submit",
+          "disposition": "Task",
+          "course": "高等数学",
+          "date": "2026-10-12",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "trusted-source-does-not-cross-group",
+      "category": "cross-group",
+      "message": {
+        "text": "实验报告延期至10月13日",
+        "groupId": "g2"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Active",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "Postpone",
+          "disposition": "Pending",
+          "course": null,
+          "date": "2026-10-13",
+          "clock": null,
+          "timeKind": "Deadline",
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "completed-ordinary-detail",
+      "category": "new-requirement",
+      "message": {
+        "text": "实验报告使用PDF格式"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Completed",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": false,
+          "action": "Inform",
+          "disposition": "Notice",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": null
+        }
+      ]
+    },
+    {
+      "id": "new-requirement-missing-time",
+      "category": "new-requirement",
+      "message": {
+        "text": "实验报告需要重新提交"
+      },
+      "context": {
+        "knownTasks": [
+          {
+            "id": "report",
+            "title": "实验报告",
+            "course": "高等数学",
+            "date": "2026-10-11",
+            "clock": null,
+            "timeKind": "Deadline",
+            "state": "Completed",
+            "evidence": [
+              {
+                "accountId": "a",
+                "groupId": "g",
+                "messageId": "original-report"
+              }
+            ],
+            "confirmedPublisherId": "teacher"
+          }
+        ]
+      },
+      "expectedCandidates": [
+        {
+          "requiresAction": true,
+          "action": "NewRequirement",
+          "disposition": "Pending",
+          "course": "高等数学",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
+          "suggestedDate": null,
+          "suggestedClock": null,
+          "suggestedTimeKind": null,
+          "target": "report"
+        }
+      ]
+    }
+  ]
+}

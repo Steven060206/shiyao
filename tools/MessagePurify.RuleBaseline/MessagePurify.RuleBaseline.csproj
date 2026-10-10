@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/MessagePurify.Core/MessagePurify.Core.csproj" />
+    <Compile Include="../../tests/MessagePurify.Core.Tests/RuleFixtureRunner.cs" Link="RuleFixtureRunner.cs" />
+    <None Include="../../tests/fixtures/rules/synthetic.json" Link="fixtures/rules/synthetic.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

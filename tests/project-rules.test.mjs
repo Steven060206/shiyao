@@ -27,7 +27,7 @@ test('小任务规则明确服从新的测试和提交要求', () => {
 });
 
 test('项目文档的本地链接、原型与核心交付文件存在', () => {
-  const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-core-foundation.md'];
+  const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-core-foundation.md', 'docs/superpowers/plans/2026-10-10-local-rules.md', 'tests/README.md'];
   for (const file of files) {
     for (const match of read(file).matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
       const target = match[1];
@@ -44,8 +44,12 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'src/MessagePurify.Core/Time/TaskTime.cs',
     'src/MessagePurify.Core/Reminders/ReminderPlanner.cs',
     'src/MessagePurify.Core/State/TaskTransitions.cs',
+    ...['RuleModels', 'MessageNormalizer', 'MessageDateParser', 'MessageRuleExtractor', 'PriorityCalculator'].map(name => `src/MessagePurify.Core/Rules/${name}.cs`),
     'tests/MessagePurify.Core.Tests/MessagePurify.Core.Tests.csproj',
-    ...['TaskTime', 'ReminderPlanner', 'TaskTransitions'].map(name => `tests/MessagePurify.Core.Tests/${name}Tests.cs`),
+    ...['TaskTime', 'ReminderPlanner', 'TaskTransitions', 'MessageNormalizer', 'MessageDateParser', 'RuleExtraction', 'PriorityCalculator', 'RuleFixture'].map(name => `tests/MessagePurify.Core.Tests/${name}Tests.cs`),
+    'tests/MessagePurify.Core.Tests/RuleFixtureRunner.cs', 'tests/fixtures/rules/synthetic.json',
+    'tools/MessagePurify.RuleBaseline/MessagePurify.RuleBaseline.csproj', 'tools/MessagePurify.RuleBaseline/Program.cs',
+    'tools/MessagePurify.RuleBaseline/packages.lock.json', 'docs/verification/rule-baseline.md',
     ...['src/MessagePurify.Core', 'tests/MessagePurify.Core.Tests'].map(folder => `${folder}/packages.lock.json`)
   ];
   for (const file of artifacts) {
@@ -88,7 +92,7 @@ test('M2 计划与当前规则开发阶段同步', () => {
   assert.match(plan, /Task 2/);
   assert.match(plan, /Task 3/);
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
-    assert.match(read(file).split('## 2.')[0], /M2.*正在实施|M2 已完成/, `${file} 需同步本地规则阶段`);
+    assert.match(read(file).split('## 2.')[0], /M2.*(?:正在实施|已完成)/, `${file} 需同步本地规则阶段`);
   }
 });
 

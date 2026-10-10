@@ -6,19 +6,24 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成：开发环境及时间、提醒、状态 C# 核心已写入，87 项核心测试通过。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M2 本地规则与样本正在实施，随后 M3 真实集成验证；真实 QQ／OCR／Windows 通知集成尚未接入。**
-- 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/MessagePurify.Core.csproj`、`Time/TaskTime.cs`、`Reminders/ReminderPlanner.cs`、`State/TaskTransitions.cs`（均在该 Core 目录下），`tests/MessagePurify.Core.Tests/MessagePurify.Core.Tests.csproj` 及 `TaskTimeTests.cs`、`ReminderPlannerTests.cs`、`TaskTransitionsTests.cs`，两个项目各有 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。下一步是 M3 真实集成验证；真实 QQ／OCR／Windows 通知集成尚未接入。**
+- 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；本项目尚未安装或接入 NapCat/OCR，尚未验证 OneBot 连接，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
 ### 本轮接续 M2 本地规则与样本
 
 - 用户要求继续工作，沿用整体设计及已确认技术路线推进 M2。已核对 M1 源码、锁文件、87 项核心测试及 demo 的二次确认改动，工作从 `8f9acdc` 创建 `codex/m2-local-rules` 分支。
-- [M2 详细计划](superpowers/plans/2026-10-10-local-rules.md)已写入，分为消息／日期、提取／优先级、样本／评估三个任务。Task 1 已完成，Task 2、3 正在实施；不把计划或合成样本作为真实 QQ 验收。
+- [M2 详细计划](superpowers/plans/2026-10-10-local-rules.md)已写入，消息／日期、提取／优先级、样本／评估三个任务均已完成；不把合成样本作为真实 QQ 验收。
 - Task 1 新增 `src/MessagePurify.Core/Rules/RuleModels.cs`、`MessageNormalizer.cs`、`MessageDateParser.cs`，以及 `tests/MessagePurify.Core.Tests/MessageNormalizerTests.cs`、`MessageDateParserTests.cs`。保留账号／群／消息证据、图片与引用段；日期按原发送时刻及保存时区解释，不制造钟点。支持完整年月日、月日、相对日期、明确星期、下月日期和数字钟点；日期范围、冲突、非法和未覆盖表达返回具体确认原因。
-- 实现前过滤测试因缺少类型退出 1；实现后实际执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release`，退出码 0、191 项通过（原 87 项、标准化 2 项、日期 102 项；后续日期边界回归已纳入）。执行 `node --test tests/project-rules.test.mjs`（10 项）、`node tests/prototype-qa.mjs`（107 项）、`git diff --check`，均退出码 0。人工核对需求、阶段和实际产物；未找到的 `maintain-context-hygiene` 技能继续以项目规定的人工核对替代。Task 1 提交说明为 `feat: add message normalization and contextual date parsing`，标识以 Git 日志为准。
+- 实现前过滤测试因缺少类型退出 1；Task 1 提交前实际执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release`，退出码 0、183 项通过（原 87 项、标准化 2 项、日期 94 项）。执行 `node --test tests/project-rules.test.mjs`（10 项）、`node tests/prototype-qa.mjs`（107 项）、`git diff --check`，均退出码 0。人工核对需求、阶段和实际产物；未找到的 `maintain-context-hygiene` 技能继续以项目规定的人工核对替代。Task 1 已提交 `998eb0f`。
 - Task 2 已写入 `Rules/MessageRuleExtractor.cs`、`PriorityCalculator.cs`，及 `RuleExtractionTests.cs`、`PriorityCalculatorTests.cs`（在既有 Core／测试目录）。普通明确行动按已确认课程和有效时间提取；疑问、否定、转述、限定对象、缺时间分别保留原因。延期／取消／新要求分别检查可信发布者和唯一目标，已归档／已取消新要求为待确认；引用仅提供关联证据，OCR 只提供建议，不实际改变事项或发通知。
-- Task 2 两类过滤测试实现前均退出 1；实现后提取过滤初始 67 项通过、优先级初始 12 项通过。补保存时区跨 UTC 日期、条件句、排除目标、混合证据引用、格式要求及自愿表达回归后，root 实际运行 Release 核心全量，退出码 0、289 项通过（提取 85 项、优先级 13 项，含 Task 1 标准化 2 项和日期 102 项）。后果只按明确说明提升一级。合成样本已写入但尚未运行基线。
+- Task 2 两类过滤测试实现前均退出 1；实现后提取过滤初始 67 项通过、优先级初始 12 项通过。补保存时区跨 UTC 日期、条件句、排除目标、混合证据引用、格式要求及自愿表达回归后，root 实际运行 Release 核心全量，退出码 0、289 项通过（提取 85 项、优先级 13 项，含 Task 1 标准化 2 项和日期 102 项）。后果只按明确说明提升一级。
+- 独立只读复核发现日期部分匹配、条件拆分后丢失作用域、取消格式要求误取消任务、自愿报名表误建任务等具体问题，已修复并补回归。日期 8 项新增回归实际先失败 6 项（退出 1），修复后过滤 102 项通过（退出 0）；核心全量 289 项包括这些修复，Task 2 已提交 `39fa505`。
+- Task 3 新增 `tests/fixtures/rules/synthetic.json`（65 个独立样本、27 类、57 个 gold 候选、47 个需本人行动）以及共享 `RuleFixtureRunner.cs`、6 项 fixture 测试和 `tools/MessagePurify.RuleBaseline/` CLI。测试项目复制 fixture 到输出目录，CLI 只引用 Core 并链接同一 runner。实际执行 fixture 过滤测试通过 6 项；CLI 生成 [rule-baseline.md](verification/rule-baseline.md)：65/65 完整匹配、正式 Task 准确率 23/23、需行动召回 47/47、直接自动覆盖 27/47、待确认占比 23/57、高影响错误 0。CLI 无效参数实际退出码 2；合成结果不替代真实独立 QQ 样本验收。
+- CLI 错误 gold 出口通过独立复制运行产物实测：执行 `.tools/dotnet/dotnet.exe .tools/m2-cli-negative/MessagePurify.RuleBaseline.dll --output .tools/m2-cli-negative/failure-report.md`，退出码 1；复制样本只修改一个期待日期，结果为 64/65 匹配、失败 1、高影响错误 1。正式 JSON 已核对未改。共享评估器的全部 Pending、错误日期／目标、零分母及失败出口经独立只读复核无未解决问题。
+- 配置 fixture 时首次过滤构建因 SDK 默认包含与显式 `Compile` 重复而退出 1；定位后移除重复项，过滤 6 项及 Release 全量 295 项通过。Core.Tests 和 CLI 的 `restore --locked-mode` 均退出 0；文档阶段措辞检查曾失败，同步有效阶段及断言后 10 项通过。验证范围始终是 C# 核心、合成样本、文档和 demo，不含真实 Windows／QQ／OCR 集成。
+- M2 交付前实际执行 `.tools/dotnet/dotnet.exe restore tests/MessagePurify.Core.Tests --locked-mode`、`restore tools/MessagePurify.RuleBaseline --locked-mode`、`test tests/MessagePurify.Core.Tests --no-restore --configuration Release`、`run --project tools/MessagePurify.RuleBaseline --configuration Release --no-restore -- --output docs/verification/rule-baseline.md`，全部退出 0，核心 295 项、CLI 65 条样本通过。执行 `node --test tests/project-rules.test.mjs`（10 项）、`node tests/prototype-qa.mjs`（107 项）、`node --check` 三个现有 JS 文件及 `git diff --check`，均退出 0。人工里程碑核对：M1／M2 已勾选，M3～M9 未勾选，需求、交接、实际源码、基线和验证范围一致；不删除文件来缩短上下文。Task 3 提交说明为 `test: add synthetic rule corpus and baseline report`，标识以 Git 日志为准。
 
 ### 上轮 demo 删除日期二次确认
 
@@ -277,8 +282,8 @@
 1. **整体设计已确认**：`docs/superpowers/specs/2026-10-10-windows-app-design.md` 包含使用流程、提醒、错误恢复、架构、数据、NapCat、规则、OCR、WebView2、Windows 集成、安装和验收。2026-10-10 用户选择 A；使用行为不重新询问，后端细节由开发者负责。
 2. **已确认：老师明确取消任务后的去向**。用户选择 A：停止后续提醒，移出待办与桌面卡片，保留已取消记录及原文，不记为用户完成，取消变更通知一次。核心取消状态及旧操作保护已测试；真实来源判断、持久化和系统清理／投递尚未实现。
 3. **已确认：自定义提醒遇到延期**。精度兼容的有效延期保持提前间隔，默认节点按新正式时间重算；精度不兼容时临时使用默认节点并提示设置待确认。提醒计算与手动字段冲突核心已实现并测试，持久化待确认及正式 UI 尚未实现。
-4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态决定已测试，实际来源关联、记录保存和通知尚未实现。
-5. **正在实施：M2 本地规则与样本基线**。详细计划与 Task 1 消息／日期已写入并验证，继续行动、变更、优先级及合成样本评估；之后进入 M3 的真实 QQ／OCR／Windows 验证。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
+4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态决定与本地来源／目标候选已测试；真实发布者关系获取、记录保存和通知尚未实现。
+5. **下一步：M3 真实 Windows、QQ、OCR 与通知小规模验证**。M1、M2 已完成；M2 的合成样本基线只用于可重复回归，不代表真实独立 QQ 样本已验收。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
 6. 数据模型、SQLite、消息桥、OCR 进程通信、提醒调度、数据保留和打包已有开发者方案，见设计稿；尚未实现。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
 7. NapCat 真实连接和历史返回、本地规则误判/漏判、OCR 学校截图、桌面宿主层级及安装包通知激活仍须真实验证。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
 8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。用户说明普通 QQ 已在电脑登录，NapCat 连接尚未验证。
@@ -372,3 +377,4 @@
 | 2026-10-10 | 完成 M1 Task 3 状态与字段保护；M1 核心基础完成 | 新增状态纯函数与 44 项测试，合计 87 项核心检查通过；取消优先、延期后撤销保留最新值、完成 1 小时／忽略 24 小时边界均验证。SDK、三个核心模块及测试已写入，真实 NapCat／OCR／WPF／SQLite／系统通知仍在后续阶段；下一步 M2 |
 | 2026-10-10 | 用户要求删除 demo 图片日期的独立二次确认勾选 | 填入／修改日期后直接通过确认或保存按钮提交，建议填入仍仅更新草稿。新增和更新浏览器回归，107 项浏览器、9 项文档及 87 项核心测试通过，需求与交接同步 |
 | 2026-10-10 | 接续 M2，完成 Task 1 消息契约、标准化及发送上下文日期 | 原发送日期、跨年、范围／冲突、非法数值及时区边界已验证，183 项核心、10 项文档及 107 项浏览器检查通过；行动与样本尚在实施，真实 QQ／OCR 尚未接入 |
+| 2026-10-10 | 完成 M2 Task 2 与 Task 3 本地规则和合成基线 | Release 核心 289 项、fixture 6 项、文档 10 项、浏览器 107 项通过；CLI 生成 65 条样本报告（23/23 正式 Task 准确、47/47 需行动召回、27/47 直接自动覆盖、0 高影响错误），无效参数退出 2。结果不代表真实 QQ 验收；下一步 M3 |
