@@ -1,12 +1,12 @@
 # 消息提纯：项目交接文档
 
-最后更新：2026-10-10（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
+最后更新：2026-10-11（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
 ## 1. 接手先看
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。下一步是 M3 真实集成验证；真实 QQ／OCR／Windows 通知集成尚未接入。**
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；当前自动验证为 Core 295/295、Infrastructure 46/46、Windows 44/44、OCR 25/25、Node 15/15、demo 107 项。协议、OCR、WebView2 隐藏桥和打包入口已实际验证，真实 QQ 只读连接、桌面人工操作和非提权通知仍未完成；普通 QQ 登录不作为 OneBot 连接成功，OneBot 尚未接入，尚未验证 OneBot 连接。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；本项目尚未安装或接入 NapCat/OCR，尚未验证 OneBot 连接，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
