@@ -163,10 +163,14 @@ try {
   assert(await evaluate('document.querySelector("input[name=due]").value === "" && document.querySelector("input[name=time]").value === ""'),'Image text does not automatically establish a deadline');
   await evaluate('document.querySelector("form").requestSubmit()');
   assert(await evaluate('document.querySelector(".error").textContent.includes("截止日期")'),'Confirming a task with no deadline shows an inline error');
-  await evaluate('document.querySelector("input[name=due]").value="2026-10-12";document.querySelector("input[name=time]").value="18:00";document.querySelector("form").requestSubmit()');
-  assert(await evaluate('document.querySelector(".error").textContent.includes("勾选") && pageItems("pending").length === 2'),'Image deadline requires explicit human confirmation');
-  await evaluate('document.querySelector("input[name=imageConfirmed]").checked=true;document.querySelector("form").requestSubmit()');
+  assert(await evaluate('!document.querySelector("input[name=imageConfirmed]") && !document.querySelector("#detail-pane").textContent.includes("我已查看原图并确认")'),'Image date form has no separate confirmation checkbox');
+  await evaluate('document.querySelector("input[name=due]").value="2026-10-12";document.querySelector("input[name=time]").value="18:00";document.querySelector("input[name=time]").dispatchEvent(new Event("input",{bubbles:true}))');
+  await click('#pending-confirm-button');
   assert(await evaluate('page === "tasks" && pageItems("pending").length === 1 && items.find(i=>i.id === "p1").due === "2026-10-12"'),'Confirmed item moves into tasks');
+  await submit('form[data-mode=save]',{due:'2026-10-13',time:'17:30'});
+  assert(await evaluate('(()=>{const item=items.find(i=>i.id==="p1");return item.due==="2026-10-13" && item.time==="17:30" && item.imageConfirmed && item.protectedTime && !document.querySelector("input[name=imageConfirmed]");})()'),'Editing an image task saves its date without another confirmation checkbox');
+  await reload(); await nav('tasks'); await select('p1');
+  assert(await evaluate('items.find(i=>i.id==="p1").due==="2026-10-13" && items.find(i=>i.id==="p1").time==="17:30" && !document.querySelector("input[name=imageConfirmed]")'),'Image task confirmation and edited date persist after refresh');
   await click('[data-action="nav"][data-page="pending"]');
   await click('[data-action="ignore"][data-id="p2"]');
   await click('[data-action="desktop"]');
@@ -258,11 +262,12 @@ try {
 
   await reset();
   assert(await evaluate('document.querySelector("select[name=course]").value === "大学物理" && document.querySelector("#course-filter").textContent.includes("离散数学")'),'Reset retains custom course options and preserves the example item course');
-  await evaluate('(()=>{const form=document.querySelector("form[data-mode=pending]");form.elements.title.value="物理预习草稿";form.elements.due.value="2026-10-12";form.elements.time.value="18:00";form.elements.imageConfirmed.checked=true;})()');
+  await evaluate('(()=>{const form=document.querySelector("form[data-mode=pending]");form.elements.title.value="物理预习草稿";form.elements.due.value="2026-10-12";form.elements.time.value="18:00";})()');
   await change('form[data-mode=pending] select[name=course]',customCourseOption);
   await submit('#course-dialog form',{courseName:' 工程实践 '});
-  assert(await evaluate('(()=>{const f=document.querySelector("form[data-mode=pending]");return f.elements.title.value==="物理预习草稿" && f.elements.due.value==="2026-10-12" && f.elements.time.value==="18:00" && f.elements.imageConfirmed.checked && f.elements.course.value==="工程实践" && document.querySelector("#course-filter").textContent.includes("工程实践");})()'),'Adding a course preserves unsaved pending title, date, time and image confirmation');
+  assert(await evaluate('(()=>{const f=document.querySelector("form[data-mode=pending]");return f.elements.title.value==="物理预习草稿" && f.elements.due.value==="2026-10-12" && f.elements.time.value==="18:00" && f.elements.course.value==="工程实践" && document.querySelector("#course-filter").textContent.includes("工程实践");})()'),'Adding a course preserves unsaved pending title, date and time');
   await evaluate('document.querySelector("select[name=course]").scrollIntoView({block:"center"})');
+  if (captureScreenshots) await delay(150);
   await screenshot('courses.png');
   await click('#pending-confirm-button');
   assert(await evaluate('items.find(i=>i.id==="p1").course === "工程实践" && items.find(i=>i.id==="p1").state === "active"'),'Pending item can be confirmed using a custom course');
@@ -343,9 +348,19 @@ try {
   assert(await evaluate('document.querySelector("#image-dialog").open && document.querySelector("#image-dialog img").alt.includes("10月12日")'),'Thumbnail opens a larger original-image dialog');
   await click('#image-dialog [data-action="close-modal"]');
   await click('[data-action="use-image-date"]');
-  assert(await evaluate('document.querySelector("input[name=due]").value === "2026-10-12" && !document.querySelector("input[name=imageConfirmed]").checked && items.find(i=>i.id==="p1").due === ""'),'Filling suggested image date does not confirm or establish formal deadline');
+  assert(await evaluate('document.querySelector("input[name=due]").value === "2026-10-12" && !document.querySelector("input[name=imageConfirmed]") && items.find(i=>i.id==="p1").due === ""'),'Filling suggested image date does not confirm or establish formal deadline');
   await click('[data-action="reject-image-date"]');
   assert(await evaluate('items.find(i=>i.id==="p1").imageSuggestionRejected && document.querySelector("input[name=due]").value === "2026-10-12" && !document.querySelector("[data-action=use-image-date]")'),'Rejecting suggestion preserves current manual form input');
+
+  await reset(); await click('[data-action="use-image-date"]');
+  await click('#pending-confirm-button');
+  assert(await evaluate('items.find(i=>i.id==="p1").state==="active" && items.find(i=>i.id==="p1").imageConfirmed && reminderLabel(items.find(i=>i.id==="p1"))==="10/11 18:00、10/12 16:00"'),'One submit confirms the filled image suggestion and establishes its reminders');
+  await reset();
+  await submit('form[data-mode=pending]',{due:'2026-10-12',time:''});
+  assert(await evaluate('items.find(i=>i.id==="p1").state==="active" && items.find(i=>i.id==="p1").time==="" && reminderLabel(items.find(i=>i.id==="p1"))==="10/11 12:00 提醒"'),'Image task can confirm a date without inventing a clock or requiring a checkbox');
+  await reset(); await change('form[data-mode=pending] select[name=kind]','notice');
+  await click('#pending-confirm-button');
+  assert(await evaluate('page==="notices" && items.find(i=>i.id==="p1").state==="active" && items.find(i=>i.id==="p1").due===""'),'Image notice submits without a date or an extra confirmation');
 
   await nav('settings');
   assert(await evaluate('document.querySelector("[data-setting=autostart]").checked && document.querySelector("[data-setting=close]").value === "tray" && document.querySelector("#list-pane").textContent.includes("暂未启用")'),'Settings expose startup, close behavior and inactive quiet-hours entry');

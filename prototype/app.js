@@ -142,7 +142,7 @@ function renderList() {
 }
 function editForm(item, mode) {
   const task = mode === 'convert' || item.kind === 'task';
-  return `<form class="form" data-id="${item.id || ''}" data-mode="${mode}" novalidate>${mode === 'pending' ? `<label class="field">事项类型<select name="kind"><option value="task" ${task ? 'selected' : ''}>任务</option><option value="notice" ${!task ? 'selected' : ''}>通知</option></select></label>` : ''}<label class="field">事项标题<input name="title" value="${escapeHTML(item.title)}" required maxlength="150"></label><label class="field">课程或分类<select name="course" data-course-select data-course-value="${escapeHTML(item.course)}" required>${courseSelectHTML(item.course)}</select></label><label class="field">事项类别<select name="taskType">${Object.entries({homework:'作业',exam:'考试',submission:'需要提交的任务',activity:'活动',other:'其他'}).map(([key,label]) => `<option value="${key}" ${key === (item.taskType || 'homework') ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="field">时间用途<select name="timeType"><option value="deadline">提交截止</option><option value="start" ${item.timeType === 'start' ? 'selected' : ''}>考试 / 活动开始</option></select></label><div class="form-grid"><label class="field">日期<input type="date" name="due" value="${item.due || ''}"></label><label class="field">具体时刻（可不填）<input type="time" name="time" value="${item.time || ''}"></label></div><p class="hint">只明确日期时，前一天中午 12:00 提醒。普通通知无需填写日期。</p>${item.image ? `<label class="check"><input type="checkbox" name="imageConfirmed" ${item.imageConfirmed ? 'checked' : ''}><span>我已查看原图并确认所填写的日期和时刻</span></label>` : ''}<label class="field">优先级<select name="priority"><option value="">自动计算</option>${['P0','P1','P2','P3'].map(p => `<option ${item.manualPriority === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label><p class="error" role="alert" hidden></p><button class="button primary" type="submit">${mode === 'pending' ? '确认事项' : mode === 'convert' ? '加入任务' : mode === 'new' ? '创建任务' : '保存修改'}</button></form>`;
+  return `<form class="form" data-id="${item.id || ''}" data-mode="${mode}" novalidate>${mode === 'pending' ? `<label class="field">事项类型<select name="kind"><option value="task" ${task ? 'selected' : ''}>任务</option><option value="notice" ${!task ? 'selected' : ''}>通知</option></select></label>` : ''}<label class="field">事项标题<input name="title" value="${escapeHTML(item.title)}" required maxlength="150"></label><label class="field">课程或分类<select name="course" data-course-select data-course-value="${escapeHTML(item.course)}" required>${courseSelectHTML(item.course)}</select></label><label class="field">事项类别<select name="taskType">${Object.entries({homework:'作业',exam:'考试',submission:'需要提交的任务',activity:'活动',other:'其他'}).map(([key,label]) => `<option value="${key}" ${key === (item.taskType || 'homework') ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="field">时间用途<select name="timeType"><option value="deadline">提交截止</option><option value="start" ${item.timeType === 'start' ? 'selected' : ''}>考试 / 活动开始</option></select></label><div class="form-grid"><label class="field">日期<input type="date" name="due" value="${item.due || ''}"></label><label class="field">具体时刻（可不填）<input type="time" name="time" value="${item.time || ''}"></label></div><p class="hint">只明确日期时，前一天中午 12:00 提醒。普通通知无需填写日期。</p><label class="field">优先级<select name="priority"><option value="">自动计算</option>${['P0','P1','P2','P3'].map(p => `<option ${item.manualPriority === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label><p class="error" role="alert" hidden></p><button class="button primary" type="submit">${mode === 'pending' ? '确认事项' : mode === 'convert' ? '加入任务' : mode === 'new' ? '创建任务' : '保存修改'}</button></form>`;
 }
 function reminderForm(item) {
   const rule = item.reminder || {mode:'default'};
@@ -325,7 +325,7 @@ document.addEventListener('click',event => {
   if (action === 'ignore') { if (item.state !== 'pending') return; item.state = 'ignored'; item.ignoredAt = Date.now(); render(); notify('已忽略，24 小时内可在“最近忽略”撤销',item); return; }
   if (action === 'archive') { if (item.state !== 'active') return; item.state = 'archived'; log(item,'archived','已归档，停止时间提醒'); resolveReminderSuggestion(item); render(); notify('已归档，可在任务页的“已归档”筛选中恢复'); return; }
   if (action === 'restore') { if (item.state !== 'archived') return; item.state = 'active'; log(item,'restored','手动恢复待办'); ensureReminderCompatibility(item); navigate('tasks',item.id); notify('已恢复待办'); return; }
-  if (action === 'use-image-date') { const form = $('detail-pane').querySelector('form[data-mode=pending]'); form.elements.due.value = '2026-10-12'; form.elements.time.value = '18:00'; form.elements.imageConfirmed.checked = false; form.elements.due.focus(); return; }
+  if (action === 'use-image-date') { const form = $('detail-pane').querySelector('form[data-mode=pending]'); form.elements.due.value = '2026-10-12'; form.elements.time.value = '18:00'; form.elements.due.focus(); return; }
   if (action === 'reject-image-date') { item.imageSuggestionRejected = true; button.closest('.change-box').remove(); persist(); return; }
   if (action === 'open-reminder') { showDesktop(false); navigate('tasks',item.id); $('reminder-settings').open = true; $('reminder-settings').scrollIntoView({block:'nearest'}); return; }
   if (action === 'default-reminder' || action === 'off-reminder') { const target = items.find(i=>i.id === item.targetId); target.reminder = {mode:action === 'off-reminder' ? 'off' : 'default'}; target.reminderFallback = false; resolveReminderSuggestion(target); render(); notify('提醒设置已更新'); return; }
@@ -345,10 +345,6 @@ document.addEventListener('input',event => {
     const value = event.target.value, position = event.target.selectionStart;
     renderList(); const search = $('search'); search.focus(); search.value = value; search.setSelectionRange(position,position);
     renderDetail(); renderNav(); renderDesktop(); persist();
-  }
-  if (['due','time'].includes(event.target.name)) {
-    const checkbox = event.target.form?.elements.imageConfirmed;
-    if (checkbox) checkbox.checked = false;
   }
 });
 document.addEventListener('change',event => {
@@ -389,11 +385,11 @@ document.addEventListener('submit',event => {
   }
   const kind = mode === 'new' || mode === 'convert' ? 'task' : mode === 'pending' ? data.get('kind') : item.kind;
   const title = data.get('title').trim(), course = data.get('course').trim(), due = data.get('due'), time = data.get('time'), timeType = data.get('timeType');
-  const message = !title ? '请填写事项标题。' : !course ? '请确认课程或分类。' : kind === 'task' && !due ? '请填写并确认截止日期或开始日期。' : time && !due ? '请同时填写日期。' : item?.image && kind === 'task' && !data.get('imageConfirmed') ? '请查看原图并勾选日期和时刻确认。' : '';
+  const message = !title ? '请填写事项标题。' : !course ? '请确认课程或分类。' : kind === 'task' && !due ? '请填写并确认截止日期或开始日期。' : time && !due ? '请同时填写日期。' : '';
   if (message) { error(message); return; }
   const target = mode === 'new' ? {id:crypto.randomUUID(),group:'手动添加',sender:'我',sent:'演示日期 · 手动录入',text:'手动添加的任务。',manual:true,unread:false,reminder:{mode:'default'},history:[]} : item;
   const protectedTime = mode === 'new' || mode !== 'save' || due !== target.due || time !== target.time || timeType !== target.timeType;
-  Object.assign(target,{title,course,due:kind === 'task' ? due : '',time:kind === 'task' ? time : '',timeType,taskType:data.get('taskType'),kind,state:'active',manualPriority:data.get('priority'),imageConfirmed:Boolean(data.get('imageConfirmed'))});
+  Object.assign(target,{title,course,due:kind === 'task' ? due : '',time:kind === 'task' ? time : '',timeType,taskType:data.get('taskType'),kind,state:'active',manualPriority:data.get('priority'),imageConfirmed:Boolean(target.image && kind === 'task')});
   if (protectedTime) target.protectedTime = true;
   if (mode === 'new') { items.push(target); $('new-dialog').close(); }
   if (kind === 'task') ensureReminderCompatibility(target);

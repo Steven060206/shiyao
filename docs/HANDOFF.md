@@ -6,12 +6,20 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成：开发环境及时间、提醒、状态 C# 核心已写入，87 项核心测试通过。下一步 M2 本地规则与样本，随后 M3 真实集成验证。新版 demo 的 102 项浏览器检查继续通过，真实 QQ／OCR／Windows 通知集成尚未接入。**
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成：开发环境及时间、提醒、状态 C# 核心已写入，87 项核心测试通过。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。下一步 M2 本地规则与样本，随后 M3 真实集成验证；真实 QQ／OCR／Windows 通知集成尚未接入。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/MessagePurify.Core.csproj`、`Time/TaskTime.cs`、`Reminders/ReminderPlanner.cs`、`State/TaskTransitions.cs`（均在该 Core 目录下），`tests/MessagePurify.Core.Tests/MessagePurify.Core.Tests.csproj` 及 `TaskTimeTests.cs`、`ReminderPlannerTests.cs`、`TaskTransitionsTests.cs`，两个项目各有 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；本项目尚未安装或接入 NapCat/OCR，尚未验证 OneBot 连接，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
-### 本轮正式开发启动
+### 本轮 demo 删除日期二次确认
+
+- 用户要求删除截图中的“我已查看原图并确认所填写的日期和时刻”勾选框。demo 改为填写日期后通过现有确认／保存按钮一次提交，不再单独勾选；填入图片建议仍只更新草稿，提交前不写正式时间。
+- 已删除勾选框、修改日期后的勾选重置和提交拦截；图片任务通过现有按钮提交后仍记录已确认时间及手动保护。填入建议、修改后保存、刷新、仅日期、图片转通知和自定义课程草稿保留均有浏览器检查；M1 核心和 M2 接续顺序不变。
+- 实际执行 `node tests/prototype-qa.mjs --screenshots`，退出码 0、107 项检查通过，无浏览器运行异常；执行 `node --test tests/project-rules.test.mjs`（9 项）、`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release`（87 项）、`node --check prototype/app.js`、`node --check tests/prototype-qa.mjs`、`git diff --check`，均退出码 0。需求、体验说明及测试说明同步更新；对应提交说明为 `fix: remove redundant image date confirmation`，标识以 Git 日志为准。
+- 未找到 `maintain-context-hygiene` 技能，已按项目规则人工核对需求、交接、实际代码及验证范围，原图／OCR 建议仍不自动确立正式时间。
+- 更新并查看 `prototype/previews/courses.png`，确认日期输入下直接显示优先级，不再出现二次勾选；课程截图在滚动完成后捕获。本轮保留这一处相关预览更新。
+
+### 上轮正式开发启动
 
 - 用户明确授权准备完成后开始编写代码，沿用既有 M1 计划，不重新选择 NapCat、本地运行或课程名单获取方式。
 - QQ 已在电脑登录来自用户说明，尚未检查 NapCat 对应 QQ 环境；真实集成仍按 M3 执行，不把普通 QQ 登录写成已接入。
@@ -353,3 +361,4 @@
 | 2026-10-10 | 用户确认 QQ 已在电脑登录并授权准备完成后开始编写代码；完成 M1 Task 1 | 在 codex/m1-core-foundation 分支安装项目专用 SDK 10.0.401、锁定依赖并编写日期／时刻／时区模型；10 项核心、9 项文档和 102 项浏览器检查通过，实际命令见第 1 节。提醒／状态核心继续实施，真实 QQ 接入尚未验证 |
 | 2026-10-10 | 完成 M1 Task 2 默认及自定义提醒计算 | 新增提醒纯函数与 33 项测试，合计 43 项核心检查通过；日期精度不造时刻，小时失效返回默认及 NeedsReview，关闭状态保留。校正计划示例以保证提前节点严格早于精确基准；系统调度／投递尚未实现 |
 | 2026-10-10 | 完成 M1 Task 3 状态与字段保护；M1 核心基础完成 | 新增状态纯函数与 44 项测试，合计 87 项核心检查通过；取消优先、延期后撤销保留最新值、完成 1 小时／忽略 24 小时边界均验证。SDK、三个核心模块及测试已写入，真实 NapCat／OCR／WPF／SQLite／系统通知仍在后续阶段；下一步 M2 |
+| 2026-10-10 | 用户要求删除 demo 图片日期的独立二次确认勾选 | 填入／修改日期后直接通过确认或保存按钮提交，建议填入仍仅更新草稿。新增和更新浏览器回归，107 项浏览器、9 项文档及 87 项核心测试通过，需求与交接同步 |
