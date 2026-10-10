@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- 用户已授权准备完成后开始编写代码，本计划正在执行；逐任务记录实际产物、验证与提交。
-- Windows x64、.NET 10 LTS；本机默认 dotnet 尚无 SDK，准备项目专用 SDK，安装运行时不能替代安装 SDK。
+- 用户已授权准备完成后开始编写代码，本计划 M1 三个任务已完成；实际产物、验证与逐任务提交见交接文档。
+- Windows x64、.NET 10 LTS；已在项目 `.tools/dotnet` 安装 SDK 10.0.401，本机默认 dotnet 安装未改。开发命令使用该 SDK 可执行文件，锁定依赖已写入。
 - 日期当天仍有效，次日才过期；不能把零点或 23:59 写成正式截止。
 - 默认具体时刻提前 24 小时、2 小时；仅日期提前一天 12:00。
 - 小时自定义遇到日期精度失效时回退默认并标记待确认，日历自定义保持偏移和钟点；关闭提醒保持关闭。
@@ -225,7 +225,7 @@ public static class TaskTransitions
 
 `RestoreForNewAction` 仅在调用者已验证可靠来源、关联和必要时间后调用；完成状态恢复待办，已归档状态不自动恢复，形成建议由 M4 处理。`OperationSequence` 将供持久化检查后续替代关系；纯函数不假装完成数据库的并发保障。
 
-- [ ] **Step 1：写手动时间保护测试，运行确认缺少实现而失败。** 在 `TaskTransitionsTests.cs` 写：
+- [x] **Step 1：写手动时间保护测试，运行确认缺少实现而失败。** 在 `TaskTransitionsTests.cs` 写：
 
 ```csharp
 [Fact]
@@ -245,7 +245,7 @@ public void ProposedTime_DoesNotOverrideProtectedTime()
 
 运行 `dotnet test tests/MessagePurify.Core.Tests --no-restore --filter TaskTransitionsTests`，确认缺少实现失败。
 
-- [ ] **Step 2：实现状态转换与版本决定。** 只有实际状态/字段改变才增加事项版本；正式时间改变才增加时间版本。重复完成/取消/归档为幂等；`AcceptTime` 表示用户接受新值，更新正式时间及保护标记，`ProposeTime` 遇保护只输出建议，未保护时自动更新但不新增手动保护。取消不被手动时间保护阻挡，取消状态不被旧完成或旧恢复调用覆盖。先实现以下保护分支，再为各状态转换加入测试：
+- [x] **Step 2：实现状态转换与版本决定。** 只有实际状态/字段改变才增加事项版本；正式时间改变才增加时间版本。重复完成/取消/归档为幂等；`AcceptTime` 表示用户接受新值，更新正式时间及保护标记，`ProposeTime` 遇保护只输出建议，未保护时自动更新但不新增手动保护。取消不被手动时间保护阻挡，取消状态不被旧完成或旧恢复调用覆盖。先实现以下保护分支，再为各状态转换加入测试：
 
 ```csharp
 public static TransitionResult ProposeTime(TaskSnapshot task, TaskTime proposed)
@@ -258,8 +258,8 @@ public static TransitionResult ProposeTime(TaskSnapshot task, TaskTime proposed)
     return new(updated, null, true);
 }
 ```
-- [ ] **Step 3：补充撤销与后续变更测试。** `CreateUndo(Complete)` 为处理时刻+1小时，`Ignore` 为+24小时；`now < ExpiresAt && !superseded` 才适用，到期边界不适用。覆盖完成后延期再撤销采用最新时间、完成后取消不能撤销、已被新行动恢复后旧撤销不适用、归档新行动不自动恢复。纯函数只判断和生成决定，持久化操作 ID/旧版本冲突及实际撤销调用在 M4 测试。
-- [ ] **Step 4：实现仅作用于完成状态的撤销并运行全部测试。** 当前快照的时间不回退；`superseded` 由后续持久化层根据操作顺序检查，核心只消费判定。
+- [x] **Step 3：补充撤销与后续变更测试。** `CreateUndo(Complete)` 为处理时刻+1小时，`Ignore` 为+24小时；`now < ExpiresAt && !superseded` 才适用，到期边界不适用。覆盖完成后延期再撤销采用最新时间、完成后取消不能撤销、已被新行动恢复后旧撤销不适用、归档新行动不自动恢复。纯函数只判断和生成决定，持久化操作 ID/旧版本冲突及实际撤销调用在 M4 测试。
+- [x] **Step 4：实现仅作用于完成状态的撤销并运行全部测试。** 当前快照的时间不回退；`superseded` 由后续持久化层根据操作顺序检查，核心只消费判定。
 
 ```csharp
 public static UndoTicket CreateUndo(UndoKind kind, DateTimeOffset processedAt,
@@ -286,7 +286,7 @@ node tests/prototype-qa.mjs
 ```
 
 明确记录状态决定已测试、数据库/通知/真实窗口未实现。
-- [ ] **Step 5：同步交接并提交。** 检查范围及 diff，提交 `feat: add lifecycle and protected time decisions`。
+- [x] **Step 5：同步交接并提交。** 检查范围及 diff，提交 `feat: add lifecycle and protected time decisions`。
 
 ## 第一阶段交付与接续
 

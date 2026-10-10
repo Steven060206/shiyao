@@ -26,7 +26,7 @@ test('小任务规则明确服从新的测试和提交要求', () => {
   }
 });
 
-test('项目文档的本地链接与已交付原型文件存在', () => {
+test('项目文档的本地链接、原型与核心交付文件存在', () => {
   const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-core-foundation.md'];
   for (const file of files) {
     for (const match of read(file).matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
@@ -36,7 +36,19 @@ test('项目文档的本地链接与已交付原型文件存在', () => {
       assert.ok(fs.existsSync(resolved), `${file} 链接目标不存在：${target}`);
     }
   }
-  for (const file of ['prototype/index.html', 'prototype/app.js', 'prototype/README.md', ...['courses', 'pending', 'main', 'main-dark', 'desktop', 'desktop-dark'].map(name => `prototype/previews/${name}.png`), 'tests/prototype-qa.mjs']) {
+  const artifacts = [
+    'prototype/index.html', 'prototype/app.js', 'prototype/README.md',
+    ...['courses', 'pending', 'main', 'main-dark', 'desktop', 'desktop-dark'].map(name => `prototype/previews/${name}.png`),
+    'tests/prototype-qa.mjs', 'global.json', '.gitignore',
+    'src/MessagePurify.Core/MessagePurify.Core.csproj',
+    'src/MessagePurify.Core/Time/TaskTime.cs',
+    'src/MessagePurify.Core/Reminders/ReminderPlanner.cs',
+    'src/MessagePurify.Core/State/TaskTransitions.cs',
+    'tests/MessagePurify.Core.Tests/MessagePurify.Core.Tests.csproj',
+    ...['TaskTime', 'ReminderPlanner', 'TaskTransitions'].map(name => `tests/MessagePurify.Core.Tests/${name}Tests.cs`),
+    ...['src/MessagePurify.Core', 'tests/MessagePurify.Core.Tests'].map(folder => `${folder}/packages.lock.json`)
+  ];
+  for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
   }
 });

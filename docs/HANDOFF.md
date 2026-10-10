@@ -6,8 +6,8 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，现确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 开发环境、时间、提醒与状态基础正在实施。新版 demo 的 102 项浏览器验证已通过，真实 QQ／OCR／Windows 通知集成尚未接入。**
-- 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/MessagePurify.Core.csproj`、`src/MessagePurify.Core/Time/TaskTime.cs`、`tests/MessagePurify.Core.Tests/MessagePurify.Core.Tests.csproj`、`tests/MessagePurify.Core.Tests/TaskTimeTests.cs` 及两个 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成：开发环境及时间、提醒、状态 C# 核心已写入，87 项核心测试通过。下一步 M2 本地规则与样本，随后 M3 真实集成验证。新版 demo 的 102 项浏览器检查继续通过，真实 QQ／OCR／Windows 通知集成尚未接入。**
+- 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/MessagePurify.Core.csproj`、`Time/TaskTime.cs`、`Reminders/ReminderPlanner.cs`、`State/TaskTransitions.cs`（均在该 Core 目录下），`tests/MessagePurify.Core.Tests/MessagePurify.Core.Tests.csproj` 及 `TaskTimeTests.cs`、`ReminderPlannerTests.cs`、`TaskTransitionsTests.cs`，两个项目各有 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；本项目尚未安装或接入 NapCat/OCR，尚未验证 OneBot 连接，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
@@ -15,7 +15,7 @@
 
 - 用户明确授权准备完成后开始编写代码，沿用既有 M1 计划，不重新选择 NapCat、本地运行或课程名单获取方式。
 - QQ 已在电脑登录来自用户说明，尚未检查 NapCat 对应 QQ 环境；真实集成仍按 M3 执行，不把普通 QQ 登录写成已接入。
-- 当前在 `codex/m1-core-foundation` 分支实施 M1，Task 1 时间模型和 Task 2 提醒模块已写入并验证，Task 3 状态操作继续推进。各任务验证后分别提交；真实应用界面、数据库、消息识别和系统集成仍在后续阶段。
+- 当前在 `codex/m1-core-foundation` 分支完成 M1，Task 1 时间、Task 2 提醒和 Task 3 状态操作均已写入并验证。各任务验证后分别提交；真实应用界面、数据库、消息识别和系统集成仍在后续阶段。
 - SDK 安装在本项目 `.tools/dotnet`（Git 忽略），没有修改全局 PATH 或已有 dotnet 安装。通过[微软官方发布元数据](https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json)获取 Windows x64 ZIP，实际执行 `Invoke-WebRequest`、`Get-FileHash -Algorithm SHA512`、`Expand-Archive`，校验与元数据一致。执行 `.tools/dotnet/dotnet.exe --version`、`--list-sdks`、`--info` 均退出码 0：SDK 10.0.401，RID win-x64，NETCore／ASP.NETCore／WindowsDesktop 运行时 10.0.12；`global.json` 锁定 10.0.401，rollForward 为 latestPatch。
 - 已执行 SDK 的 `new globaljson`、`new classlib -f net10.0 --no-restore`、`new xunit -f net10.0 --no-restore`、`add … reference …` 和 `restore tests/MessagePurify.Core.Tests --use-lock-file`，均退出码 0。保留模板稳定依赖 Microsoft.NET.Test.Sdk 17.14.1（MIT）、xunit 2.9.3 与 runner 3.1.4（Apache-2.0），版本与完整传递依赖写入锁文件；未使用覆盖率采集器，不加入 coverlet。许可证来源为对应 NuGet 官方包页，xunit v2 为仅安全更新的旧稳定系列，当前构建未出现警告。
 - `TaskTime` 保留 Deadline／Start、日期、可选钟点及时区；仅日期当天仍有效、不生成正式瞬时值；精确时间到时即失效，非法时区及夏令时歧义／不存在钟点返回明确异常。先执行 `test … --no-restore --filter TaskTimeTests`，退出码 1，确认缺少 TimeKind／TaskTime 实现；写入实现后执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore`，退出码 0，10 项通过、0 失败。
@@ -24,6 +24,10 @@
 - Task 2 新增 `src/MessagePurify.Core/Reminders/ReminderPlanner.cs`、`tests/MessagePurify.Core.Tests/ReminderPlannerTests.cs`。默认精确节点提前 24／2 小时，日期节点前一天 12:00；支持自定义小时、日历偏移及关闭。小时规则遇日期精度回退默认并返回 NeedsReview，日历偏移保留，关闭不重启。仅产出节点及待确认决定，不进行系统投递或创建持久化待确认项。
 - 先执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --filter ReminderPlannerTests`，退出码 1，确认缺少提醒类型／实现；实现后同命令退出码 0、33 项通过，全部核心测试退出码 0、43 项通过。精确基准的“提前”节点须严格更早，校正计划示例的 `>` 为 `>=`；包括夏令时经过 24 小时、小数小时及日历节点的测试，不改变正式时间。
 - Task 2 交付前再次执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore`、`node --test tests/project-rules.test.mjs`、`node tests/prototype-qa.mjs`、`git diff --check`，全部退出码 0，43 项核心、9 项文档、102 项浏览器检查通过。提交说明 `feat: add default and custom reminder planning`，标识以 Git 日志为准。
+- Task 3 新增 `src/MessagePurify.Core/State/TaskTransitions.cs`、`tests/MessagePurify.Core.Tests/TaskTransitionsTests.cs`。完成／取消／归档／恢复只对实际变化递增事项版本，时间修改独立递增时间版本；受保护正式时间只输出建议，接受后才更改并保护。取消不被旧完成／恢复／归档覆盖；已完成可信新行动可恢复，已归档及取消不自动恢复。完成撤销 1 小时、忽略资格 24 小时，到期或被后续操作替代时不可撤销；完成后延期再撤销保留最新时间。
+- 先执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --filter TaskTransitionsTests`，退出码 1，确认缺少状态类型／实现；实现后同命令退出码 0、44 项通过；全部核心测试退出码 0、87 项通过、0 失败。`OperationSequence` 及 superseded 的实际检查、证据／处理记录保存、忽略的持久化恢复和数据库并发在 M4 落实，核心只消费当前快照和明确输入，不恢复整个旧快照。
+- M1 交付前实际执行 `.tools/dotnet/dotnet.exe --version`、`restore tests/MessagePurify.Core.Tests --locked-mode`、`test tests/MessagePurify.Core.Tests --no-restore --configuration Release`，全部退出码 0：SDK 10.0.401、Release 编译成功、87 项测试通过，0 失败／跳过。执行 `node --test tests/project-rules.test.mjs`（9 项）、`node tests/prototype-qa.mjs`（102 项）、`node --check tests/project-rules.test.mjs`、`node --check tests/prototype-qa.mjs`、`node --check prototype/app.js`、`git diff --check`，均退出码 0，无浏览器运行异常；范围为核心、文档及 demo。
+- 独立只读代码复核未发现需要修正的问题；人工完成里程碑上下文核对：M1 三任务已勾选且源码／测试／锁文件存在，需求、设计及本文的阶段与实际验证一致，M2～M9 未勾选。`maintain-context-hygiene` 技能仍未找到，沿用人工核对，不删除项目文件。前两次提交为 `f1bdce3`、`0edf77a`；Task 3 提交说明 `feat: add lifecycle and protected time decisions`，标识以 Git 日志为准。
 
 ### 上轮 demo 认可与下一步说明
 
@@ -251,18 +255,18 @@
 
 这些是尚待设计或验证的内容，不要误写为已实现或要求用户重新确认已选过的方向。
 
-**已确认：demo 先行，用户反馈 demo 基本满足要求并授权开始正式开发。** M1 正在实施，时间及提醒模块已验证，状态模块继续推进。真实 QQ、OCR、系统通知和桌面宿主验证仍按后续计划执行；整体设计确认继续有效。本轮记录见第 1 节。
+**已确认：demo 先行，用户反馈 demo 基本满足要求并授权开始正式开发。** M1 已完成，时间、提醒和状态核心已验证。真实 QQ、OCR、系统通知和桌面宿主验证仍按后续计划执行；整体设计确认继续有效。本轮记录见第 1 节。
 
 1. **整体设计已确认**：`docs/superpowers/specs/2026-10-10-windows-app-design.md` 包含使用流程、提醒、错误恢复、架构、数据、NapCat、规则、OCR、WebView2、Windows 集成、安装和验收。2026-10-10 用户选择 A；使用行为不重新询问，后端细节由开发者负责。
-2. **已确认：老师明确取消任务后的去向**。用户选择 A：停止该任务后续提醒，移出待办和桌面卡片，保留“已取消”记录及原始消息，不记为用户已完成；取消变更仍通知一次。尚未实现。
-3. **已确认：自定义提醒遇到延期**。精度兼容的有效延期保持提前间隔，默认节点按新正式时间重算；精度不兼容时临时使用默认节点并提示设置待确认。提醒计算核心已实现并测试，持久化待确认及正式 UI 尚未实现；手动字段冲突保护在 Task 3 实施。
-4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并按规则继续提醒；保留此前完成记录及新旧证据。普通补充说明不自动恢复，关联或有效截止信息不确定时仍按既有规则待确认。尚未实现。
-5. **当前：执行既有 M1 计划**。SDK、时间和提醒模块已完成，继续状态操作，再进入 M2 本地规则与样本。以 `docs/superpowers/plans/2026-10-10-core-foundation.md` 实际勾选项为准，不将 demo 流程或核心测试通过写成真实应用验收。
+2. **已确认：老师明确取消任务后的去向**。用户选择 A：停止后续提醒，移出待办与桌面卡片，保留已取消记录及原文，不记为用户完成，取消变更通知一次。核心取消状态及旧操作保护已测试；真实来源判断、持久化和系统清理／投递尚未实现。
+3. **已确认：自定义提醒遇到延期**。精度兼容的有效延期保持提前间隔，默认节点按新正式时间重算；精度不兼容时临时使用默认节点并提示设置待确认。提醒计算与手动字段冲突核心已实现并测试，持久化待确认及正式 UI 尚未实现。
+4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态决定已测试，实际来源关联、记录保存和通知尚未实现。
+5. **下一步：M2 本地规则与样本基线**。M1 三个任务已完成，先制定 M2 详细步骤，按设计实现消息分段、相对日期、行动／对象／课程／来源分别判定及合成样本评估；之后进入 M3 的真实 QQ／OCR／Windows 验证。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
 6. 数据模型、SQLite、消息桥、OCR 进程通信、提醒调度、数据保留和打包已有开发者方案，见设计稿；尚未实现。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
 7. NapCat 真实连接和历史返回、本地规则误判/漏判、OCR 学校截图、桌面宿主层级及安装包通知激活仍须真实验证。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
 8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。用户说明普通 QQ 已在电脑登录，NapCat 连接尚未验证。
 9. 安静时段已明确延期：Windows 第一版只保留“暂未启用”的设置入口，具体时间及自动静音行为留待未来若规划手机版时再讨论；手机版开发尚未确定。
-10. **2026-10-10 七项复核补充已并入设计（需求已确认，尚未实现）**：
+10. **2026-10-10 七项复核补充已并入设计（需求已确认，M1 仅完成相关核心决定，端到端流程尚未实现）**：
     - 归档：详情操作及恢复、已归档筛选、移出待办与卡片、停止时间提醒及清理旧通知，证据和处理记录保留；归档后新要求先待确认。
     - 取消与发送：同一账号/事项的状态变更与系统提交串行协调，覆盖在途发送和汇总成员，失效条目随后清理，取消本身的有效变更通知不被误删。
     - 迟到消息：已结束历史批次不重开，未处理旧消息进入新的持久化小批次；首个符合汇总条件的结果入批后 5 秒内关闭，时间不足窗口时立即提交，不等下次断线。
@@ -348,3 +352,4 @@
 | 2026-10-10 | 用户反馈 demo 基本满足要求，询问下一步 | 同步演示基本认可状态，说明按既有计划先实施 M1 核心基础，再推进识别与真实集成。更新文档状态检查；本轮仅维护文档及测试，真实应用代码尚未开始 |
 | 2026-10-10 | 用户确认 QQ 已在电脑登录并授权准备完成后开始编写代码；完成 M1 Task 1 | 在 codex/m1-core-foundation 分支安装项目专用 SDK 10.0.401、锁定依赖并编写日期／时刻／时区模型；10 项核心、9 项文档和 102 项浏览器检查通过，实际命令见第 1 节。提醒／状态核心继续实施，真实 QQ 接入尚未验证 |
 | 2026-10-10 | 完成 M1 Task 2 默认及自定义提醒计算 | 新增提醒纯函数与 33 项测试，合计 43 项核心检查通过；日期精度不造时刻，小时失效返回默认及 NeedsReview，关闭状态保留。校正计划示例以保证提前节点严格早于精确基准；系统调度／投递尚未实现 |
+| 2026-10-10 | 完成 M1 Task 3 状态与字段保护；M1 核心基础完成 | 新增状态纯函数与 44 项测试，合计 87 项核心检查通过；取消优先、延期后撤销保留最新值、完成 1 小时／忽略 24 小时边界均验证。SDK、三个核心模块及测试已写入，真实 NapCat／OCR／WPF／SQLite／系统通知仍在后续阶段；下一步 M2 |
