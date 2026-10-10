@@ -68,7 +68,7 @@ test('新版演示交付链接可用，保存说明与真实集成阶段一致',
 test('需求、交接及设计的当前状态一致记录整体设计已确认', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
     assert.match(read(file).split('## 2.')[0], /demo 基本满足要求/, `${file} 需同步用户的演示反馈`);
-    assert.match(read(file).split('## 2.')[0], /M1/, `${file} 需明确下一步核心基础阶段`);
+    assert.match(read(file).split('## 2.')[0], /M1/, `${file} 需保留核心基础完成状态`);
   }
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
     const current = read(file).split('## 1.')[0] + (file.endsWith('HANDOFF.md') ? read(file).match(/^- 当前阶段：.*$/m)?.[0] : '');
@@ -77,6 +77,18 @@ test('需求、交接及设计的当前状态一致记录整体设计已确认',
     assert.match(current, /M1.*正在实施|M1 已完成/, `${file} 需准确记录核心开发阶段`);
     assert.match(current, /尚未接入/, `${file} 需保留真实集成状态`);
     assert.doesNotMatch(current, /整体设计尚未确认|完整设计仍待整体核对/, file);
+  }
+});
+
+test('M2 计划与当前规则开发阶段同步', () => {
+  const plan = read('docs/superpowers/plans/2026-10-10-local-rules.md');
+  assert.match(plan, /原发送时刻/);
+  assert.match(plan, /合成样本与真实独立验收分开/);
+  assert.match(plan, /Task 1/);
+  assert.match(plan, /Task 2/);
+  assert.match(plan, /Task 3/);
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
+    assert.match(read(file).split('## 2.')[0], /M2.*正在实施|M2 已完成/, `${file} 需同步本地规则阶段`);
   }
 });
 
