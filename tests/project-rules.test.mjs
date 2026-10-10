@@ -108,6 +108,14 @@ test('QQ 登录与实际连接状态分别记录', () => {
   }
 });
 
+test('未确认的自动切换方案只保留在交接事项中', () => {
+  const handoff = read('docs/HANDOFF.md');
+  const requirements = read('docs/requirements.md');
+  assert.match(handoff, /未决定：定时自动切换普通 QQ 与 NapCat/);
+  assert.match(handoff, /尚未确认要开发/);
+  assert.doesNotMatch(requirements, /定时自动切换普通 QQ 与 NapCat/);
+});
+
 test('M3 正在实施，实测条件不被协议模拟替代', () => {
   const plan = read('docs/superpowers/plans/2026-10-10-integration-probes.md');
   for (const label of ['Task 1', 'Task 2', 'Task 3', 'get_group_msg_history', 'JSON Lines', 'activationObserved']) {
