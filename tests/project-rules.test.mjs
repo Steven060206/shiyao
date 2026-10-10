@@ -36,7 +36,7 @@ test('项目文档的本地链接与已交付原型文件存在', () => {
       assert.ok(fs.existsSync(resolved), `${file} 链接目标不存在：${target}`);
     }
   }
-  for (const file of ['prototype/index.html', 'prototype/app.js', 'prototype/README.md', ...['main', 'main-dark', 'desktop', 'desktop-dark'].map(name => `prototype/previews/${name}.png`), 'tests/prototype-qa.mjs']) {
+  for (const file of ['prototype/index.html', 'prototype/app.js', 'prototype/README.md', ...['pending', 'main', 'main-dark', 'desktop', 'desktop-dark'].map(name => `prototype/previews/${name}.png`), 'tests/prototype-qa.mjs']) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
   }
 });

@@ -121,7 +121,7 @@ function suggestionHTML(item) {
   if (item.kind === 'reminder') return `<div class="change-box"><b>原自定义提醒不再适用，当前使用默认提醒</b><p>此任务的新时间只有日期，原“提前小时”规则无法继续使用。</p><button class="button small" data-action="open-reminder" data-id="${item.targetId}">重新设置提醒</button><button class="button small" data-action="default-reminder" data-id="${item.id}">保留默认提醒</button><button class="button small" data-action="off-reminder" data-id="${item.id}">关闭时间提醒</button></div>`;
   return `<div class="change-box"><b>${item.restoreArchived ? '已归档任务收到新行动要求' : '新时间与手动填写的时间不同'}</b><p>当前：${escapeHTML(dateLabel(item.oldTime))}<br>建议：${escapeHTML(dateLabel(item.suggestion))}<br>接受前保留当前任务状态与有效提醒。</p><button class="button primary small" data-action="accept-change" data-id="${item.id}">${item.restoreArchived ? '接受并恢复待办' : '接受新时间'}</button></div>`;
 }
-function renderDetail() {
+function renderDetailContent() {
   const item = items.find(i => i.id === selectedId);
   if (page === 'settings') { $('detail-pane').innerHTML = '<p class="eyebrow">演示范围</p><h2 class="detail-title">先体验日常操作</h2><p class="detail-sub">这些开关保存的是此浏览器的演示偏好。系统声音、自动启动、托盘和 QQ 连接将在真实 Windows 应用中接入。</p><div class="deadline-box"><small>体验路线</small><b>确认图片日期 → 完成并撤销</b><small>也可以归档恢复、添加考试、调整提醒，或在详情底部模拟老师的新消息。</small></div><button class="button" data-action="guide">重新体验引导</button>'; return; }
   if (!item) { $('detail-pane').innerHTML = '<div class="empty"><h2>选择一个事项</h2><p>这里显示原文、图片和可编辑信息。</p></div>'; return; }
@@ -129,6 +129,23 @@ function renderDetail() {
   const suggestion = ['change','reminder'].includes(item.kind);
   const expired = ['completed','ignored'].includes(item.state) && !canUndo(item);
   $('detail-pane').innerHTML = `<p class="eyebrow">${pending ? '核对并补齐信息' : '事项详情'}</p><h2 class="detail-title">${escapeHTML(item.title)}</h2><p class="detail-sub">${badge(item)} <span style="margin-left:7px">${escapeHTML(item.course || '课程或分类待确认')}</span></p>${item.changeLabel ? `<div class="change-box">${escapeHTML(item.changeLabel)}</div>` : ''}${suggestion ? suggestionHTML(item) : `<div class="deadline-box ${active && task && overdue(item) ? 'overdue' : ''}"><small>${pending ? '待补信息' : task ? timeName(item) : '事项类型'}</small><b>${pending ? escapeHTML(item.reason) : task ? dateLabel(item) : '普通通知'}</b><small>${reminderLabel(item)}</small></div>`}<div class="detail-actions">${pending ? `<button class="button small" data-action="ignore" data-id="${item.id}">忽略此项</button>` : canUndo(item) ? `<button class="button" data-action="undo" data-id="${item.id}">撤销</button><span class="hint">${item.state === 'completed' ? '完成后 1 小时内' : '忽略后 24 小时内'}可撤销</span>` : expired ? '<span class="tag">撤销期限已过，记录保留</span>' : ''}${active && task ? `<button class="button primary" data-action="complete" data-id="${item.id}">标记完成</button><button class="button" data-action="archive" data-id="${item.id}">归档</button><button class="button small" data-action="preview-reminder" data-id="${item.id}">预览提醒</button>` : active && item.kind === 'notice' ? `<button class="button" data-action="convert" data-id="${item.id}">加入任务</button>` : item.state === 'archived' ? `<button class="button" data-action="restore" data-id="${item.id}">恢复待办</button>` : ''}</div>${item.reminderFallback ? '<div class="change-box">原自定义提醒不再适用，当前使用默认提醒。请重新设置或保留默认。</div>' : ''}<h3 class="section-label">${item.manual ? '任务来源' : '原始消息'}</h3><p class="source-meta">${escapeHTML(item.group)} · ${escapeHTML(item.sender)}<br>${escapeHTML(item.sent)}</p><div class="message">${escapeHTML(item.text)}</div>${item.image ? `<button class="source-image-button" data-action="image" aria-label="放大原图">${imagePreview()}</button><details class="ocr-details"><summary>查看识别文字</summary><p class="ocr">图片文字（示例）：${escapeHTML(item.ocr)}</p></details>${pending && !item.imageSuggestionRejected ? '<div class="change-box"><b>建议日期：10月12日 18:00</b><p>核对原图后确认，才能用于提醒。</p><button class="button small" data-action="use-image-date">填入建议</button><button class="button small quiet" data-action="reject-image-date" data-id="'+item.id+'">拒绝建议</button></div>' : ''}` : ''}${item.history?.length ? `<details><summary>变更与完成记录（${item.history.length}）</summary>${item.history.map(e => `<p class="ocr">${escapeHTML(e.text)}${e.undone ? '（已撤销）' : ''}</p>`).join('')}</details>` : ''}${suggestion || !active && !pending ? '' : pending ? `<h3 class="section-label">补齐并确认</h3>${editForm(item,'pending')}` : convertingId === item.id ? `<h3 class="section-label">加入任务</h3>${editForm(item,'convert')}` : task ? `<details><summary>修改事项信息</summary>${editForm(item,'save')}</details>${reminderForm(item)}` : ''}${task && !pending && item.state !== 'cancelled' ? `<details class="simulation"><summary>体验老师的新消息（示例）</summary><p class="ocr">模拟已能明确关联到此任务的消息，保留原文。</p><div class="detail-actions">${active ? `<button class="button small" data-action="simulate-delay" data-id="${item.id}">延期两天</button><button class="button small" data-action="simulate-date" data-id="${item.id}">新时间只有日期</button><button class="button small" data-action="simulate-cancel" data-id="${item.id}">老师取消任务</button>` : ''}<button class="button small" data-action="simulate-new" data-id="${item.id}">新增提交要求</button></div></details>` : ''}`;
+}
+function updatePendingAction(form) {
+  const task = form.elements.kind.value === 'task';
+  $('pending-confirm-button').textContent = task ? '确认并加入任务' : '确认并保留为通知';
+  $('pending-confirm-help').textContent = task ? '补齐课程和日期后，点击按钮即可加入任务列表。' : '确认后进入通知列表；需要完成的事项，请将“事项类型”选为“任务”。';
+}
+function renderDetail() {
+  renderDetailContent();
+  const pane = $('detail-pane'), form = pane.querySelector('form[data-mode=pending]');
+  const content = document.createElement('div');
+  content.className = 'detail-scroll';
+  content.append(...pane.childNodes); pane.append(content);
+  if (!form) return;
+  form.id = 'pending-confirm-form';
+  form.querySelector('button[type=submit]').remove();
+  pane.insertAdjacentHTML('beforeend','<div class="confirmation-bar" aria-label="确认事项"><p id="pending-confirm-help"></p><button id="pending-confirm-button" class="button primary" type="submit" form="pending-confirm-form"></button></div>');
+  updatePendingAction(form);
 }
 function renderDesktop() {
   const tasks = pageItems('tasks'), pending = pageItems('pending');
@@ -304,13 +321,14 @@ document.addEventListener('change',event => {
   if (input.id === 'course-filter' || input.id === 'state-filter') { filters[input.id === 'course-filter' ? 'course' : 'state'] = input.value; render(); return; }
   if (input.dataset.setting) { settings[input.dataset.setting] = input.type === 'checkbox' ? input.checked : input.value; applyPreferences(); persist(); return; }
   if (input.name === 'reminderMode') input.form.querySelectorAll('[data-rule]').forEach(el => el.hidden = el.dataset.rule !== input.value);
+  if (input.name === 'kind' && input.form.dataset.mode === 'pending') updatePendingAction(input.form);
   if (input.name === 'taskType') input.form.elements.timeType.value = ['exam','activity'].includes(input.value) ? 'start' : 'deadline';
 });
 document.addEventListener('submit',event => {
   const form = event.target.closest('form[data-mode]'); if (!form) return; event.preventDefault();
   const data = new FormData(form), mode = form.dataset.mode;
   const item = items.find(i => i.id === form.dataset.id);
-  const error = message => { form.querySelector('.error').textContent = message; form.querySelector('.error').hidden = false; };
+  const error = message => { const notice = form.querySelector('.error'); notice.textContent = message; notice.hidden = false; notice.scrollIntoView({block:'nearest'}); };
   if (mode === 'reminder') {
     const rule = {mode:data.get('reminderMode')}, hours = Number(data.get('hours')), days = Number(data.get('days')), clock = data.get('clock');
     if (rule.mode === 'hours' && (!item.time || !Number.isFinite(hours) || hours < 0.5 || hours > 8760)) { error('只有明确时刻才能使用小时提醒，请填写 0.5～8760 小时。'); return; }

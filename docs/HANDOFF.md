@@ -6,10 +6,18 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户选择 A，确认 demo 先行；新版可点击 demo 已写入并完成 78 项浏览器验证，当前供用户体验。整体设计已确认、实施计划已写入，真实应用代码尚未开始。主要使用行为及七项复核补充继续有效，真实 WPF、QQ、OCR、Windows 桌面驻留和系统提醒尚未开发。先收集 demo 体验反馈，再接续正式应用阶段。**
-- 当前可交付产物：`AGENTS.md`、`docs/requirements.md`、`docs/HANDOFF.md`、`docs/superpowers/specs/2026-10-10-windows-app-design.md`，以及 `prototype/index.html`、`prototype/app.js`、`prototype/README.md`、`prototype/previews/main.png`、`prototype/previews/main-dark.png`、`prototype/previews/desktop.png`、`prototype/previews/desktop-dark.png`；可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
+- 当前阶段：**新版 demo 已根据体验反馈修复详情栏滚动与待确认入口，完成 86 项浏览器验证，继续供用户体验。用户已确认 demo 先行；整体设计已确认、实施计划已写入，真实应用代码尚未开始。主要使用行为及七项复核补充继续有效，真实 WPF、QQ、OCR、Windows 桌面驻留和系统提醒尚未开发。先收集 demo 体验反馈，再接续正式应用阶段。**
+- 当前可交付产物：`AGENTS.md`、`docs/requirements.md`、`docs/HANDOFF.md`、`docs/superpowers/specs/2026-10-10-windows-app-design.md`，以及 `prototype/index.html`、`prototype/app.js`、`prototype/README.md`、`prototype/previews/pending.png`、`prototype/previews/main.png`、`prototype/previews/main-dark.png`、`prototype/previews/desktop.png`、`prototype/previews/desktop-dark.png`；可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。没有安装或接入本项目所需的 NapCat/OCR，没有登录或连接真实 QQ，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
+
+### 本轮 demo 体验修复
+
+- 用户反馈右侧详情被裁切、滚轮不生效，以及无法找到待确认的编辑确认入口。已复现并定位：`.main` 的 Grid 子项默认最小高度被长详情撑大，上层 `.app` 隐藏溢出，详情本身无滚动空间；确认按钮在裁切区域的表单底部。
+- 1100×800 复现时详情高 1169px、底部坐标约 1254px、滚动高度等于可视高度。新增高度回归检查首次执行 `node tests/prototype-qa.mjs` 退出码 1，证明原问题；只加入 `.main { min-height:0 }` 后，详情可视高度为 694px、滚动高度 1169px、底部 779px，复跑退出码 0、79 项通过。
+- 详情现在由独立滚动内容区与底部固定操作栏组成。待确认的按钮根据事项类型显示“确认并加入任务”或“确认并保留为通知”，文字说明确认后的去向和必填信息。按钮使用原表单提交机制，信息缺失时滚动到错误提示；图片日期的人工确认规则继续有效。
+- 最终实际执行 `node tests/prototype-qa.mjs --screenshots`，退出码 0、86 项通过；新增原生鼠标滚轮上下滚动、左栏不受影响、按钮固定可见、按钮文案更新、错误可见，以及原生鼠标点击转为任务／通知的检查。执行 `node --test tests/project-rules.test.mjs`，退出码 0、8 项通过；`node --check prototype/app.js`、`node --check tests/prototype-qa.mjs`、`git diff --check` 均退出码 0。
+- 五张预览已生成；新增并查看 `prototype/previews/pending.png`（1100×800），确认右栏滚动条和底部确认按钮可见。需求、体验说明与实际文件已人工核对一致；`maintain-context-hygiene` 技能此前搜索未找到，继续依据项目规则完成核对。真实应用集成边界不变，继续等待用户体验反馈。对应提交说明为 `fix: restore detail scrolling and visible confirmation`，标识以 Git 日志为准。
 
 ### 上轮整体确认与实施计划
 
@@ -27,12 +35,12 @@
 - 每次改动后，都必须编写或更新相关测试，并在交付给用户前，确保所有测试和验证全部通过。小任务同样适用，不强制测试先行。
 - 现有 `AGENTS.md` 已加入“注意事项”，原有接续、文档同步、讨论和阶段规则保留；需求文档同步新增要求。
 - 上轮在项目根目录执行 `git init`，建立本地 Git 仓库，并创建首次基线提交 `ff16b4b`，包含现有文档、浏览器原型及规则和测试改动。提交作者仅在本仓库配置为 `Codex <codex@localhost>`，未修改全局作者设置；后续提交见 Git 日志。本轮没有应用实现改动，也未配置远程仓库。
-- 已有 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs` 和 `tests/README.md`。早期 27 项浏览器检查现已扩充为 78 项，文档检查从 7 项扩充为 8 项。默认测试不覆盖已有预览图，可用 `--screenshots` 主动更新预览；测试范围与命令见 `tests/README.md`。
+- 已有 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs` 和 `tests/README.md`。早期 27 项浏览器检查先扩充为 78 项，本轮修复后为 86 项；文档检查为 8 项。默认测试不覆盖已有预览图，可用 `--screenshots` 主动更新五张预览；测试范围与命令见 `tests/README.md`。
 - 上轮实际执行 `node --test tests/project-rules.test.mjs`，退出码 0，6 项通过、0 失败；执行 `node tests/prototype-qa.mjs`，最终退出码 0，27 项通过、无 JavaScript 异常。首次浏览器检查及诊断复跑均在按钮动画断言处退出码 1：诊断显示本机 `prefers-reduced-motion: reduce` 为真、按钮过渡为 `0s`，符合界面现有规则；测试随后显式模拟普通与减少动画两种偏好，不依赖 Windows 设置，未改原型代码。
 - 上轮实际执行 `node --check tests/prototype-qa.mjs` 和 `node --check tests/project-rules.test.mjs`，均退出码 0。全部现有测试的命令及环境要求见 `tests/README.md`；验证范围为文档和浏览器原型，真实应用代码尚未开始。本轮更新阶段相关检查并重新验证后记录结果。
 - 上轮实际执行 `git diff --cached --check`、`git commit -m 'chore: add project rules and repeatable checks'`、`git log -1 --format='%h %s'` 和 `git status --short`，均退出码 0；首次提交成功、状态输出为空。提交包含 12 个文件，没有个人凭据配置。核对需求、交接与实际产物一致；本机仍未找到 `maintain-context-hygiene` 技能，按项目规则人工完成交接核对。
 
-### 已实现的界面原型与验证
+### 新版 demo 的实现范围与此前验证
 
 - 入口为 `prototype/index.html`，逻辑拆入普通脚本 `prototype/app.js`；双击 HTML 可运行，未增加构建工具或依赖。体验说明见 [demo 说明](../prototype/README.md)。
 - 左侧导航、列表与右侧详情沿用早期布局；新增标题／课程／来源群搜索、课程筛选，以及任务页的已归档／已取消筛选、待确认页的最近忽略入口。桌面卡片列表不随主界面搜索而减少。
@@ -303,3 +311,4 @@
 | 2026-10-10 | 用户选择 A，整体设计已确认，制定实施计划 | 更新需求、项目设计、下载副本和交接的有效状态；写入 M1～M9 总路线及 M1 三任务详细计划，31 项设计验收场景均有映射。只读复核未检测到 .NET SDK、已检测到 Chrome/WebView2，未安装依赖或接入 QQ。更新并实际运行 7 项文档检查、27 项浏览器检查，均退出码 0；脚本语法及 diff 检查通过，范围为文档和原型。真实应用代码未开始，下一步执行 M1；不再把整体确认写成待选事项 |
 | 2026-10-10 | 用户询问是否应先看 demo | 核对现有原型后建议先补齐后续交互再供体验；只记为待决定建议，整体设计确认不回退，不把旧原型写成新版完整 demo。强化当前阶段检查，要求需求、交接与设计均明确应用实现尚未开始。实际执行 `node --test tests/project-rules.test.mjs`，退出码 0、7 项通过；`node tests/prototype-qa.mjs` 退出码 0、27 项通过；`node --check tests/project-rules.test.mjs`、`git diff --check` 均退出码 0。本轮不修改应用或原型代码，验证仅为文档和既有浏览器原型 |
 | 2026-10-10 | 用户选择 A，补齐新版 demo 供体验 | demo 先行由建议转为有效顺序；新增普通脚本、体验说明及撤销／归档／提醒／变更／搜索／新增／图片／设置等示例交互，演示进度改为浏览器本地保存，刷新不重置撤销计时。更新实际测试为 8 项文档与 78 项浏览器检查，全部通过，四张预览已生成并查看；具体命令及范围见第 1 节。真实应用代码尚未开始，下一步先收集体验反馈，再接续 M1 |
+| 2026-10-10 | 用户反馈右栏无法滚动、找不到待确认提交入口 | 复现并修复 Grid 最小高度造成的裁切，独立滚动详情内容，固定底部确认按钮并明确任务／通知去向，验证失败时提示可见。最终 86 项浏览器与 8 项文档检查通过，脚本语法及 diff 检查通过；新增待确认预览并查看。普通刷新可加载修复且保留已有演示数据，真实 QQ／Windows 功能尚未接入 |
