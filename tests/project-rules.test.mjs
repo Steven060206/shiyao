@@ -27,7 +27,7 @@ test('小任务规则明确服从新的测试和提交要求', () => {
 });
 
 test('项目文档的本地链接、原型与核心交付文件存在', () => {
-  const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-core-foundation.md', 'docs/superpowers/plans/2026-10-10-local-rules.md', 'tests/README.md'];
+  const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-core-foundation.md', 'docs/superpowers/plans/2026-10-10-local-rules.md', 'docs/superpowers/plans/2026-10-10-integration-probes.md', 'tests/README.md'];
   for (const file of files) {
     for (const match of read(file).matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
       const target = match[1];
@@ -50,7 +50,11 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'tests/MessagePurify.Core.Tests/RuleFixtureRunner.cs', 'tests/fixtures/rules/synthetic.json',
     'tools/MessagePurify.RuleBaseline/MessagePurify.RuleBaseline.csproj', 'tools/MessagePurify.RuleBaseline/Program.cs',
     'tools/MessagePurify.RuleBaseline/packages.lock.json', 'docs/verification/rule-baseline.md',
-    ...['src/MessagePurify.Core', 'tests/MessagePurify.Core.Tests'].map(folder => `${folder}/packages.lock.json`)
+    ...['src/MessagePurify.Core', 'tests/MessagePurify.Core.Tests'].map(folder => `${folder}/packages.lock.json`),
+    'docs/verification/integration-probes.md',
+    'docs/integrations/napcat-setup.md',
+    'packaging/probe/README.md', 'packaging/probe/Install-Probe.ps1', 'packaging/probe/Run-Probe.ps1',
+    'packaging/napcat/Start-NapCat.ps1', 'packaging/napcat/Start-NapCat.cmd'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
@@ -101,6 +105,26 @@ test('QQ 登录与实际连接状态分别记录', () => {
     const content = read(file);
     assert.match(content, /用户.*QQ.*(?:电脑|本机)登录/, `${file} 需记录用户确认的登录`);
     assert.match(content, /尚未验证 OneBot 连接|不作为 OneBot 连接成功/, `${file} 需区分登录和接入`);
+  }
+});
+
+test('M3 正在实施，实测条件不被协议模拟替代', () => {
+  const plan = read('docs/superpowers/plans/2026-10-10-integration-probes.md');
+  for (const label of ['Task 1', 'Task 2', 'Task 3', 'get_group_msg_history', 'JSON Lines', 'activationObserved']) {
+    assert.ok(plan.includes(label), `M3 契约缺失：${label}`);
+  }
+  assert.match(plan, /M3 所有真实验收项完成前保持“正在实施”/);
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
+    assert.match(read(file).split('## 2.')[0], /M3.*正在实施/, file);
+  }
+});
+
+test('学校群名仅辅助候选，保留用户确认及非正式名称例外', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
+    const content = read(file);
+    assert.match(content, /红框.*学校相关群/, file);
+    assert.match(content, /非正式名称/, file);
+    assert.match(content, /群名.*辅助|名称.*辅助/, file);
   }
 });
 

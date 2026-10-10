@@ -1,0 +1,3 @@
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0Run-Probe.ps1" -Mode ColdNotification
+pause

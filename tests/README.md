@@ -23,8 +23,18 @@ Node 文档测试包含 10 项检查：协作规则同步、小任务规则优�
 
 浏览器测试包含 107 项检查，覆盖原有主题／动画、排序、桌面卡片、图片确认及通知转任务，并新增：首次引导、已读行为、完成 1 小时／忽略 24 小时撤销及刷新、归档恢复、搜索与筛选、手动任务与开始时间、自定义提醒、延期及精度失效、人工字段冲突、新行动要求、取消、图片放大及 OCR 折叠、通知内容／声音意图预览、设置与桌面布局保存。图片日期不再单独勾选，检查没有二次勾选框、未提交建议不确立正式时间、按钮直接提交、修改后保存及刷新、仅日期和图片通知提交。详情栏的回归检查在 1100×800 窗口中确认长内容不被裁切，使用 Chrome 原生鼠标滚轮上下滚动及原生点击固定确认按钮，核对任务／通知的去向和错误提示可见性。课程相关 16 项检查覆盖共享选项、两处自定义入口、刷新和重置、重复／空白名称、取消恢复选择、未提交表单保留、待确认／手动任务使用自定义课程及筛选。测试在截止边界显式验证撤销资格，并通过过期动作检查防止越界恢复；未实际等待 1 小时或 24 小时。动画与系统主题测试显式模拟媒体偏好，不依赖本机 Windows 设置。
 
-真实应用已创建 .NET 核心测试项目，OCR 测试项目尚未创建。后续按 [总计划](../docs/superpowers/plans/2026-10-10-windows-app-implementation.md) 将新增测试命令补入本文；计划中的示例和验收目标不计为已运行测试。
+M3 已创建 OneBot、Windows 探针和 OCR 测试项目。实际验证命令为：
+
+```powershell
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --configuration Release
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release
+& ./.tools/ocr/venv/Scripts/python.exe -m pip check
+& ./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py
+node --test tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs
+```
+
+当前实际计数：Infrastructure 46 项、Windows 44 项、OCR 25 项、打包/启动 Node 3 项通过。受控未就绪 QQ CLI 退出码 1；真实 QQ、非提权通知和桌面人工操作仍按[集成探针记录](../docs/verification/integration-probes.md)单独判断。
 
 需要 Node.js 22 或更新版本和 Chrome。默认使用 `C:/Program Files/Google/Chrome/Application/chrome.exe`；其他安装位置可通过环境变量 `CHROME_PATH` 指定。浏览器检查使用独立临时配置，不访问个人浏览器会话。普通测试不会覆盖预览图；仅在主动更新预览时运行 `node tests/prototype-qa.mjs --screenshots`，生成课程选择、待确认、主界面及桌面卡片的六张预览。
 
-这些检查验证 C# 核心、文档和浏览器原型，不代表真实 QQ、OCR、Windows 系统通知或桌面驻留已通过测试。
+这些检查验证 C# 核心、协议、OCR 工作进程、Windows 探针参数和浏览器原型；真实 QQ、Windows 系统通知呈现/点击和桌面人工驻留仍不由自动测试替代。

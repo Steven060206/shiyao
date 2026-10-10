@@ -8,10 +8,18 @@
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
 - 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；当前自动验证为 Core 295/295、Infrastructure 46/46、Windows 44/44、OCR 25/25、Node 15/15、demo 107 项。协议、OCR、WebView2 隐藏桥和打包入口已实际验证，真实 QQ 只读连接、桌面人工操作和非提权通知仍未完成；普通 QQ 登录不作为 OneBot 连接成功，OneBot 尚未接入，尚未验证 OneBot 连接。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
-- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；本项目尚未安装或接入 NapCat/OCR，尚未验证 OneBot 连接，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
+- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat 官方 Shell 包已下载校验，替代路径已验证，但同一账号与普通 QQ 并存时会冲突，当前 NapCat 进程已退出；OneBot 尚未真实连接。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；没有注册正式自启动，也没有完成桌面人工操作或非提权系统通知点击。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
-### 本轮接续 M2 本地规则与样本
+### 本轮接续 M3 真实集成探针
+
+- 用户要求继续，已从 `0c0893a` 进入 `codex/m3-integration-probes`，沿用已确认设计；[M3 详细计划](superpowers/plans/2026-10-10-integration-probes.md)已写入。M1／M2 基线实际重跑 Release 核心 295 项通过。
+- 已只读检测普通 QQ 安装及进程（`D:/QQ`、版本目录 `9.9.36-53644`）。官方 Shell 入口依赖注册表而失败，已提供 `packaging/napcat/Start-NapCat.cmd` 直接指定 QQ 路径；NapCat WebUI 6099 曾返回 HTTP 200，但当前进程已退出，OneBot 3001 未启用。普通 QQ 登录不等于 OneBot 连接。当前执行会话提权，通知须在支持的非提权环境实测。Windows、OneBot、OCR 代码及探针正在实施，尚无 M3 完成结论。
+- 用户已提供真实 QQ 截图并确认六处红框中的群均为学校相关群；名称通常正规，也有非正式名称，群名只辅助候选，不能据此排除。截图是群列表和私聊界面，没有完整学校通知正文及日期；可用于真实截图 OCR，不作为通知日期提取验收。原图及识别全文仅用于本机，不写 Git。
+- 用户反馈担心接入后无法继续使用 QQ。已确认 Shell 方式是接管一个 QQ 进程，普通 QQ 与 NapCat 不能同时登录同一账号；NapCat 启动的窗口仍可正常聊天，停止 NapCat 后可恢复普通 QQ。该限制已同步需求和接入说明，不把双开作为方案。
+- M3 当前实际结果见[集成探针验证记录](verification/integration-probes.md)：Core 295、Infrastructure 46、Windows 44、OCR 25、Node 15、demo 107 均已运行通过；真实 QQ 只读探针退出 1（3001 未就绪），通知因提权 blocked，桌面人工项未操作。普通 QQ 登录不作为 OneBot 连接成功，当前尚未验证 OneBot 连接。
+
+### 上轮 M2 本地规则与样本
 
 - 用户要求继续工作，沿用整体设计及已确认技术路线推进 M2。已核对 M1 源码、锁文件、87 项核心测试及 demo 的二次确认改动，工作从 `8f9acdc` 创建 `codex/m2-local-rules` 分支。
 - [M2 详细计划](superpowers/plans/2026-10-10-local-rules.md)已写入，消息／日期、提取／优先级、样本／评估三个任务均已完成；不把合成样本作为真实 QQ 验收。
@@ -378,3 +386,6 @@
 | 2026-10-10 | 用户要求删除 demo 图片日期的独立二次确认勾选 | 填入／修改日期后直接通过确认或保存按钮提交，建议填入仍仅更新草稿。新增和更新浏览器回归，107 项浏览器、9 项文档及 87 项核心测试通过，需求与交接同步 |
 | 2026-10-10 | 接续 M2，完成 Task 1 消息契约、标准化及发送上下文日期 | 原发送日期、跨年、范围／冲突、非法数值及时区边界已验证，183 项核心、10 项文档及 107 项浏览器检查通过；行动与样本尚在实施，真实 QQ／OCR 尚未接入 |
 | 2026-10-10 | 完成 M2 Task 2 与 Task 3 本地规则和合成基线 | Release 核心 289 项、fixture 6 项、文档 10 项、浏览器 107 项通过；CLI 生成 65 条样本报告（23/23 正式 Task 准确、47/47 需行动召回、27/47 直接自动覆盖、0 高影响错误），无效参数退出 2。结果不代表真实 QQ 验收；下一步 M3 |
+| 2026-10-10 | 用户提供真实 QQ 截图，确认红框均为学校相关群 | 同步正规群名辅助候选及非正式名称例外；截断名称待真实列表核对。仅验证截图 OCR，不把群列表视作完整通知日期样本；M3 正在实施 |
+| 2026-10-11 | 用户反馈普通 QQ 与 NapCat 同账号冲突，担心无法继续使用 QQ | 明确 Shell 接管的 QQ 窗口仍可正常使用；普通 QQ 与 NapCat 不同时登录同账号，停止 NapCat 后可恢复普通 QQ。更新需求、设计和接入说明；真实 OneBot 尚未通过 |
+| 2026-10-11 | M3 探针实现与自动验证推进 | Infrastructure 46 项、Windows 44 项、OCR 25 项和 Node 14 项通过；隐藏 WebView2 桥及自包含发布实测通过；真实 QQ 3001 未就绪，通知受提权阻止，桌面人工项未测。见 `docs/verification/integration-probes.md` |
