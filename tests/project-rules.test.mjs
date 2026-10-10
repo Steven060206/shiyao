@@ -27,7 +27,7 @@ test('小任务规则明确服从新的测试和提交要求', () => {
 });
 
 test('项目文档的本地链接与已交付原型文件存在', () => {
-  const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md'];
+  const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-core-foundation.md'];
   for (const file of files) {
     for (const match of read(file).matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
       const target = match[1];
@@ -41,8 +41,27 @@ test('项目文档的本地链接与已交付原型文件存在', () => {
   }
 });
 
-test('需求、交接及设计仍一致记录整体设计待核对', () => {
+test('需求、交接及设计的当前状态一致记录整体设计已确认', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
-    assert.match(read(file), /(?:整体设计|完整设计)[^。；\n]*(?:未确认|待.*核对)/, file);
+    const current = read(file).split('## 1.')[0] + (file.endsWith('HANDOFF.md') ? read(file).match(/^- 当前阶段：.*$/m)?.[0] : '');
+    assert.match(current, /整体设计已确认/, file);
+    assert.match(current, /实施(?:总)?计划/, file);
+    assert.doesNotMatch(current, /整体设计尚未确认|完整设计仍待整体核对/, file);
+  }
+});
+
+test('实施总计划覆盖设计中的全部真实验收场景', () => {
+  const spec = read('docs/superpowers/specs/2026-10-10-windows-app-design.md');
+  const section = spec.split('## 12. 后续真实验收')[1].split('## 13.')[0];
+  const scenarios = section.split('\n').map(line => line.trim()).filter(line => line.startsWith('| ') && !line.startsWith('| ---')).map(line => line.split('|')[1].trim()).filter(label => label !== '场景');
+  assert.ok(scenarios.length > 0, '设计验收表为空或格式变化');
+  const plan = read('docs/superpowers/plans/2026-10-10-windows-app-implementation.md');
+  const rows = new Map(plan.split('\n').filter(line => line.startsWith('| ')).map(line => line.split('|').slice(1, 3).map(value => value.trim())));
+  for (const scenario of scenarios) {
+    assert.ok(rows.has(scenario), `计划遗漏验收场景：${scenario}`);
+    for (const stage of rows.get(scenario).split('、')) {
+      assert.match(stage, /^M[1-9]$/, `无效阶段：${stage}`);
+      assert.ok(plan.includes(`### ${stage}：`), `阶段未定义：${stage}`);
+    }
   }
 });
