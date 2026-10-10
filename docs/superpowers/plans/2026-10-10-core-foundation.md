@@ -130,7 +130,7 @@ public static class ReminderPlanner
 }
 ```
 
-- [ ] **Step 1：写默认日期、精确时间和关闭提醒测试。** 在 `ReminderPlannerTests.cs` 写：
+- [x] **Step 1：写默认日期、精确时间和关闭提醒测试。** 在 `ReminderPlannerTests.cs` 写：
 
 ```csharp
 [Fact]
@@ -149,7 +149,7 @@ public void DefaultExactTime_Uses24And2Hours()
 
 日期 `2026-10-12` 的唯一默认节点断言为 `2026-10-11T12:00:00+08:00`，且原 `time.Time` 仍为 null；`Start` 使用同样倒推但保留时间类型；`DisabledReminder` 始终无节点、无需失效提示。执行 `dotnet test tests/MessagePurify.Core.Tests --no-restore --filter ReminderPlannerTests`，确认缺少实现而失败。
 
-- [ ] **Step 2：实现默认计算和校验。** 在 `ReminderPlanner` 内实现，节点不回写正式时间：
+- [x] **Step 2：实现默认计算和校验。** 在 `ReminderPlanner` 内实现，节点不回写正式时间：
 
 ```csharp
 private static IReadOnlyList<DateTimeOffset> DefaultNodes(TaskTime time) =>
@@ -173,22 +173,22 @@ public static ReminderPlan Plan(TaskTime time, ReminderChoice choice)
     {
         if (calendar.Days < 0) throw new ArgumentOutOfRangeException(nameof(choice));
         var node = time.AtLocal(time.Date.AddDays(-calendar.Days), calendar.Clock);
-        if (time.GetExactInstant() is { } instant && node > instant)
-            throw new ArgumentException("提前提醒不能晚于正式时间。", nameof(choice));
+        if (time.GetExactInstant() is { } instant && node >= instant)
+            throw new ArgumentException("提前提醒必须早于正式时间。", nameof(choice));
         return new(new[] { node }, false);
     }
     throw new ArgumentException("不支持的提醒规则。", nameof(choice));
 }
 ```
-- [ ] **Step 3：补充自定义变更测试并实现。** `HoursBefore(1)` 在 `2026-10-14 18:00` 得到 `17:00`；新时间只有 `2026-10-14` 时回退 `10-13 12:00` 且 `NeedsReview=true`。`CalendarBefore(1, 20:00)` 在日期或精确时间下均保持 `10-13 20:00`；关闭提醒在延期或精度变化后仍为空。小时须有限且正数，日历天数须非负；精确基准下不能配置基准之后的节点，日期精度允许当天钟点。用不合法输入测试检查明确校验失败。
-- [ ] **Step 4：运行核心与全部已有测试。** 记录实际结果；精度失效仅生成计划决定，正式状态持久化和设置待确认 UI 在 M4/M7 实现。
+- [x] **Step 3：补充自定义变更测试并实现。** `HoursBefore(1)` 在 `2026-10-14 18:00` 得到 `17:00`；新时间只有 `2026-10-14` 时回退 `10-13 12:00` 且 `NeedsReview=true`。`CalendarBefore(1, 20:00)` 在日期或精确时间下均保持 `10-13 20:00`；关闭提醒在延期或精度变化后仍为空。小时须有限且正数，日历天数须非负；精确基准下不能配置基准之后的节点，日期精度允许当天钟点。用不合法输入测试检查明确校验失败。
+- [x] **Step 4：运行核心与全部已有测试。** 记录实际结果；精度失效仅生成计划决定，正式状态持久化和设置待确认 UI 在 M4/M7 实现。
 
 ```powershell
 dotnet test tests/MessagePurify.Core.Tests --no-restore
 node --test tests/project-rules.test.mjs
 node tests/prototype-qa.mjs
 ```
-- [ ] **Step 5：同步交接并提交。** 只暂存本任务源码、测试及交接，检查 diff，提交 `feat: add default and custom reminder planning`。
+- [x] **Step 5：同步交接并提交。** 只暂存本任务源码、测试及交接，检查 diff，提交 `feat: add default and custom reminder planning`。
 
 ## Task 3：状态操作、字段保护和撤销适用性
 

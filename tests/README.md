@@ -9,7 +9,7 @@ node --test tests/project-rules.test.mjs
 node tests/prototype-qa.mjs
 ```
 
-核心测试使用 .NET 10 SDK，已在 `.tools/dotnet` 安装 Windows x64 10.0.401；`global.json` 锁定版本，两个项目的 `packages.lock.json` 锁定依赖。如另一本机已有对应 SDK，可把命令中的可执行文件改为 `dotnet`。当前 10 项 C# 测试覆盖日期当天与次日边界、精确到时、Deadline／Start 类型、保存时区、非法时区及夏令时歧义／不存在钟点。测试用显式时间输入，不依赖执行机器的当前时刻。
+核心测试使用 .NET 10 SDK，已在 `.tools/dotnet` 安装 Windows x64 10.0.401；`global.json` 锁定版本，两个项目的 `packages.lock.json` 锁定依赖。如另一本机已有对应 SDK，可把命令中的可执行文件改为 `dotnet`。当前 43 项 C# 测试包含 10 项时间边界和 33 项提醒计算，覆盖日期当天与次日、精确到时、Deadline／Start、时区和夏令时异常、默认 24／2 小时及前日中午、自定义小时／日历、延期重算、精度失效回退、关闭保留及非法提前节点。测试用显式时间输入，不依赖执行机器的当前时刻。
 
 Node 文档测试包含 9 项检查：协作规则同步、小任务规则优先级、交付文件和文档链接、整体设计及核心开发状态、全部设计验收场景的计划覆盖、新版演示的保存方式和真实集成边界，以及 QQ 登录与 OneBot 连接分别记录。
 
