@@ -12,8 +12,8 @@
 
 ## Global Constraints
 
-- 本计划所有任务当前均未实施，本轮不安装 SDK、不创建 C# 应用文件。
-- Windows x64、.NET 10 LTS；本机默认 dotnet 尚无 SDK，安装运行时不能替代安装 SDK。
+- 用户已授权准备完成后开始编写代码，本计划正在执行；逐任务记录实际产物、验证与提交。
+- Windows x64、.NET 10 LTS；本机默认 dotnet 尚无 SDK，准备项目专用 SDK，安装运行时不能替代安装 SDK。
 - 日期当天仍有效，次日才过期；不能把零点或 23:59 写成正式截止。
 - 默认具体时刻提前 24 小时、2 小时；仅日期提前一天 12:00。
 - 小时自定义遇到日期精度失效时回退默认并标记待确认，日历自定义保持偏移和钟点；关闭提醒保持关闭。
@@ -56,7 +56,7 @@ public sealed record TaskTime(
 
 **Interfaces:** 输入原发送上下文确定的时区及已确认日期/时刻；产出 `TaskTime.IsPast(now)`、`GetExactInstant()`。
 
-- [ ] **Step 1：准备 SDK 并创建两个项目。** 从设计第 14 节的官方 .NET 来源安装 Windows x64 .NET 10 SDK；执行 `dotnet --list-sdks` 和 `dotnet --version`，确认当前选中 10.x，记录精确版本。然后在项目根目录执行：
+- [x] **Step 1：准备 SDK 并创建两个项目。** 从设计第 14 节的官方 .NET 来源安装 Windows x64 .NET 10 SDK；执行 `dotnet --list-sdks` 和 `dotnet --version`，确认当前选中 10.x，记录精确版本。然后在项目根目录执行：
 
 ```powershell
 dotnet new globaljson --sdk-version (dotnet --version) --roll-forward latestPatch
@@ -68,7 +68,7 @@ dotnet restore tests/MessagePurify.Core.Tests --use-lock-file
 
 仅删除自己新生成的 `Class1.cs`/默认示例测试，替换为真实测试；`.gitignore` 加入 `**/bin/`、`**/obj/`、`**/TestResults/`。检查模板包的许可和稳定版本，将生成的锁文件纳入提交。SDK 尚未可用时记录事实，不伪报编译成功。
 
-- [ ] **Step 2：写时间边界测试，再运行以确认缺少实现而失败。** 在 `TaskTimeTests.cs` 写：
+- [x] **Step 2：写时间边界测试，再运行以确认缺少实现而失败。** 在 `TaskTimeTests.cs` 写：
 
 ```csharp
 [Fact]
@@ -84,7 +84,7 @@ public void DateOnly_RemainsValidUntilNextLocalDay()
 
 增加精确 `2026-10-12 18:00 +08:00` 的前一秒/到时边界；`Deadline` 与 `Start` 均检测有效性但保留不同类型。运行 `dotnet test tests/MessagePurify.Core.Tests --no-restore --filter TaskTimeTests`，预期因尚无实现失败，不能把配置或测试框架失败当作目标失败。
 
-- [ ] **Step 3：实现时间模型。** 实现下面的方法；无效时区或无法唯一解释的时刻向调用者报告校验错误，由后续待确认路径处理，不猜测正式时间。
+- [x] **Step 3：实现时间模型。** 实现下面的方法；无效时区或无法唯一解释的时刻向调用者报告校验错误，由后续待确认路径处理，不猜测正式时间。
 
 ```csharp
 public DateTimeOffset? GetExactInstant() =>
@@ -107,8 +107,8 @@ public bool IsPast(DateTimeOffset now)
     return localDate > Date;
 }
 ```
-- [ ] **Step 4：运行相关与全量测试。** `dotnet test tests/MessagePurify.Core.Tests --no-restore`、`node --test tests/project-rules.test.mjs`、`node tests/prototype-qa.mjs` 全部通过；记录实际版本、命令和结果。
-- [ ] **Step 5：更新交接并提交。** 写明仅核心时间模型可用；检查源码/测试/锁文件和文档范围，执行 `git diff --check`、暂存本任务文件、`git diff --cached --check`，提交 `feat: add core time model and test project`。
+- [x] **Step 4：运行相关与全量测试。** `dotnet test tests/MessagePurify.Core.Tests --no-restore`、`node --test tests/project-rules.test.mjs`、`node tests/prototype-qa.mjs` 全部通过；记录实际版本、命令和结果。
+- [x] **Step 5：更新交接并提交。** 写明仅核心时间模型可用；检查源码/测试/锁文件和文档范围，执行 `git diff --check`、暂存本任务文件、`git diff --cached --check`，提交 `feat: add core time model and test project`。
 
 ## Task 2：默认提醒、自定义提醒与精度失效
 

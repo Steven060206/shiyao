@@ -6,12 +6,23 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，询问正式开发的下一步。新版 demo 已完成详情栏滚动、待确认入口及课程／分类同步和自定义，102 项浏览器验证通过。整体设计已确认、实施计划已写入，真实应用代码尚未开始。接下来按既有计划从 M1 开发环境、时间、提醒与状态基础开始，再进入消息识别及真实集成验证；本轮仅说明顺序，尚未执行 M1。**
-- 当前可交付产物：`AGENTS.md`、`docs/requirements.md`、`docs/HANDOFF.md`、`docs/superpowers/specs/2026-10-10-windows-app-design.md`，以及 `prototype/index.html`、`prototype/app.js`、`prototype/README.md`、`prototype/previews/courses.png`、`prototype/previews/pending.png`、`prototype/previews/main.png`、`prototype/previews/main-dark.png`、`prototype/previews/desktop.png`、`prototype/previews/desktop-dark.png`；可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
-- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。没有安装或接入本项目所需的 NapCat/OCR，没有登录或连接真实 QQ，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
+- 当前阶段：**用户反馈 demo 基本满足要求，现确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 开发环境、时间、提醒与状态基础正在实施。新版 demo 的 102 项浏览器验证已通过，真实 QQ／OCR／Windows 通知集成尚未接入。**
+- 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/MessagePurify.Core.csproj`、`src/MessagePurify.Core/Time/TaskTime.cs`、`tests/MessagePurify.Core.Tests/MessagePurify.Core.Tests.csproj`、`tests/MessagePurify.Core.Tests/TaskTimeTests.cs` 及两个 `packages.lock.json`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
+- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；本项目尚未安装或接入 NapCat/OCR，尚未验证 OneBot 连接，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
-### 本轮 demo 认可与下一步说明
+### 本轮正式开发启动
+
+- 用户明确授权准备完成后开始编写代码，沿用既有 M1 计划，不重新选择 NapCat、本地运行或课程名单获取方式。
+- QQ 已在电脑登录来自用户说明，尚未检查 NapCat 对应 QQ 环境；真实集成仍按 M3 执行，不把普通 QQ 登录写成已接入。
+- 当前在 `codex/m1-core-foundation` 分支实施 M1，Task 1 时间模型已写入并验证，Task 2 提醒及 Task 3 状态操作尚未写入正式项目。各任务验证后分别提交；真实应用界面、数据库、消息识别和系统集成仍在后续阶段。
+- SDK 安装在本项目 `.tools/dotnet`（Git 忽略），没有修改全局 PATH 或已有 dotnet 安装。通过[微软官方发布元数据](https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json)获取 Windows x64 ZIP，实际执行 `Invoke-WebRequest`、`Get-FileHash -Algorithm SHA512`、`Expand-Archive`，校验与元数据一致。执行 `.tools/dotnet/dotnet.exe --version`、`--list-sdks`、`--info` 均退出码 0：SDK 10.0.401，RID win-x64，NETCore／ASP.NETCore／WindowsDesktop 运行时 10.0.12；`global.json` 锁定 10.0.401，rollForward 为 latestPatch。
+- 已执行 SDK 的 `new globaljson`、`new classlib -f net10.0 --no-restore`、`new xunit -f net10.0 --no-restore`、`add … reference …` 和 `restore tests/MessagePurify.Core.Tests --use-lock-file`，均退出码 0。保留模板稳定依赖 Microsoft.NET.Test.Sdk 17.14.1（MIT）、xunit 2.9.3 与 runner 3.1.4（Apache-2.0），版本与完整传递依赖写入锁文件；未使用覆盖率采集器，不加入 coverlet。许可证来源为对应 NuGet 官方包页，xunit v2 为仅安全更新的旧稳定系列，当前构建未出现警告。
+- `TaskTime` 保留 Deadline／Start、日期、可选钟点及时区；仅日期当天仍有效、不生成正式瞬时值；精确时间到时即失效，非法时区及夏令时歧义／不存在钟点返回明确异常。先执行 `test … --no-restore --filter TaskTimeTests`，退出码 1，确认缺少 TimeKind／TaskTime 实现；写入实现后执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore`，退出码 0，10 项通过、0 失败。
+- 文档检查首次因顶部需求摘要未记录真实集成边界而失败，读取失败断言后补齐摘要；重跑 `node --test tests/project-rules.test.mjs` 退出码 0、9 项通过。`node tests/prototype-qa.mjs` 退出码 0、102 项通过。`maintain-context-hygiene` 技能在本机技能目录中未找到，按项目规则人工核对当前阶段、有效需求及实际产物。
+- Task 1 交付前执行 `.tools/dotnet/dotnet.exe restore tests/MessagePurify.Core.Tests --locked-mode`、`test tests/MessagePurify.Core.Tests --no-restore`、`node --test tests/project-rules.test.mjs`、`node tests/prototype-qa.mjs`、`node --check tests/project-rules.test.mjs`、`git diff --check`，全部退出码 0，分别 10 项核心、9 项文档和 102 项浏览器检查通过。提交说明 `feat: add core time model and test project`，标识以 Git 日志为准。
+
+### 上轮 demo 认可与下一步说明
 
 - 用户表示 demo 基本满足要求，并询问下一步。该反馈是对演示交互的基本认可，不代表真实应用验收；有效产品需求和既有技术路线继续保留。
 - 下一步沿用已写入的 M1：准备开发环境，完成时间模型、提醒计算、任务状态及撤销规则的真实 C# 核心和测试；随后按 M2、M3 进行本地消息识别与真实 Windows／QQ／OCR／通知的小规模验证，再推进存储、正式界面、后台运行和安装交付。
@@ -237,16 +248,16 @@
 
 这些是尚待设计或验证的内容，不要误写为已实现或要求用户重新确认已选过的方向。
 
-**已确认：demo 先行，用户反馈 demo 基本满足要求。** 新版 demo 已完成浏览器交互验证；用户本轮询问下一步，正式开发尚未开始。真实 QQ、OCR、系统通知和桌面宿主验证仍按正式应用计划执行；整体设计确认继续有效。本轮记录见第 1 节。
+**已确认：demo 先行，用户反馈 demo 基本满足要求并授权开始正式开发。** M1 正在实施，时间模型已验证，提醒及状态模块继续推进。真实 QQ、OCR、系统通知和桌面宿主验证仍按后续计划执行；整体设计确认继续有效。本轮记录见第 1 节。
 
 1. **整体设计已确认**：`docs/superpowers/specs/2026-10-10-windows-app-design.md` 包含使用流程、提醒、错误恢复、架构、数据、NapCat、规则、OCR、WebView2、Windows 集成、安装和验收。2026-10-10 用户选择 A；使用行为不重新询问，后端细节由开发者负责。
 2. **已确认：老师明确取消任务后的去向**。用户选择 A：停止该任务后续提醒，移出待办和桌面卡片，保留“已取消”记录及原始消息，不记为用户已完成；取消变更仍通知一次。尚未实现。
 3. **已确认：自定义提醒遇到延期**。精度兼容的有效延期保持提前间隔，默认节点按新正式时间重算；用户随后确认精度不兼容时临时使用默认节点并提示设置待确认。与手动正式字段冲突的建议接受前不替换。尚未实现。
 4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并按规则继续提醒；保留此前完成记录及新旧证据。普通补充说明不自动恢复，关联或有效截止信息不确定时仍按既有规则待确认。尚未实现。
-5. **下一步：按既有计划进入正式开发的 M1**。用户已基本认可 demo；从 `docs/superpowers/plans/2026-10-10-core-foundation.md` 的 SDK 与核心基础工作开始，随后按 `docs/superpowers/plans/2026-10-10-windows-app-implementation.md` 推进。本轮只说明开发顺序，没有执行 M1，不将 demo 流程通过写成真实应用验收。
+5. **当前：执行既有 M1 计划**。SDK 和时间模型已完成，继续提醒及状态操作，再进入 M2 本地规则与样本。以 `docs/superpowers/plans/2026-10-10-core-foundation.md` 实际勾选项为准，不将 demo 流程或核心测试通过写成真实应用验收。
 6. 数据模型、SQLite、消息桥、OCR 进程通信、提醒调度、数据保留和打包已有开发者方案，见设计稿；尚未实现。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
 7. NapCat 真实连接和历史返回、本地规则误判/漏判、OCR 学校截图、桌面宿主层级及安装包通知激活仍须真实验证。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
-8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。本轮工具链复核仍未检测到 .NET SDK，已检测到 Chrome/WebView2 运行时；命令及结果见第 1 节。Git 已在上轮建立；本轮未安装依赖、未写应用代码、未连接 QQ，SDK 准备是已确认计划的下一步。
+8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。用户说明普通 QQ 已在电脑登录，NapCat 连接尚未验证。
 9. 安静时段已明确延期：Windows 第一版只保留“暂未启用”的设置入口，具体时间及自动静音行为留待未来若规划手机版时再讨论；手机版开发尚未确定。
 10. **2026-10-10 七项复核补充已并入设计（需求已确认，尚未实现）**：
     - 归档：详情操作及恢复、已归档筛选、移出待办与卡片、停止时间提醒及清理旧通知，证据和处理记录保留；归档后新要求先待确认。
@@ -332,3 +343,4 @@
 | 2026-10-10 | 用户反馈右栏无法滚动、找不到待确认提交入口 | 复现并修复 Grid 最小高度造成的裁切，独立滚动详情内容，固定底部确认按钮并明确任务／通知去向，验证失败时提示可见。最终 86 项浏览器与 8 项文档检查通过，脚本语法及 diff 检查通过；新增待确认预览并查看。普通刷新可加载修复且保留已有演示数据，真实 QQ／Windows 功能尚未接入 |
 | 2026-10-10 | 用户要求两处课程下拉内容同步并支持自定义 | 筛选、待确认、编辑及手动新增任务共用课程／分类选项，新增后同步、刷新及重置保留，取消和同步不丢失草稿。新增 16 项相关浏览器检查及课程预览，最终 102 项浏览器与 8 项文档检查通过，脚本语法及 diff 检查通过；需求、交接和说明已同步。真实应用代码尚未开始，继续供用户体验 |
 | 2026-10-10 | 用户反馈 demo 基本满足要求，询问下一步 | 同步演示基本认可状态，说明按既有计划先实施 M1 核心基础，再推进识别与真实集成。更新文档状态检查；本轮仅维护文档及测试，真实应用代码尚未开始 |
+| 2026-10-10 | 用户确认 QQ 已在电脑登录并授权准备完成后开始编写代码；完成 M1 Task 1 | 在 codex/m1-core-foundation 分支安装项目专用 SDK 10.0.401、锁定依赖并编写日期／时刻／时区模型；10 项核心、9 项文档和 102 项浏览器检查通过，实际命令见第 1 节。提醒／状态核心继续实施，真实 QQ 接入尚未验证 |

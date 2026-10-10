@@ -49,7 +49,7 @@ test('新版演示交付链接可用，保存说明与真实集成阶段一致',
     const content = read(file);
     assert.match(content, /本地存储/, `${file} 需说明演示保存方式`);
     assert.match(content, /撤销.*真实经过时间|真实经过时间.*撤销/, `${file} 需说明撤销计时与演示日期区分`);
-    assert.match(content, /真实应用(?:实现|代码)尚未开始|Windows.*尚未接入/, `${file} 不得将 demo 当作真实集成`);
+    assert.match(content, /真实应用(?:实现|代码)尚未开始|Windows.*尚未接入/, `${file} 需说明真实集成边界`);
   }
 });
 
@@ -62,8 +62,17 @@ test('需求、交接及设计的当前状态一致记录整体设计已确认',
     const current = read(file).split('## 1.')[0] + (file.endsWith('HANDOFF.md') ? read(file).match(/^- 当前阶段：.*$/m)?.[0] : '');
     assert.match(current, /整体设计已确认/, file);
     assert.match(current, /实施(?:总)?计划/, file);
-    assert.match(current, /应用(?:代码|实现)尚未开始/, `${file} 不得把计划或 demo 误记为真实应用已实现`);
+    assert.match(current, /M1.*正在实施|M1 已完成/, `${file} 需准确记录核心开发阶段`);
+    assert.match(current, /尚未接入/, `${file} 需保留真实集成状态`);
     assert.doesNotMatch(current, /整体设计尚未确认|完整设计仍待整体核对/, file);
+  }
+});
+
+test('QQ 登录与实际连接状态分别记录', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
+    const content = read(file);
+    assert.match(content, /用户.*QQ.*(?:电脑|本机)登录/, `${file} 需记录用户确认的登录`);
+    assert.match(content, /尚未验证 OneBot 连接|不作为 OneBot 连接成功/, `${file} 需区分登录和接入`);
   }
 });
 
