@@ -36,8 +36,20 @@ test('项目文档的本地链接与已交付原型文件存在', () => {
       assert.ok(fs.existsSync(resolved), `${file} 链接目标不存在：${target}`);
     }
   }
-  for (const file of ['prototype/index.html', ...['main', 'main-dark', 'desktop', 'desktop-dark'].map(name => `prototype/previews/${name}.png`), 'tests/prototype-qa.mjs']) {
+  for (const file of ['prototype/index.html', 'prototype/app.js', 'prototype/README.md', ...['main', 'main-dark', 'desktop', 'desktop-dark'].map(name => `prototype/previews/${name}.png`), 'tests/prototype-qa.mjs']) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
+  }
+});
+
+test('新版演示交付链接可用，保存说明与真实集成阶段一致', () => {
+  for (const match of read('prototype/index.html').matchAll(/<script src="([^"]+)"/g)) {
+    assert.ok(fs.statSync(path.resolve(root, 'prototype', match[1])).isFile(), `演示脚本缺失：${match[1]}`);
+  }
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'prototype/README.md']) {
+    const content = read(file);
+    assert.match(content, /本地存储/, `${file} 需说明演示保存方式`);
+    assert.match(content, /撤销.*真实经过时间|真实经过时间.*撤销/, `${file} 需说明撤销计时与演示日期区分`);
+    assert.match(content, /真实应用(?:实现|代码)尚未开始|Windows.*尚未接入/, `${file} 不得将 demo 当作真实集成`);
   }
 });
 

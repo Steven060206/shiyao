@@ -6,18 +6,18 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**2026-10-10 用户选择 A，整体设计已确认，实施计划已写入。主要使用行为及七项复核补充均为有效需求；下一步执行开发环境和核心基础阶段，真实应用代码尚未开始。现有浏览器原型使用示例数据，上轮通过 27 项交互检查；真实 WPF、QQ、OCR、Windows 桌面驻留和系统提醒尚未开发。**
-- 当前可交付产物：`AGENTS.md`、`docs/requirements.md`、`docs/HANDOFF.md`、`docs/superpowers/specs/2026-10-10-windows-app-design.md`，以及 `prototype/index.html`、`prototype/previews/main.png`、`prototype/previews/main-dark.png`、`prototype/previews/desktop.png`、`prototype/previews/desktop-dark.png`；可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
-- 原型代码已写入并运行验证，双击 `prototype/index.html` 可用浏览器打开；事项数据只保存在当前页面内存中，刷新恢复示例，主题偏好保存在浏览器本地存储。没有安装或接入本项目所需的 NapCat/OCR，没有登录或连接真实 QQ，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
+- 当前阶段：**用户选择 A，确认 demo 先行；新版可点击 demo 已写入并完成 78 项浏览器验证，当前供用户体验。整体设计已确认、实施计划已写入，真实应用代码尚未开始。主要使用行为及七项复核补充继续有效，真实 WPF、QQ、OCR、Windows 桌面驻留和系统提醒尚未开发。先收集 demo 体验反馈，再接续正式应用阶段。**
+- 当前可交付产物：`AGENTS.md`、`docs/requirements.md`、`docs/HANDOFF.md`、`docs/superpowers/specs/2026-10-10-windows-app-design.md`，以及 `prototype/index.html`、`prototype/app.js`、`prototype/README.md`、`prototype/previews/main.png`、`prototype/previews/main-dark.png`、`prototype/previews/desktop.png`、`prototype/previews/desktop-dark.png`；可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
+- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。没有安装或接入本项目所需的 NapCat/OCR，没有登录或连接真实 QQ，没有注册 Windows 自动启动，没有真实桌面驻留或系统通知测试结果。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
-### 本轮整体确认与实施计划
+### 上轮整体确认与实施计划
 
 - 用户回复 A，确认按更新后的完整设计继续制定开发步骤；设计状态由“待整体核对”改为“整体设计已确认”，不重新选择后端机制。
 - 已写入[实施总计划](superpowers/plans/2026-10-10-windows-app-implementation.md)及[第一阶段详细计划](superpowers/plans/2026-10-10-core-foundation.md)。总计划分 M1～M9，映射设计第 12 节的全部 31 个验收场景；M1 细分三个可测试并独立提交的任务。计划中的源码路径、代码示例和测试命令是实施说明，不是已经创建或运行的应用功能。
 - 独立只读环境核对实际执行 `git --version`、`git status --short`、`node --version`、`Get-Command dotnet -All -ErrorAction SilentlyContinue | Select-Object Name, Source, CommandType | ConvertTo-Json -Compress`、`dotnet --list-sdks`、`dotnet --list-runtimes`，均退出码 0。Git 为 2.54.0.windows.1、Node 为 v24.16.0；默认 dotnet 在 `C:/Program Files/dotnet/dotnet.exe`，SDK 列表为空，NETCore 6/7/8 及 WindowsDesktop 6/7 运行时已安装，不能替代 .NET 10 SDK。
 - 执行 PowerShell 浏览器文件及注册表只读查询，使用 `Test-Path`、`Get-Item`、`Get-ChildItem` 和注册表 `GetValue`，两份查询脚本均退出码 0；Chrome 为 154.0.8037.98，WebView2 Runtime 注册版本为 155.0.4283.45。仅检测安装，尚未运行 WPF/WebView2 应用。
-- 本轮更新整体确认状态测试、计划链接检查和全部验收场景映射检查；实际执行 `node --test tests/project-rules.test.mjs`，退出码 0、7 项通过；执行 `node tests/prototype-qa.mjs`，退出码 0、27 项通过、无 JavaScript 异常。执行 `node --check tests/project-rules.test.mjs` 与 `git diff --check`，均退出码 0。全部当前测试通过，验证范围是文档和浏览器原型；M1 所有实施项未执行，下一步准备 SDK 并实现时间/提醒/状态基础。
+- 当轮更新整体确认状态测试、计划链接检查和全部验收场景映射检查；实际执行 `node --test tests/project-rules.test.mjs`，退出码 0、7 项通过；执行 `node tests/prototype-qa.mjs`，退出码 0、27 项通过、无 JavaScript 异常。执行 `node --check tests/project-rules.test.mjs` 与 `git diff --check`，均退出码 0。当轮测试通过，验证范围是文档和早期浏览器原型；M1 所有实施项未执行。其后用户确认 demo 先行，当前顺序以“接手先看”为准。
 - 自行核对计划与完整设计：31 项验收均映射到已定义阶段，两份计划中的任务均未勾选；占位词扫描无匹配，未发现 C#/WPF 实现文件。下载副本与上次提交先作正文比对，确认没有额外改动后同步整体确认状态、环境记录及计划绝对链接；再核对与项目设计正文一致。交接、需求、设计和实际文件保持一致，按已有规则人工完成上下文核对。
 - 已实际执行 `git diff --cached --check`、`git commit -m 'docs: confirm design and plan Windows implementation'`、`git log -1 --format='%h %s'` 和 `git status --porcelain`，均退出码 0；对应提交已创建，包含本轮 7 个项目文件，工作区状态输出为空。下载副本为项目设计的正文相同副本，正式版本以仓库中的设计为准；最新提交标识见 Git 日志。
 
@@ -27,22 +27,27 @@
 - 每次改动后，都必须编写或更新相关测试，并在交付给用户前，确保所有测试和验证全部通过。小任务同样适用，不强制测试先行。
 - 现有 `AGENTS.md` 已加入“注意事项”，原有接续、文档同步、讨论和阶段规则保留；需求文档同步新增要求。
 - 上轮在项目根目录执行 `git init`，建立本地 Git 仓库，并创建首次基线提交 `ff16b4b`，包含现有文档、浏览器原型及规则和测试改动。提交作者仅在本仓库配置为 `Codex <codex@localhost>`，未修改全局作者设置；后续提交见 Git 日志。本轮没有应用实现改动，也未配置远程仓库。
-- 已有 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs` 和 `tests/README.md`。将临时目录的 26 项浏览器检查保存到项目中，使用脚本位置定位项目；新增减少动画偏好检查，现有 27 项浏览器检查。默认测试不覆盖已有预览图，可用 `--screenshots` 主动更新预览。协作规则、文档链接、确认状态和计划覆盖现有 7 项文档检查。
+- 已有 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs` 和 `tests/README.md`。早期 27 项浏览器检查现已扩充为 78 项，文档检查从 7 项扩充为 8 项。默认测试不覆盖已有预览图，可用 `--screenshots` 主动更新预览；测试范围与命令见 `tests/README.md`。
 - 上轮实际执行 `node --test tests/project-rules.test.mjs`，退出码 0，6 项通过、0 失败；执行 `node tests/prototype-qa.mjs`，最终退出码 0，27 项通过、无 JavaScript 异常。首次浏览器检查及诊断复跑均在按钮动画断言处退出码 1：诊断显示本机 `prefers-reduced-motion: reduce` 为真、按钮过渡为 `0s`，符合界面现有规则；测试随后显式模拟普通与减少动画两种偏好，不依赖 Windows 设置，未改原型代码。
 - 上轮实际执行 `node --check tests/prototype-qa.mjs` 和 `node --check tests/project-rules.test.mjs`，均退出码 0。全部现有测试的命令及环境要求见 `tests/README.md`；验证范围为文档和浏览器原型，真实应用代码尚未开始。本轮更新阶段相关检查并重新验证后记录结果。
 - 上轮实际执行 `git diff --cached --check`、`git commit -m 'chore: add project rules and repeatable checks'`、`git log -1 --format='%h %s'` 和 `git status --short`，均退出码 0；首次提交成功、状态输出为空。提交包含 12 个文件，没有个人凭据配置。核对需求、交接与实际产物一致；本机仍未找到 `maintain-context-hygiene` 技能，按项目规则人工完成交接核对。
 
 ### 已实现的界面原型与验证
 
-- 左侧导航切换任务、待确认、通知、已完成、设置；事项列表与右侧详情栏并列，保留原始消息和示例图片。
-- 示例任务支持修改标题、课程、截止日期/时刻和优先级，标记完成后移入已完成记录，保留证据；普通通知可以手动加入任务。
-- 待确认支持补齐、确认和忽略；图片中的日期不自动填入正式字段，需要手动填写并勾选确认。
-- “预览桌面卡片”在浏览器页面中展示左右双卡片，可以拖动、调整大小。待确认清空后隐藏其卡片，任务清空后显示“暂无待办”。逾期高亮仍展示原截止时间。
-- 提醒时刻的展示按已确认规则计算；没有调用 Windows 通知、RapidOCR 或 NapCat，也未实现真实消息筛选、任务合并、持久化或自动启动。
-- 支持浅色/深色主题自由切换，深色主题使用纯黑画布和桌面背景，面板使用近黑灰色分层；主界面和桌面卡片统一换肤。切换使用 320ms 的颜色、边框和阴影过渡，并支持 `prefers-reduced-motion` 时关闭动画。
-- 按钮点击提供轻微缩放和位移反馈；任务卡片、桌面卡片内条目悬停时有短距离位移和阴影反馈；减少动画设置会关闭这些动效。
-- 实际验证命令：`node C:/Users/Administrator/AppData/Local/Temp/msg-purify-prototype-qa.mjs`。使用独立临时 Chrome 无界面会话，退出码 0，26 项检查通过，没有 JavaScript 运行异常。检查范围包括排序、提醒时刻展示、按钮过渡、任务卡片和桌面卡片悬停位移与阴影、主题切换及 320ms 过渡、主界面 1100 像素宽度布局、桌面卡片拖动与缩放、完成记录与证据、图片日期确认、通知转任务和空状态。该验证脚本位于临时目录，不是应用依赖。
-- 已生成并查看 1440×1000 的主界面、深色主界面、桌面卡片和深色桌面卡片预览图，路径见上方产物清单。
+- 入口为 `prototype/index.html`，逻辑拆入普通脚本 `prototype/app.js`；双击 HTML 可运行，未增加构建工具或依赖。体验说明见 [demo 说明](../prototype/README.md)。
+- 左侧导航、列表与右侧详情沿用早期布局；新增标题／课程／来源群搜索、课程筛选，以及任务页的已归档／已取消筛选、待确认页的最近忽略入口。桌面卡片列表不随主界面搜索而减少。
+- 完成后立即移入已完成记录，即时提示和记录详情均提供“撤销”，1 小时内有效；忽略后 24 小时内可撤销。时间戳保存后刷新继续计时，过期保留记录；点击动作再次检查资格。重新收到新行动要求时，先前完成记录仍保留。
+- 归档移出待办和桌面模拟卡片，保留原文并停止时间提醒展示；归档筛选内可恢复待办。新增手动任务支持类别、课程、日期、可选时刻和优先级；区分提交截止与考试／活动开始，开始已过不误记为作业逾期，仅日期当天仍有效。
+- 单条提醒可选默认、提前小时、前几天某时刻及关闭；仅日期禁用小时模式。延期保留相对间隔，时刻精度丢失时临时采用默认提醒，新增关联待确认项；已关闭提醒不自动开启。上述只计算和展示节点，没有执行系统调度。
+- 详情底部可模拟延期、取消和新增行动要求。手动时间冲突保留旧值及有效提醒，接受后更新；取消独立生效并保留记录；已完成新要求恢复待办，已归档新要求先待确认。示例消息及完成／变化记录可查看；没有接入真实消息识别或系统变更通知。
+- 图片点击放大、OCR 默认折叠、建议日期可填入或拒绝；填入仅影响表单，勾选确认并提交后才确立正式日期。新内容带未读数量和红点，显示详情后标记已读；在桌面预览操作不会将隐藏的主界面详情误记为已读。
+- 保留浅色与纯黑深色、320ms 换肤、按钮按压和卡片悬停动效；设置新增跟随系统和减少动画，以及声音、自动启动、关闭行为的演示偏好。安静时段入口标注“暂未启用”。首次提供三步示例引导；“预览提醒”展示内容及声音意图，点击“打开事项”定位对应详情。没有播放系统声音或修改 Windows 设置。
+- 桌面双卡片可拖动／缩放并保存浏览器模拟布局，待确认清空后隐藏其卡片，任务清空后显示“暂无待办”；保留逾期原时间。这里的双卡片仍为一个浏览器预览容器，不是两个独立 Windows 桌面窗口。
+- 本轮实际执行 `node --check prototype/app.js`，退出码 0；中途 `node tests/prototype-qa.mjs` 依次通过 29 项、72 项。最终执行 `node tests/prototype-qa.mjs --screenshots`，退出码 0、78 项通过、无 JavaScript 异常；包括刷新、撤销边界、冲突处理、精度变化、纯黑背景和 1100px 布局检查。检查撤销边界时使用显式时间戳及过期动作，不实际等待 1 小时或 24 小时。
+- 已重新生成并查看四张 1440×1000 预览图，主界面和桌面卡片的浅色及纯黑深色布局可用。实际执行 `node --test tests/project-rules.test.mjs`，退出码 0、8 项通过；链接、交付脚本、浏览器存储说明与真实集成阶段一致。
+- 交付前再次实际执行 `node --test tests/project-rules.test.mjs` 和 `node tests/prototype-qa.mjs`，均退出码 0，分别 8 项及 78 项通过；`node --check prototype/app.js`、`node --check tests/prototype-qa.mjs`、`node --check tests/project-rules.test.mjs`、`git diff --check` 均退出码 0。对应提交说明为 `feat: complete interactive demo workflows`，提交标识以 Git 日志为准。
+- 本机技能目录搜索仍未找到 `maintain-context-hygiene`；已按项目规则人工核对有效需求、阶段、产物、保存方式及验证边界。下载目录设计副本本轮没有修改，项目设计正文没有变化。
+- 尚未实现：真实 WPF/WebView2、SQLite、QQ/NapCat、RapidOCR、托盘、Windows 提醒、自动启动、真实桌面驻留。合并拆分、账号切换、课程关联修复和备份恢复没有加入本 demo，继续按正式应用计划执行。
 
 ### 已确认设计与此前文档核对
 
@@ -206,13 +211,13 @@
 
 这些是尚待设计或验证的内容，不要误写为已实现或要求用户重新确认已选过的方向。
 
-**本轮新增的待决定建议：先补齐可点击 demo 再进入 M1。** 用户询问是否需要先看 demo；现有 `prototype/index.html` 可演示布局、主题、动画、完成和待确认等基础流程，但尚未覆盖后续确认的撤销、归档、自定义提醒等交互。建议先用示例数据补齐这些可感知流程，供用户实际体验；之后做小范围真实集成验证并按计划开发。此顺序尚未得到用户明确选择，不能记为已确认需求或已完成新版 demo；当前整体设计确认继续有效。本轮只答复并记录建议，没有新增原型或真实应用功能。
+**已确认：demo 先行。** 用户选择 A；新版 demo 已完成浏览器交互验证，当前供用户体验。真实 QQ、OCR、系统通知和桌面宿主验证仍按正式应用计划执行；整体设计确认继续有效。本轮实际实现范围及验证记录见第 1 节。
 
 1. **整体设计已确认**：`docs/superpowers/specs/2026-10-10-windows-app-design.md` 包含使用流程、提醒、错误恢复、架构、数据、NapCat、规则、OCR、WebView2、Windows 集成、安装和验收。2026-10-10 用户选择 A；使用行为不重新询问，后端细节由开发者负责。
 2. **已确认：老师明确取消任务后的去向**。用户选择 A：停止该任务后续提醒，移出待办和桌面卡片，保留“已取消”记录及原始消息，不记为用户已完成；取消变更仍通知一次。尚未实现。
 3. **已确认：自定义提醒遇到延期**。精度兼容的有效延期保持提前间隔，默认节点按新正式时间重算；用户随后确认精度不兼容时临时使用默认节点并提示设置待确认。与手动正式字段冲突的建议接受前不替换。尚未实现。
 4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并按规则继续提醒；保留此前完成记录及新旧证据。普通补充说明不自动恢复，关联或有效截止信息不确定时仍按既有规则待确认。尚未实现。
-5. **下一步：执行 M1 开发环境和核心基础**。实施总计划及 M1 详细计划已写入，分别为 `docs/superpowers/plans/2026-10-10-windows-app-implementation.md`、`docs/superpowers/plans/2026-10-10-core-foundation.md`。按已确定路线准备 .NET 10 SDK，建立时间/提醒/状态核心及测试，再按总计划进入规则样本和真实集成验证；本轮只完成计划及相关文档、测试更新，没有执行任何 M1 应用实现项。
+5. **下一步：用户体验新版 demo，按反馈调整界面**。体验后再按 `docs/superpowers/plans/2026-10-10-windows-app-implementation.md` 和 `docs/superpowers/plans/2026-10-10-core-foundation.md` 进入 M1 的 SDK 与核心基础工作。本轮没有安装 SDK 或接入 QQ，不将 demo 流程通过写成真实应用验收。
 6. 数据模型、SQLite、消息桥、OCR 进程通信、提醒调度、数据保留和打包已有开发者方案，见设计稿；尚未实现。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
 7. NapCat 真实连接和历史返回、本地规则误判/漏判、OCR 学校截图、桌面宿主层级及安装包通知激活仍须真实验证。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
 8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。本轮工具链复核仍未检测到 .NET SDK，已检测到 Chrome/WebView2 运行时；命令及结果见第 1 节。Git 已在上轮建立；本轮未安装依赖、未写应用代码、未连接 QQ，SDK 准备是已确认计划的下一步。
@@ -297,3 +302,4 @@
 | 2026-10-10 | 用户要求每次改动更新测试、全部验证通过并创建对应 Git commit | 在现有 `AGENTS.md` 加入“注意事项”，保留原协作规则，并明确新要求优先于小任务测试豁免；同步有效需求及交接。保存可重复运行的浏览器检查，新增文档检查及减少动画偏好覆盖：6 项文档检查、27 项浏览器检查全部通过，两份测试脚本语法检查通过。初始化本地 Git 并保存首个项目基线，实际命令与诊断记录见第 1 节；未改原型应用代码。下一步仍为整体设计确认，之后才编写实现计划和真实应用代码 |
 | 2026-10-10 | 用户选择 A，整体设计已确认，制定实施计划 | 更新需求、项目设计、下载副本和交接的有效状态；写入 M1～M9 总路线及 M1 三任务详细计划，31 项设计验收场景均有映射。只读复核未检测到 .NET SDK、已检测到 Chrome/WebView2，未安装依赖或接入 QQ。更新并实际运行 7 项文档检查、27 项浏览器检查，均退出码 0；脚本语法及 diff 检查通过，范围为文档和原型。真实应用代码未开始，下一步执行 M1；不再把整体确认写成待选事项 |
 | 2026-10-10 | 用户询问是否应先看 demo | 核对现有原型后建议先补齐后续交互再供体验；只记为待决定建议，整体设计确认不回退，不把旧原型写成新版完整 demo。强化当前阶段检查，要求需求、交接与设计均明确应用实现尚未开始。实际执行 `node --test tests/project-rules.test.mjs`，退出码 0、7 项通过；`node tests/prototype-qa.mjs` 退出码 0、27 项通过；`node --check tests/project-rules.test.mjs`、`git diff --check` 均退出码 0。本轮不修改应用或原型代码，验证仅为文档和既有浏览器原型 |
+| 2026-10-10 | 用户选择 A，补齐新版 demo 供体验 | demo 先行由建议转为有效顺序；新增普通脚本、体验说明及撤销／归档／提醒／变更／搜索／新增／图片／设置等示例交互，演示进度改为浏览器本地保存，刷新不重置撤销计时。更新实际测试为 8 项文档与 78 项浏览器检查，全部通过，四张预览已生成并查看；具体命令及范围见第 1 节。真实应用代码尚未开始，下一步先收集体验反馈，再接续 M1 |

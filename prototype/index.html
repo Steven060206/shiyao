@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>消息提纯 · 界面原型</title>
+  <title>消息提纯 · 可点击 Demo</title>
   <script>
-    try { if (localStorage.getItem('message-purify-theme') === 'dark') document.documentElement.dataset.theme = 'dark'; } catch {}
+    try { const preference = JSON.parse(localStorage.getItem('message-purify-demo-v2') || '{}').settings?.theme || 'system'; document.documentElement.dataset.theme = preference === 'system' ? (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light') : preference; } catch {}
   </script>
   <style>
     :root { color-scheme:light; --ink:#25362d; --muted:#64766c; --line:#e1e8e3; --accent:#226e53; --soft:#edf5ef; --danger:#a34237; --warning:#855819; }
@@ -134,6 +134,34 @@
     @media(max-width:1160px) { .app { grid-template-columns:154px minmax(0,1fr); }.sidebar { padding-inline:12px; }.workarea { grid-template-columns:minmax(280px,1fr) 350px; }.list-pane,.detail-pane { padding:24px 20px; }.topbar { padding-inline:20px; }.row-top h2 { font-size:14px; } }
     @media(max-width:880px) { .app { width:860px; margin:12px; height:calc(100dvh - 24px); }.workarea { grid-template-columns:340px minmax(0,1fr); }.demo-badge { display:none; }.widget { left:20px; }.desktop { min-width:630px; } }
     @media(prefers-reduced-motion:reduce) { * { transition:none!important; } .button:hover,.task-row:hover,.desktop-card:hover,.mini-row:hover { transform:none!important; box-shadow:none!important; } }
+    .filters { display:grid; grid-template-columns:minmax(100px,1fr) 116px 108px; gap:8px; margin-bottom:17px; }
+    .filters input,.filters select { margin:0; min-width:0; }
+    .button,.task-row,.desktop-card,.mini-row { transition:transform .16s ease,background-color .32s ease,color .32s ease,border-color .32s ease,box-shadow .32s ease; }
+    .unread-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:#d56b59; margin-left:6px; vertical-align:middle; flex-shrink:0; }
+    .guide-banner,.change-box { border:1px solid var(--line); background:var(--soft); border-radius:8px; padding:12px 14px; margin-bottom:17px; font-size:12px; }
+    .guide-banner { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .change-box p { margin:7px 0; color:var(--muted); font-size:11px; }
+    .detail-actions { flex-wrap:wrap; }
+    .source-image-button { display:block; width:100%; background:none; border:0; padding:0; }
+    .source-image-button .source-image { margin-top:0; }
+    .ocr-details { margin-top:10px; padding-top:10px; }
+    .setting-row { display:flex; align-items:center; justify-content:space-between; gap:16px; margin:16px 0; }
+    .setting-row select { width:145px; margin:0; }
+    .setting-row .check { margin:0; }
+    dialog { color:var(--ink); background:#fff; border:1px solid var(--line); border-radius:12px; padding:26px; width:min(520px,90vw); max-height:88dvh; overflow:auto; box-shadow:0 20px 70px #0005; }
+    dialog::backdrop { background:#0006; }
+    dialog h2 { font-size:22px; margin:8px 0 12px; }
+    dialog p { color:var(--muted); font-size:12px; line-height:1.9; }
+    .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:22px; }
+    #image-dialog { width:min(850px,92vw); }
+    #image-dialog .source-image { margin:14px 0; }
+    .toast { max-width:calc(100vw - 40px); display:flex; align-items:center; gap:16px; }
+    .toast button { color:inherit; border:1px solid currentColor; background:transparent; border-radius:5px; padding:3px 9px; white-space:nowrap; }
+    .simulation { margin-top:26px; }
+    .simulation .detail-actions { margin-bottom:8px; }
+    [data-theme="dark"] dialog { background:#101010; }
+    [data-motion="reduce"] * { transition:none!important; }
+    [data-motion="reduce"] .button:hover,[data-motion="reduce"] .task-row:hover,[data-motion="reduce"] .desktop-card:hover,[data-motion="reduce"] .mini-row:hover { transform:none!important; box-shadow:none!important; }
   </style>
 </head>
 <body>
@@ -142,159 +170,26 @@
       <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>消息提纯</div>
       <p class="brand-caption">学校群消息整理</p>
       <nav class="nav" id="nav" aria-label="主导航"></nav>
-      <div class="sidebar-foot"><b>界面原型</b>示例数据 · 刷新后恢复</div>
+      <div class="sidebar-foot"><b>可点击 Demo · 未连接 QQ</b><span id="storage-status">演示进度保存在此浏览器</span></div>
     </aside>
     <main class="main">
       <header class="topbar">
         <div class="breadcrumb">消息提纯 <span aria-hidden="true"> / </span> <strong id="breadcrumb">任务</strong></div>
-        <div class="top-actions"><span class="demo-badge">示例数据</span><button class="button small quiet" data-action="reset">重置示例</button><button class="button small" data-action="theme" aria-label="切换到深色模式">深色模式</button><button class="button small" data-action="desktop">预览桌面卡片</button></div>
+        <div class="top-actions"><span class="demo-badge">示例数据</span><button class="button small quiet" data-action="reset">重置示例</button><button class="button small" data-action="new">＋ 新增任务</button><button class="button small" data-action="theme" aria-label="切换到深色模式">深色模式</button><button class="button small" data-action="desktop">预览桌面卡片</button></div>
       </header>
       <div class="workarea"><section class="list-pane" id="list-pane" aria-label="事项列表"></section><aside class="detail-pane" id="detail-pane" aria-label="事项详情"></aside></div>
     </main>
   </div>
   <section class="desktop" id="desktop" hidden aria-label="桌面卡片预览">
-    <header class="desktop-bar"><div><h1>桌面卡片预览</h1><p>示例桌面 · 卡片左右排列，仅在桌面显示</p></div><div class="top-actions"><button class="button" data-action="theme" aria-label="切换到深色模式">深色模式</button><button class="button" data-action="back">返回主界面</button></div></header>
+    <header class="desktop-bar"><div><h1>桌面卡片预览</h1><p>浏览器模拟桌面 · 卡片左右排列</p></div><div class="top-actions"><button class="button" data-action="theme" aria-label="切换到深色模式">深色模式</button><button class="button" data-action="back">返回主界面</button></div></header>
     <div class="widget" id="widget"><div class="widget-handle" id="widget-handle"><span>消息提纯</span><span>拖动调整位置 · 右下角调整大小</span></div><div class="widget-grid" id="widget-grid"></div></div>
     <p class="desktop-help">有待确认事项时持续显示，全部处理后隐藏待确认卡片</p>
   </section>
   <div id="toast" class="toast" role="status" hidden></div>
-  <script>
-    // 界面原型：全部为示例数据，仅保存在本页内存中；未连接 QQ 或调用系统提醒。
-    const TODAY = '2026-10-09';
-    const NOW = new Date('2026-10-09T10:00:00+08:00');
-    const pages = {tasks:'任务',pending:'待确认',notices:'通知',completed:'已完成',settings:'设置'};
-    const seed = [
-      {id:'t1',kind:'task',state:'active',title:'数据结构 · 实验二报告',course:'数据结构',group:'数据结构课程群',due:'2026-10-09',time:'18:00',sender:'课程老师',sent:'10月8日 19:40',text:'请同学们在10月9日18:00前提交实验二报告。\n提交到课程平台，包含代码、运行截图和结果分析。'},
-      {id:'t2',kind:'task',state:'active',title:'高等数学 · 第三章习题',course:'高等数学',group:'高数学习群',due:'2026-10-11',time:'',sender:'课程老师',sent:'10月8日 15:12',text:'本周作业：第三章习题第1、3、5题。\n10月11日提交，写清解题过程，拍照上传到课程平台。'},
-      {id:'t3',kind:'task',state:'active',title:'大学英语 · 单元听力练习',course:'大学英语',group:'大学英语课程群',due:'2026-10-13',time:'20:00',sender:'课程老师',sent:'10月9日 08:35',text:'请完成第三单元听力练习，10月13日20:00前提交。\n练习入口在课程平台的第三单元下。'},
-      {id:'t4',kind:'task',state:'active',title:'程序设计 · 实验一',course:'程序设计',group:'程序设计课程群',due:'2026-10-08',time:'23:59',sender:'课程老师',sent:'10月6日 16:20',text:'实验一请在10月8日23:59前提交。\n内容包括基础输入输出、条件分支和循环练习。'},
-      {id:'p1',kind:'task',state:'pending',title:'大学物理 · 实验预习',course:'大学物理',group:'大学物理实验群',due:'',time:'',reason:'截止日期需从图片中确认',sender:'实验老师',sent:'10月9日 09:18',text:'下次实验前请完成预习，提交时间见图片。',image:true,ocr:'实验预习要求：10月12日18:00前提交预习报告。报告包含实验原理和步骤。'},
-      {id:'p2',kind:'notice',state:'pending',title:'教务通知 · 专业讲座',course:'',group:'学院通知群',due:'',time:'',reason:'适用对象待确认',sender:'教务老师',sent:'10月9日 09:05',text:'10月14日举办专业发展讲座，面向电子信息类专业同学。\n有兴趣的同学可以报名参加。'},
-      {id:'n1',kind:'notice',state:'active',title:'图书馆开放时间调整',course:'校园通知',group:'学校综合群',due:'',time:'',sender:'图书馆老师',sent:'10月9日 08:10',text:'本周六图书馆开放时间调整为09:00—17:00。\n请同学们合理安排借阅时间。'},
-      {id:'n2',kind:'notice',state:'active',title:'校园摄影比赛报名',course:'校园活动',group:'学校综合群',due:'',time:'',sender:'学生事务老师',sent:'10月8日 12:30',text:'校园摄影比赛开始报名，主题是“我眼中的校园”。\n自愿参加，报名截止日期为10月20日。'}
-    ];
-    let items = structuredClone(seed), page = 'tasks', selectedId = 't1', convertingId = null, toastTimer;
-    const $ = id => document.getElementById(id);
-    const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
-    const dayOffset = date => (Date.parse(date+'T00:00:00Z')-Date.parse(TODAY+'T00:00:00Z'))/86400000;
-    const overdue = item => Boolean(item.due && (item.time ? new Date(item.due+'T'+item.time+':00+08:00') < NOW : item.due < TODAY));
-    function priority(item) {
-      if (item.manualPriority) return item.manualPriority;
-      if (!item.due) return 'P3';
-      const days = dayOffset(item.due);
-      return days <= 0 ? 'P0' : days <= 3 ? 'P1' : days <= 7 ? 'P2' : 'P3';
-    }
-    function dateLabel(item) {
-      if (!item.due) return '日期待补齐';
-      const day = item.due === TODAY ? '今天' : `${Number(item.due.slice(5,7))}月${Number(item.due.slice(8))}日`;
-      return day + (item.time ? ' '+item.time : ' · 仅有日期');
-    }
-    function reminderLabel(item) {
-      if (item.state === 'completed') return '已完成，停止提醒';
-      if (item.state === 'pending') return '确认后再安排提醒';
-      if (item.kind === 'notice') return '普通通知，可自行加入任务';
-      if (overdue(item)) return '仅保留卡片高亮，不重复弹通知';
-      const format = date => new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(date);
-      if (!item.due) return '补齐日期后安排提醒';
-      if (!item.time) return format(new Date(Date.parse(item.due+'T12:00:00+08:00')-86400000))+' 提醒';
-      const deadline = Date.parse(item.due+'T'+item.time+':00+08:00');
-      return format(new Date(deadline-86400000))+'、'+format(new Date(deadline-7200000));
-    }
-    function pageItems(target = page) {
-      const filtered = items.filter(item => target === 'pending' ? item.state === 'pending' : target === 'completed' ? item.state === 'completed' : item.state === 'active' && item.kind === (target === 'tasks' ? 'task' : 'notice'));
-      return target === 'tasks' ? filtered.sort((a,b) => priority(a).localeCompare(priority(b)) || (a.due+(a.time || '23:59')).localeCompare(b.due+(b.time || '23:59'))) : filtered;
-    }
-    function badge(item) {
-      if (item.state === 'pending') return '<span class="tag pending">待确认</span>';
-      if (item.state === 'completed') return '<span class="tag">已完成</span>';
-      if (item.kind === 'notice') return '<span class="tag">通知</span>';
-      return `<span class="tag ${priority(item).toLowerCase()}">${priority(item)}</span>`;
-    }
-    function renderList() {
-      if (page === 'settings') {
-        $('list-pane').innerHTML = '<div class="page-head"><div><h1>设置</h1><p class="subline">当前已确定的使用方式</p></div></div><section class="settings-section"><h2>截止提醒</h2><p>有具体时刻：提前 1 天和 2 小时各提醒一次。<br>只有日期：前一天中午 12:00 提醒。<br>逾期后：保留卡片高亮，不重复弹通知。</p></section><section class="settings-section"><h2>桌面卡片</h2><p>提醒事项与待确认左右排列，可拖动、调整大小。<br>仅在桌面显示。待确认处理完后隐藏该卡片。</p><button class="button small" data-action="desktop" style="margin-top:15px">预览桌面卡片</button></section><section class="settings-section"><h2>消息处理</h2><p>NapCat 接收群消息，本地规则进行筛选。<br>图片日期须确认后才能用于提醒。<br>课程关联和疑似机器人账号由用户确认。</p></section>';
-        return;
-      }
-      const list = pageItems();
-      const descriptions = {tasks:`${list.length} 项待办 · ${list.filter(overdue).length} 项逾期`,pending:'补齐信息，确认与自己相关的事项',notices:'学校通知与自愿活动',completed:'已完成事项及其原始消息'};
-      $('list-pane').innerHTML = `<div class="page-head"><div><h1>${pages[page]}</h1><p class="subline">${descriptions[page]}</p></div><div class="date-stamp">10月9日<br>演示日期</div></div><div class="list-summary"><b>全部 ${list.length}</b><span>${page === 'tasks' ? '按优先级与截止时间排序' : '保留来源与原始消息'}</span></div><div class="rows">${list.map(item => `<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.state === 'active' && item.kind === 'task' ? overdue(item) ? 'overdue' : item.due === TODAY ? 'today' : '' : ''}" data-action="select" data-id="${item.id}" aria-pressed="${item.id === selectedId}"><div class="row-top">${badge(item)}<h2>${escapeHTML(item.title)}</h2></div><div class="row-meta"><span>${escapeHTML(item.group)}</span><span>${item.kind === 'task' ? dateLabel(item) : item.sent}</span></div>${item.state === 'pending' ? `<p class="row-note pending">${escapeHTML(item.reason)}</p>` : item.kind === 'task' && item.state === 'active' && overdue(item) ? '<p class="row-note">已逾期 · 等待手动完成</p>' : ''}</button>`).join('') || `<div class="empty"><h2>${page === 'tasks' ? '暂无待办' : page === 'pending' ? '待确认事项已全部处理' : page === 'completed' ? '暂无已完成记录' : '暂无通知'}</h2><p>${page === 'completed' ? '完成的任务会保留在这里。' : '新的相关事项会显示在这里。'}</p></div>`}</div>`;
-    }
-    function editForm(item, mode) {
-      const task = mode === 'convert' || item.kind === 'task';
-      return `<form class="form" data-id="${item.id}" data-mode="${mode}" novalidate>${mode === 'pending' ? `<label class="field">事项类型<select name="kind"><option value="task" ${task ? 'selected' : ''}>任务</option><option value="notice" ${!task ? 'selected' : ''}>通知</option></select></label>` : ''}<label class="field">事项标题<input name="title" value="${escapeHTML(item.title)}" required></label><label class="field">课程或分类<input name="course" value="${escapeHTML(item.course)}" placeholder="例如：大学物理" required></label><div class="form-grid"><label class="field">截止日期<input type="date" name="due" value="${item.due}"></label><label class="field">具体时刻（可不填）<input type="time" name="time" value="${item.time}"></label></div><p class="hint">只明确日期时，前一天中午 12:00 提醒。普通通知无需填写截止日期。</p>${item.image ? '<label class="check"><input type="checkbox" name="imageConfirmed"><span>我已查看原图并确认所填写的日期和时刻</span></label>' : ''}<label class="field">优先级<select name="priority"><option value="">自动计算</option>${['P0','P1','P2','P3'].map(p => `<option ${item.manualPriority === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label><p class="error" role="alert" hidden></p><button class="button primary" type="submit">${mode === 'pending' ? '确认事项' : mode === 'convert' ? '加入任务' : '保存修改'}</button></form>`;
-    }
-    function imagePreview() {
-      const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="720" height="440" viewBox="0 0 720 440"><rect width="720" height="440" fill="#f8f8f3"/><rect x="30" y="30" width="660" height="380" fill="white" stroke="#ddd"/><text x="65" y="88" font-size="18" fill="#777" font-family="Microsoft YaHei,sans-serif">原图示例 · 实验安排</text><text x="65" y="148" font-size="30" fill="#252d24" font-family="Microsoft YaHei,sans-serif">大学物理实验预习</text><path d="M65 172H650" stroke="#ddd"/><text x="65" y="225" font-size="24" fill="#343f35" font-family="Microsoft YaHei,sans-serif">10月12日 18:00 前提交预习报告</text><text x="65" y="285" font-size="22" fill="#525e53" font-family="Microsoft YaHei,sans-serif">报告包含实验原理和步骤</text><text x="65" y="358" font-size="17" fill="#7e867d" font-family="Microsoft YaHei,sans-serif">课程老师 · 大学物理实验群</text></svg>';
-      return `<img class="source-image" alt="原图示例：大学物理实验预习，10月12日18:00前提交预习报告" src="data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}">`;
-    }
-    function renderDetail() {
-      const item = items.find(i => i.id === selectedId);
-      if (page === 'settings') { $('detail-pane').innerHTML = '<p class="eyebrow">界面预览</p><h2 class="detail-title">用示例先看清布局</h2><p class="detail-sub">本页展示已确认的规则。点击“预览桌面卡片”查看桌面组件。</p><div class="deadline-box"><small>原型范围</small><b>任务、确认与详情交互</b><small>QQ 接入、OCR 和系统提醒尚未连接。</small></div>'; return; }
-      if (!item) { $('detail-pane').innerHTML = '<div class="empty"><h2>选择一个事项</h2><p>这里显示原文、图片和可编辑信息。</p></div>'; return; }
-      const pending = item.state === 'pending', completed = item.state === 'completed';
-      $('detail-pane').innerHTML = `<p class="eyebrow">${pending ? '核对并补齐信息' : '事项详情'}</p><h2 class="detail-title">${escapeHTML(item.title)}</h2><p class="detail-sub">${badge(item)} <span style="margin-left:7px">${escapeHTML(item.course || '课程或分类待确认')}</span></p>${pending ? `<div class="deadline-box"><small>待补信息</small><b>${escapeHTML(item.reason)}</b><small>确认或忽略后，此项从待确认中移除。</small></div><div class="detail-actions"><button class="button small" data-action="ignore" data-id="${item.id}">忽略此项</button></div>` : `<div class="deadline-box ${overdue(item) && item.kind === 'task' && !completed ? 'overdue' : ''}"><small>${item.kind === 'task' ? '截止时间' : '事项类型'}</small><b>${item.kind === 'task' ? dateLabel(item) : '普通通知'}</b><small>${reminderLabel(item)}</small></div><div class="detail-actions">${completed ? '<span class="tag">已完成，原始消息已保留</span>' : item.kind === 'task' ? `<button class="button primary" data-action="complete" data-id="${item.id}">标记完成</button>` : `<button class="button" data-action="convert" data-id="${item.id}">加入任务</button>`}</div>`}<h3 class="section-label">原始消息</h3><p class="source-meta">${escapeHTML(item.group)} · ${escapeHTML(item.sender)}<br>${escapeHTML(item.sent)}</p><div class="message">${escapeHTML(item.text)}</div>${item.image ? imagePreview()+`<p class="ocr">图片文字（示例）：${escapeHTML(item.ocr)}<br>填写日期后，需勾选确认才能用于提醒。</p>` : ''}${completed ? '' : pending ? `<h3 class="section-label">补齐并确认</h3>${editForm(item,'pending')}` : convertingId === item.id ? `<h3 class="section-label">加入任务</h3>${editForm(item,'convert')}` : item.kind === 'task' ? `<details><summary>修改事项信息</summary>${editForm(item,'save')}</details>` : ''}`;
-    }
-    function renderDesktop() {
-      const tasks = pageItems('tasks'), pending = pageItems('pending');
-      $('widget').classList.toggle('only-tasks',pending.length === 0);
-      const rows = (list, isPending) => list.map(item => `<article class="mini-row ${!isPending ? overdue(item) ? 'overdue' : item.due === TODAY ? 'today' : '' : ''}"><button class="mini-open" data-action="open" data-id="${item.id}">${escapeHTML(item.title)}</button><p class="mini-meta">${escapeHTML(item.group)}${isPending ? '<br>'+escapeHTML(item.reason) : ''}</p><div class="mini-foot">${isPending ? '<span class="tag pending">待确认</span>' : badge(item)}<span style="color:var(--muted);font-size:10px">${isPending ? '' : overdue(item) ? '已逾期 · '+dateLabel(item) : dateLabel(item)}</span><button class="button small" data-action="${isPending ? 'open' : 'complete'}" data-id="${item.id}">${isPending ? '处理' : '完成'}</button></div></article>`).join('');
-      $('widget-grid').innerHTML = `<section class="desktop-card" aria-label="提醒事项卡片"><header class="card-heading"><h2>提醒事项</h2><span>${tasks.length} 项</span></header><div class="card-body">${rows(tasks,false) || '<div class="empty"><h2>暂无待办</h2></div>'}</div></section>${pending.length ? `<section class="desktop-card" aria-label="待确认卡片"><header class="card-heading"><h2>待确认</h2><span>${pending.length} 项</span></header><div class="card-body">${rows(pending,true)}</div></section>` : ''}`;
-    }
-    function render() {
-      const list = page === 'settings' ? [] : pageItems();
-      if (!list.some(i => i.id === selectedId)) selectedId = list[0]?.id || null;
-      $('nav').innerHTML = Object.entries(pages).map(([key,label]) => `<button data-action="nav" data-page="${key}" ${key === page ? 'aria-current="page"' : ''}><span>${label}</span>${key === 'settings' ? '' : `<span class="count">${pageItems(key).length}</span>`}</button>`).join('');
-      $('breadcrumb').textContent = pages[page];
-      renderList(); renderDetail(); renderDesktop();
-    }
-    function notify(message) { clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false; toastTimer = setTimeout(() => $('toast').hidden = true,2200); }
-    function updateThemeButtons() {
-      const label = document.documentElement.dataset.theme === 'dark' ? '浅色模式' : '深色模式';
-      document.querySelectorAll('[data-action="theme"]').forEach(button => { button.textContent = label; button.setAttribute('aria-label','切换到'+label); });
-    }
-    function toggleTheme() {
-      const theme = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-      document.documentElement.dataset.theme = theme;
-      try { localStorage.setItem('message-purify-theme',theme); } catch {}
-      updateThemeButtons();
-    }
-    function showDesktop(show) { $('desktop').hidden = !show; $('app').hidden = show; }
-    document.addEventListener('click', event => {
-      const button = event.target.closest('button[data-action]'); if (!button) return;
-      const action = button.dataset.action, item = items.find(i => i.id === button.dataset.id);
-      if (action === 'theme') { toggleTheme(); return; }
-      if (action === 'desktop') { showDesktop(true); return; }
-      if (action === 'back') { showDesktop(false); return; }
-      if (action === 'reset') { items = structuredClone(seed); page = 'tasks'; selectedId = 't1'; convertingId = null; render(); notify('示例已恢复'); return; }
-      if (action === 'nav') { page = button.dataset.page; selectedId = null; convertingId = null; render(); return; }
-      if (action === 'select') { selectedId = item.id; convertingId = null; render(); return; }
-      if (action === 'open') { page = item.state === 'pending' ? 'pending' : 'tasks'; selectedId = item.id; convertingId = null; showDesktop(false); render(); return; }
-      if (action === 'convert') { convertingId = item.id; renderDetail(); return; }
-      if (action === 'complete') { item.state = 'completed'; render(); notify('已完成，原始消息保留在已完成记录中'); return; }
-      if (action === 'ignore') { item.state = 'ignored'; render(); notify('已忽略此项'); }
-    });
-    document.addEventListener('submit', event => {
-      const form = event.target.closest('form[data-mode]'); if (!form) return; event.preventDefault();
-      const data = new FormData(form), item = items.find(i => i.id === form.dataset.id), mode = form.dataset.mode;
-      const kind = mode === 'convert' ? 'task' : mode === 'pending' ? data.get('kind') : item.kind;
-      const title = data.get('title').trim(), course = data.get('course').trim(), due = data.get('due'), time = data.get('time');
-      const error = form.querySelector('.error');
-      let message = !title ? '请填写事项标题。' : !course ? '请确认课程或分类。' : kind === 'task' && !due ? '请填写并确认截止日期。' : time && !due ? '请同时填写日期。' : item.image && kind === 'task' && !data.get('imageConfirmed') ? '请查看原图并勾选日期和时刻确认。' : '';
-      if (message) { error.textContent = message; error.hidden = false; return; }
-      Object.assign(item,{title,course,due:kind === 'task' ? due : '',time:kind === 'task' ? time : '',kind,state:'active',manualPriority:data.get('priority')});
-      if (mode !== 'save') page = kind === 'task' ? 'tasks' : 'notices';
-      selectedId = item.id; convertingId = null; render(); notify(mode === 'pending' ? '已确认并移入'+(kind === 'task' ? '任务' : '通知') : '已保存');
-    });
-    $('widget-handle').addEventListener('pointerdown', event => {
-      if (event.button !== 0) return;
-      const widget = $('widget'), startX = event.clientX, startY = event.clientY, startLeft = widget.offsetLeft, startTop = widget.offsetTop;
-      const handle = event.currentTarget; handle.setPointerCapture(event.pointerId);
-      const move = e => { widget.style.left = Math.max(10,Math.min(innerWidth-widget.offsetWidth-10,startLeft+e.clientX-startX))+'px'; widget.style.top = Math.max(82,Math.min(innerHeight-80,startTop+e.clientY-startY))+'px'; };
-      const stop = () => { handle.removeEventListener('pointermove',move); handle.removeEventListener('pointerup',stop); handle.removeEventListener('pointercancel',stop); };
-      handle.addEventListener('pointermove',move); handle.addEventListener('pointerup',stop); handle.addEventListener('pointercancel',stop);
-    });
-    updateThemeButtons();
-    render();
-  </script>
+  <dialog id="new-dialog" aria-label="新增任务"></dialog>
+  <dialog id="image-dialog" aria-label="查看原图"></dialog>
+  <dialog id="guide-dialog" aria-label="首次使用引导"></dialog>
+  <dialog id="reminder-dialog" aria-label="提醒通知预览"></dialog>
+  <script src="app.js"></script>
 </body>
 </html>
