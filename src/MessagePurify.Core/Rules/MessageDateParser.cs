@@ -30,8 +30,10 @@ public static class MessageDateParser
     private static readonly Regex AbbreviatedDateRange = Pattern(
         @"(?:[日号]|[0-9]+月[0-9]+)\s*(?:或(?:者)?|至|到|[-—~～、])\s*[0-9]+[日号]");
     private static readonly Regex ClockExpressions = Pattern(
-        @"(?:[0-9]+(?:\.[0-9]+)?|[零〇一二两三四五六七八九十]+)[点时](?:半|一刻|三刻|[0-9零〇一二两三四五六七八九十]+分?)?" +
+        @"(?:[0-9]+(?:\.[0-9]+)?|[零〇一二两三四五六七八九十]+)[点时](?:半|一刻|三刻|[0-9零〇一二两三四五六七八九十]+(?:分(?:[0-9]+秒)?|秒)?)?" +
         @"|[0-9]+:[0-9]+(?::[0-9]+)?");
+    private static readonly Regex NumericDateExpressions = Pattern(@"(?<![0-9])[0-9]+(?:[-/][0-9]+){2,}");
+    private static readonly Regex UnsupportedWeeks = Pattern(@"(?:上|下下)(?:周|星期|礼拜)");
 
     public static DateParseResult Parse(string text, DateTimeOffset sentAt,
         string timeZoneId, TimeKind kind)
@@ -46,6 +48,12 @@ public static class MessageDateParser
             var normalized = text.Normalize(NormalizationForm.FormKC);
             var dates = Dates.Matches(normalized).ToArray();
             var clocks = Clocks.Matches(normalized).ToArray();
+            // 完整表达必须覆盖，不能把上周星期一或多段数字日期的后半截当成新日期。
+            if (UnsupportedWeeks.IsMatch(normalized))
+                return Issue(DateIssue.Missing, "存在尚未支持的星期表达，需要确认。");
+            if (NumericDateExpressions.Matches(normalized).Any(expression =>
+                !dates.Any(date => date.Index == expression.Index && date.Length == expression.Length)))
+                return Issue(DateIssue.Invalid, "数字日期表达不完整或格式不受支持，需要确认。");
             var parsedDates = dates.Select(match => ReadDate(match, messageDate)).ToArray();
             var parsedClocks = clocks.Select(ReadClock).ToArray();
 

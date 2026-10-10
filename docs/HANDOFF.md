@@ -16,7 +16,9 @@
 - 用户要求继续工作，沿用整体设计及已确认技术路线推进 M2。已核对 M1 源码、锁文件、87 项核心测试及 demo 的二次确认改动，工作从 `8f9acdc` 创建 `codex/m2-local-rules` 分支。
 - [M2 详细计划](superpowers/plans/2026-10-10-local-rules.md)已写入，分为消息／日期、提取／优先级、样本／评估三个任务。Task 1 已完成，Task 2、3 正在实施；不把计划或合成样本作为真实 QQ 验收。
 - Task 1 新增 `src/MessagePurify.Core/Rules/RuleModels.cs`、`MessageNormalizer.cs`、`MessageDateParser.cs`，以及 `tests/MessagePurify.Core.Tests/MessageNormalizerTests.cs`、`MessageDateParserTests.cs`。保留账号／群／消息证据、图片与引用段；日期按原发送时刻及保存时区解释，不制造钟点。支持完整年月日、月日、相对日期、明确星期、下月日期和数字钟点；日期范围、冲突、非法和未覆盖表达返回具体确认原因。
-- 实现前过滤测试因缺少类型退出 1；实现后实际执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release`，退出码 0、183 项通过（原 87 项、标准化 2 项、日期 94 项）。执行 `node --test tests/project-rules.test.mjs`（10 项）、`node tests/prototype-qa.mjs`（107 项）、`git diff --check`，均退出码 0。人工核对需求、阶段和实际产物；未找到的 `maintain-context-hygiene` 技能继续以项目规定的人工核对替代。Task 1 提交说明为 `feat: add message normalization and contextual date parsing`，标识以 Git 日志为准。
+- 实现前过滤测试因缺少类型退出 1；实现后实际执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release`，退出码 0、191 项通过（原 87 项、标准化 2 项、日期 102 项；后续日期边界回归已纳入）。执行 `node --test tests/project-rules.test.mjs`（10 项）、`node tests/prototype-qa.mjs`（107 项）、`git diff --check`，均退出码 0。人工核对需求、阶段和实际产物；未找到的 `maintain-context-hygiene` 技能继续以项目规定的人工核对替代。Task 1 提交说明为 `feat: add message normalization and contextual date parsing`，标识以 Git 日志为准。
+- Task 2 已写入 `Rules/MessageRuleExtractor.cs`、`PriorityCalculator.cs`，及 `RuleExtractionTests.cs`、`PriorityCalculatorTests.cs`（在既有 Core／测试目录）。普通明确行动按已确认课程和有效时间提取；疑问、否定、转述、限定对象、缺时间分别保留原因。延期／取消／新要求分别检查可信发布者和唯一目标，已归档／已取消新要求为待确认；引用仅提供关联证据，OCR 只提供建议，不实际改变事项或发通知。
+- Task 2 两类过滤测试实现前均退出 1；实现后提取过滤初始 67 项通过、优先级初始 12 项通过。补保存时区跨 UTC 日期、条件句、排除目标、混合证据引用、格式要求及自愿表达回归后，root 实际运行 Release 核心全量，退出码 0、289 项通过（提取 85 项、优先级 13 项，含 Task 1 标准化 2 项和日期 102 项）。后果只按明确说明提升一级。合成样本已写入但尚未运行基线。
 
 ### 上轮 demo 删除日期二次确认
 

@@ -111,10 +111,15 @@ public class MessageDateParserTests
     [InlineData("下周18点交作业")]
     [InlineData("大后天交作业")]
     [InlineData("上周五交作业")]
+    [InlineData("上周星期一交作业")]
+    [InlineData("下下周星期一交作业")]
+    [InlineData("下下周礼拜一交作业")]
     [InlineData("下下周一交作业")]
     [InlineData("明天三点交作业")]
     [InlineData("明天18.5点交作业")]
     [InlineData("明天18点一刻交作业")]
+    [InlineData("明天18点30秒交作业")]
+    [InlineData("明天18点30分20秒交作业")]
     public void MissingExplicitDate_DoesNotInventOne(string text)
     {
         var result = MessageDateParser.Parse(text, SentAt, Zone, TimeKind.Deadline);
@@ -143,6 +148,9 @@ public class MessageDateParserTests
     [InlineData("明天上午0点交作业")]
     [InlineData("明天18点60分交作业")]
     [InlineData("10-12-13交作业")]
+    [InlineData("2026-10-12-13交作业")]
+    [InlineData("2026/10/12/13交作业")]
+    [InlineData("2026-10/12交作业")]
     [InlineData("明天18:30:00交作业")]
     public void InvalidNumericValue_ReturnsIssueWithoutThrowing(string text)
     {
