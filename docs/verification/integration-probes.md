@@ -12,7 +12,7 @@
 | OCR 协议与合成图 | 通过：25 项 Python | `./.tools/ocr/venv/Scripts/python.exe -m pip check` 和 `./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 均通过。真实 CPU 模型识别合成中文通知、长图日期、空白图和损坏图后继续；有限数值、代理码点 UTF-8 和离线模型回归已覆盖。 |
 | 用户 QQ 截图 OCR | 真实截图文字通过，通知日期不验收 | 本机 worker 处理用户群列表截图：55 行、6 个红框群名均识别、原图字节未变。截图没有完整学校通知正文和日期，不能证明日期提取。全文只在 `.tools/m3-results/`。 |
 | WPF/WebView2 隐藏桥 | 通过 | 发布后运行 `Run-Probe.ps1 -Mode Bridge`；报告 `C:\Users\Administrator\AppData\Local\MessagePurify\IntegrationProbe\results\Bridge-20261010-225528.json`。本轮重新 publish 并安装到含空格路径 `.tools/m3-install space`，运行 `Run-Probe.ps1 -Mode Bridge -WaitSeconds 20` 退出码 0，报告 `.tools/m3-install space/results/Bridge-20261011-013731.json`。WebView2 `155.0.4283.45`，echo→reply→ack、secure context、特殊文字保留均通过，PNG 已核对。 |
-| Windows 通知 | 普通完整性进程已运行，通知接口失败 | 高完整性原会话仍返回 `blockedElevated`；桌面 Explorer 同样为高完整性，普通 ShellExecute 不能降低权限。Basic User 仅禁用管理员组仍是高完整性，已修正探针误判。独立测试进程实际降为中等完整性（RID 8192）后 `elevated=false`，通知接口返回 `COMException:0x80070490`，没有通知 ID；提交、呈现、声音及热/冷点击仍未通过。未修改 UAC、用户账户或 Explorer。 |
+| Windows 通知 | 资源发布与提交通过；用户点击/声音未验收 | 高完整性进程仍返回 `blockedElevated`，符合 SDK 约束。补齐 `Microsoft.WindowsAppRuntime.Insights.Resource.dll` 后，独立中等完整性进程可注册并提交普通测试提醒；用户已看到过一条提醒但点击没有反应，最新重发报告 `activationObserved=false`。受控 COM 冷启动回归已通过（`activationObserved=true`、`activationKind=cold`、账号匹配），只证明回调路由，不替代用户实际呈现、声音或点击验收。 |
 | 桌面卡片 | 未完成人工操作 | WPF 产物、父窗/DPI/样式及拖动几何测试通过；未执行 Win+D、遮挡、鼠标拖动/缩放、多屏、Explorer 重启或睡眠恢复人工验收。 |
 
 ## 代码和自动化验证
@@ -21,11 +21,12 @@
 - Infrastructure Release：46/46。
 - Windows 参数/桥/通知路由/桌面几何及真实令牌完整性：45/45；本轮重新 test、IntegrationProbe 自包含 `win-x64` publish、安装均退出码 0。
 - OCR：25/25，使用项目隔离解释器运行；`./.tools/ocr/venv/Scripts/python.exe -m pip check` 无坏依赖。
-- Node 文档、NapCat 启动路径和当前用户探针打包：本轮运行 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，19/19、退出码 0（新增一项真实 QQ 报告范围回归，更新模式状态检查）。
+- Node 文档、NapCat 启动路径和当前用户探针打包：本轮运行四文件命令，21/21、退出码 0；其中打包测试覆盖官方通知资源提取、缺资源拒绝安装、重复安装和路径空格。
 - demo 浏览器：107 项。
+- `tests/notification_cold_activation_test.py`：正式自包含发布产物受控 COM 冷启动回归退出码 0，输出 `PASS: cold COM callback located the synthetic account and item.`；受控回调不是用户点击验收。
 - `git diff --check`：退出码 0（仅显示工作区换行提示）。
 
-QQ 接入检查完成后继续通知验证，发现并修正一处权限检测错误。本轮已重跑 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 19、demo 107，全部通过；所有未通过或未人工操作的 M3 项保持未验收。
+QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，再定位并修复自包含发布缺少官方通知资源的问题。本轮已重跑 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 21、demo 107，全部通过；受控冷启动回调通过，用户实际点击、声音和所有未人工操作的 M3 项仍保持未验收。
 
 本轮回归实际执行：三个测试项目的 `.tools/dotnet/dotnet.exe test tests/<项目> --no-restore --configuration Release`，OCR 的 pip check / unittest discover，四文件 Node 测试及 `node tests/prototype-qa.mjs`。Infrastructure 初次构建因正在监听的 QQ 探针锁住运行目录 DLL 而退出码 1；先用同项目 `--no-build --no-restore --configuration Release` 验证 46 项，退出码 0。300 秒监听正常结束后，复跑 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release`，构建与 46 项均通过、退出码 0；没有关闭 QQ。
 
@@ -35,9 +36,16 @@ QQ 接入检查完成后继续通知验证，发现并修正一处权限检测�
 
 - 原 `NotificationProbe.IsElevated` 根据管理员组成员身份判断权限。`runas /trustlevel:0x20000` 运行诊断时报告 `elevated=false`，但 SDK 的 `IsSupported` 返回 false。核对 [Windows App SDK 的完整性判断源码](https://github.com/microsoft/WindowsAppSDK/blob/main/dev/Common/Security.IntegrityLevel.h) 与 [AppNotificationManager 实现](https://github.com/microsoft/WindowsAppSDK/blob/main/dev/AppNotifications/AppNotificationManager.cpp)：通知按令牌完整性是否达到 High 判断，不按管理员组是否启用。
 - 新增 `ProcessIntegrity.cs`，通过 `GetTokenInformation(TokenIntegrityLevel)` 获取当前令牌的完整性 RID；权限报告和阻止规则与 SDK 一致。新增 Windows 回归独立执行 `whoami /groups /fo csv /nh`，核对原生查询值；实际 Windows 45/45、编译无警告。
-- 实际执行 `.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/IntegrationProbe --configuration Release --runtime win-x64 --self-contained true --no-restore --output .tools/windows-probe-publish`，再执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-publish`，均退出码 0。重新运行 Basic User 下的通知探针，报告 `normal-integrity-corrected-20261011.json` 为 `elevated=true`、`blockedElevated`，消除之前的误判。
-- 本机一次性测试通过 Windows Basic User 运行独立 Python 辅助进程，再只降低该辅助进程令牌的完整性；没有改变系统策略或已有应用。`results/medium-launch-20261011.json` 记录 RID 12288→8192；子进程报告 `results/normal-medium-20261011.json` 为 `elevated=false`、`COMException:0x80070490`，通知未提交。两份报告在 `%LOCALAPPDATA%/MessagePurify/IntegrationProbe/` 下；辅助脚本在本机忽略目录及同一结果目录，不作为正式应用入口。
-- 只读核查 WpnService 与当前 WpnUserService 均 Running；接口错误的根因仍待定位，不宣称通知、声音或点击可用。
+- 修复后实际执行 `.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/IntegrationProbe --configuration Release --runtime win-x64 --self-contained true --no-restore --output ".tools/windows-probe-publish fixed"`，再执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory ".tools/windows-probe-publish fixed"`，均退出码 0。发布后由 `Copy-NotificationResource.ps1` 从匹配的官方 Windows App SDK 2.5.1 MSIX 提取 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`；安装脚本会拒绝缺少该资源的产物，Node 打包回归覆盖提取、覆盖旧文件和缺失资源失败。
+- 本机一次性测试通过 Windows Basic User 运行独立 Python 辅助进程，再只降低该辅助进程令牌的完整性；没有改变系统策略或已有应用。`results/medium-launch-20261011.json` 记录 RID 12288→8192。资源修复后，中等完整性测试进程的普通通知报告为 `notificationStatus=submitted`；最新用户重发报告为 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json`，仍未观察到用户激活回调。
+- 只读核查 WpnService 与当前 WpnUserService 均 Running。错误分为两层：Codex 子进程继承包身份（状态 122），SDK 注册返回 `0x80070490`；经真实 Explorer 启动后无包身份（状态 15700），才暴露缺少通知资源的 `0x8007007E`。补齐匹配资源后注册与提交成功；仅降低完整性不能消除包身份。用户已确认一次普通提醒呈现，静音呈现、声音和用户实际点击仍需验收。
+
+## 通知资源与冷启动回归
+
+- Windows App SDK 2.5.1 的自包含发布目录不会自动携带 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`。`packaging/probe/Copy-NotificationResource.ps1` 在 Publish 后从匹配的官方 `Microsoft.WindowsAppRuntime.2.msix` 提取该资源，`Install-Probe.ps1` 在安装前检查资源存在；资源提取和安装检查已由四文件 Node 回归覆盖。
+- `NotificationProbe` 在 `Register()` 后读取 SDK 首次激活参数，修复冷启动点击参数没有被消费的问题。受控回归 `.tools/m3-results/cold-notification-regression-summary.json` 显示修复前 `activationObserved=false`，修复后 `activationObserved=true`、`activationKind=cold`、账号匹配；`tests/notification_cold_activation_test.py` 对正式发布产物退出码 0。
+- 2026-10-11 14:28:38 通过真实 Explorer 打开本机 `.lnk`（目标为 `pythonw.exe` 辅助脚本）重发，报告 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json` 为 `submitted`、通知 ID 36646、`error=null`、`activationObserved=false`。辅助进程无包身份，完整性 RID 8192。此运行副本包含资源修复，尚未包含冷启动修复；用户此前确认看到过提醒并点击无反应，最新一次呈现及真实点击仍等待反馈，声音未验收。
+- 冷启动回归对正式产物 `.tools/windows-probe-publish fixed/MessagePurify.Windows.IntegrationProbe.exe` 实际执行 `python tests/notification_cold_activation_test.py --executable <该产物绝对路径>`。经真实 Explorer 启动的辅助进程运行，最新 `.tools/m3-results/cold-test-result.json` 为退出码 0、PASS；直接从 Codex 运行包装脚本会继承包身份，本轮曾得到 COM `0x80080005`，随后改用实际 Explorer 重跑通过。该测试不发送通知，不能作为用户点击结果。
 
 ## 当前 QQ 接入说明
 
@@ -49,7 +57,9 @@ QQ 接入检查完成后继续通知验证，发现并修正一处权限检测�
 
 用户回答“刚收到新的群消息”后，把已有探针运行文件复制到独立忽略目录以避免构建 DLL 锁，实际运行 `.tools/dotnet/dotnet.exe .tools/m3-results/qq-live-run-20261011-feedback/MessagePurify.QqProbe.dll --listen-seconds 180 --output .tools/m3-results/qq-framework-user-feedback.md`，退出码 0。报告起始 2026-10-11 13:42:06（北京时间）、实时群消息 1、历史 7、去重后 8、排除私聊 0、其他事件 7、无失败。只验证收到一条群文本事件，没有验证所有群、图片事件或长期接收。
 
-随后运行 `python .tools/m3-results/check-recent-group-traffic.py`，只调用群列表及历史读取，每群最多读一页 5 条：52 群尝试、41 成功、11 接口失败、历史合计 178 条，其中近十分钟 2 条分属 2 群，最新原始时间为 13:42:10。脚本退出码 0表示诊断已完成，不表示 52 群历史全部通过；11 个失败原因未进一步定位。统计保存在 `.tools/m3-results/qq-recent-group-traffic.json`，不保存账号、群名、正文或 Token，不把这些历史作为实时事件验收。
+随后运行 `python .tools/m3-results/check-recent-group-traffic.py`，只调用群列表及历史读取，每群最多读一页 5 条：52 群尝试、41 成功、11 接口失败、历史合计 178 条，其中近十分钟 2 条分属 2 群，最新原始时间为 13:42:10。脚本退出码 0表示诊断已完成，不表示 52 群历史全部通过。统计保存在 `.tools/m3-results/qq-recent-group-traffic.json`，不保存账号、群名、正文或 Token，不把这些历史作为实时事件验收。
+
+实际执行 `python .tools/m3-results/diagnose-group-history-errors-20261011.py`，只读查询状态一次、群列表一次、历史两次；退出码 0。报告 `.tools/m3-results/qq-history-errors-diagnosis-20261011.json` 中一个失败样本为 `failed/1200/data=null`，空历史错误成立；一个成功对照为 `ok/0`、5 条。结合本机 NapCat 实现，定位失败样本为底层返回空历史后转换成接口错误；未逐群复测全部 11 个失败，不修改客户端或把错误伪装成成功。七天分页和断线补漏仍未验收。
 
 用户询问是否会向学校群发送消息，已核对项目 QQ 客户端、探针和启动脚本没有 QQ 发送接口调用。QQ 接入只读，不向 QQ 群或私聊发送消息；现有受控 loopback 回归精确断言探针仅调用五个读取 action，提醒使用本机 Windows 通知。
 

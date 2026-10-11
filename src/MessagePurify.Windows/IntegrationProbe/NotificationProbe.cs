@@ -1,5 +1,6 @@
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
+using Microsoft.Windows.AppLifecycle;
 
 namespace MessagePurify.Windows.IntegrationProbe;
 
@@ -10,15 +11,23 @@ public sealed class NotificationProbe : IDisposable
 
     public static bool IsElevated() => ProcessIntegrity.IsElevated();
 
-    public bool Register(ProbeReport report, Action<string> onInvoked)
+    public bool Register(ProbeReport report, Action<string> onInvoked, bool coldActivation = false)
     {
         if (report.Elevated) { report.NotificationStatus = "blockedElevated"; return false; }
         if (!AppNotificationManager.IsSupported()) { report.NotificationStatus = "unsupported"; return false; }
         AppNotificationManager.Default.NotificationInvoked += (_, arguments) => onInvoked(arguments.Argument);
+        report.NotificationStatus = "registering";
         AppNotificationManager.Default.Register();
         registered = true;
+        report.NotificationStatus = "readingSetting";
         report.NotificationSetting = AppNotificationManager.Default.Setting.ToString();
         report.NotificationStatus = "registered";
+        if (coldActivation)
+        {
+            var activation = AppInstance.GetCurrent().GetActivatedEventArgs();
+            if (activation.Kind == ExtendedActivationKind.AppNotification && activation.Data is AppNotificationActivatedEventArgs launch)
+                onInvoked(launch.Argument);
+        }
         return true;
     }
 
@@ -43,6 +52,7 @@ public sealed class NotificationProbe : IDisposable
             .AddText("合成内容。点击验证账号与事项定位。");
         if (mode == "silent") builder.MuteAudio();
         var notification = builder.BuildNotification();
+        report.NotificationStatus = "submitting";
         AppNotificationManager.Default.Show(notification);
         report.NotificationId = notification.Id;
         report.NotificationStatus = notification.Id == 0 ? "submissionUnknown" : "submitted";

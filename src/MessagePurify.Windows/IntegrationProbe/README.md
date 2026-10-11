@@ -27,7 +27,7 @@ SDK COM 冷启动另写同目录的 `cold-activation.json`，不依赖启动工�
 
 - 桥 `passed` 要求真实 WebView2 页面发送、WPF 回复、页面 ack 完成，保留合成文字且页面处于 secure context。
 - 桌面 `attachedStructureOnly` 只说明父窗和样式检查。Win+D、其他窗口遮挡、拖动／缩放、多屏 DPI、Explorer 重启及睡眠恢复仍须操作实测；报告的 `manualChecks` 不自动变为通过。
-- `submitted` 只说明 Windows 返回通知标识，不能证明屏幕呈现、声音或用户已查看。`activationObserved` 单独记录真实 SDK 回调，账号不匹配时不读取当前账号数据。
+- `submitted` 只说明 Windows 返回通知标识，不能证明屏幕呈现、声音或用户已查看。`activationObserved` 单独记录 SDK 回调，账号不匹配时不读取当前账号数据；受控冷启动回调通过也不替代用户实际点击验收。
 - 当前会话若提权，通知返回 `blockedElevated`，退出码 3。微软 AppNotification 不支持提权应用；不修改 UAC 或绕过系统通知设置。
 - 正常退出调用 `Unregister()` 释放本进程接收，保留冷启动注册；卸载的完整注册清理在后续安装阶段实现。
 

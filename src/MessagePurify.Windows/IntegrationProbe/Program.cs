@@ -83,7 +83,7 @@ public static class Program
                             report.Save(reportPath);
                             activation.TrySetResult(true);
                         });
-                    });
+                    }, options.ColdActivation);
                     if (!registered) exitCode = 3;
                     else if (options.Notification is not null)
                     {

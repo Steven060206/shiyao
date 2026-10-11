@@ -26,7 +26,7 @@
 - 声音按事项及总开关处理；安静时段只保留“暂未启用”入口。
 - 每次改动更新相关测试；所有测试和验证通过后创建对应 Git commit，同时更新交接。
 - 真实 QQ、OCR、桌面宿主、安装通知激活及一周使用观察均须记录实测；不能用模拟测试代替。
-- M3 探针当前结果：Infrastructure 46/46、Windows 44/44、OCR 25/25、Node 18/18，WebView2 隐藏桥已实测通过；真实 QQ 3001 未就绪，Framework 桌面聊天共存、非提权通知和桌面人工项未完成。详见[集成探针验证记录](../../verification/integration-probes.md)。
+- M3 探针当前结果：Infrastructure 46/46、Windows 45/45、OCR 25/25、四文件 Node 21/21，WebView2 隐藏桥和 Framework 真实只读接口限定范围已实测通过；通知自包含资源已补齐，受控 COM 冷启动回调通过。真实用户通知呈现/声音/点击、Framework 长期稳定性、七天历史补漏和桌面人工项仍未完成。详见[集成探针验证记录](../../verification/integration-probes.md)。
 
 ## 1. 计划编写时的起点（历史记录）
 

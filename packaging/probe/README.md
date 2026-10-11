@@ -9,7 +9,7 @@
 & ./packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-publish
 ```
 
-默认安装目录为 `%LOCALAPPDATA%\MessagePurify\IntegrationProbe`，无需管理员权限。安装后双击对应入口：
+发布步骤会从项目锁定的 Windows App SDK 2.5.1 官方 MSIX 中提取 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`；安装脚本会拒绝缺少该资源的发布目录。默认安装目录为 `%LOCALAPPDATA%\MessagePurify\IntegrationProbe`，无需管理员权限。安装后双击对应入口：
 
 | 入口 | 操作 |
 | --- | --- |
@@ -19,6 +19,6 @@
 | SilentNotification.cmd | 发静音测试提醒，60 秒内点击验证定位 |
 | ColdNotification.cmd | 发测试提醒后退出，点击检查冷启动定位 |
 
-报告保存在安装目录的 `results/`。报告中的提交、系统呈现和点击分别判断；自动命令不能证明用户看见或听见。当前 Codex 会话提权，通知路径会明确报告受阻。请从普通桌面双击入口，不选择“以管理员身份运行”。
+报告保存在安装目录的 `results/`。报告中的提交、系统呈现和点击分别判断；自动命令不能证明用户看见或听见。高完整性进程会明确报告受阻，请从普通桌面双击入口，不选择“以管理员身份运行”。受控冷启动回调可用 `python tests/notification_cold_activation_test.py --executable <发布目录>\MessagePurify.Windows.IntegrationProbe.exe` 回归；这不是用户实际点击验收。
 
 桌面探针用于核对实际附着、非置顶与操作行为。Explorer 重启、睡眠和多屏 DPI 项需要各自实际验证；本脚本不主动执行这些操作。

@@ -13,13 +13,18 @@
     <!-- Windows App SDK otherwise selects WebView2's WinRT projection, omitting the WPF control. -->
     <WebView2EnableCsWinRTProjection>false</WebView2EnableCsWinRTProjection>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <MessagePurifyAppSdkVersion>2.5.1</MessagePurifyAppSdkVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="$(MessagePurifyAppSdkVersion)" />
   </ItemGroup>
   <ItemGroup>
     <None Update="ui/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+  <!-- SDK 2.5.1 omits this runtime resource from self-contained component payloads. -->
+  <Target Name="CopyNotificationResource" AfterTargets="Publish">
+    <Exec Command="powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)../../../packaging/probe/Copy-NotificationResource.ps1&quot; -RuntimePackageDirectory &quot;$(NuGetPackageRoot)microsoft.windowsappsdk.runtime/$(MessagePurifyAppSdkVersion)&quot; -PublishDirectory &quot;$(PublishDir).&quot;" />
+  </Target>
 </Project>

@@ -6,7 +6,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $probeSource = (Resolve-Path -LiteralPath $PublishDirectory).Path
 $probeTarget = [IO.Path]::GetFullPath($InstallDirectory)
-foreach ($probeRequired in @('MessagePurify.Windows.IntegrationProbe.exe', 'ui/index.html')) {
+foreach ($probeRequired in @('MessagePurify.Windows.IntegrationProbe.exe', 'ui/index.html', 'Microsoft.WindowsAppRuntime.Insights.Resource.dll')) {
     if (-not (Test-Path -LiteralPath (Join-Path $probeSource $probeRequired) -PathType Leaf)) {
         throw "Published probe is incomplete: $probeRequired"
     }
