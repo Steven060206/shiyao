@@ -18,10 +18,10 @@ public class RuleExtractionTests
         Assert.Single(MessageRuleExtractor.Extract(Message(text, sender), context ?? Context()).Candidates);
 
     [Fact]
-    public void ImageNoticeWithSubmitAllByDeadlineKeepsDateAsSuggestion()
+    public void ClassMonitorImageSubmissionRequirementKeepsDeadlineAsSuggestion()
     {
         var sentAt = DateTimeOffset.Parse("2026-09-26T12:43:00+08:00");
-        var message = new SchoolMessage(new("a", "g", "image-notice"), "teacher", sentAt,
+        var message = new SchoolMessage(new("a", "g", "image-notice"), "class-monitor", sentAt,
             [new(SegmentKind.Image, "10月12日之前所有人都要交齐", AssetId: "school-notice")]);
 
         var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context() with { Now = sentAt }).Candidates);
@@ -29,6 +29,8 @@ public class RuleExtractionTests
         Assert.Equal(RuleAction.Submit, candidate.Action);
         Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
         Assert.Null(candidate.Time);
+        Assert.Null(candidate.TargetTaskId);
+        Assert.Equal(message.Key, Assert.Single(candidate.Evidence));
         Assert.Equal(new DateOnly(2026, 10, 12), candidate.SuggestedTime!.Date);
         Assert.Equal(TimeKind.Deadline, candidate.SuggestedTime.Kind);
         Assert.Contains("图片识别仅作建议，需要查看原图确认", candidate.ReviewReasons);

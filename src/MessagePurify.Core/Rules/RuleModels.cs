@@ -16,6 +16,7 @@ public sealed record RuleContext(string AccountId, string GroupId, string TimeZo
 public sealed record KnownTask(string Id, string Title, string Course, TaskTime Time,
     TaskState State, IReadOnlyList<MessageKey> Evidence, string? ConfirmedPublisherId = null);
 
+/// <summary>描述学校通知中的行动要求，仅用于事项分类，不是软件要执行的命令。</summary>
 public enum RuleAction { Submit, Complete, Attend, Register, Remind, Postpone, Cancel, NewRequirement, Inform }
 public enum RuleDisposition { Task, Notice, Pending, Ignored, Change }
 public sealed record RuleAssessment(string Description, bool Reliable);
