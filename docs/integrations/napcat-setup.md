@@ -1,23 +1,31 @@
 # NapCat 本机接入准备
 
-当前已准备官方 **v4.18.37 Shell** 包。Shell 会启动一个带 NapCat 的 QQ 窗口；同一账号不能同时登录普通 QQ 和这个窗口，但这不影响使用 QQ，只是接入期间要在 NapCat 窗口中聊天。
+当前已准备官方 **v4.18.37 Shell** 和 **Framework** 包。Shell 是无界面接管路线；同一账号不能同时登录普通桌面 QQ 和 Shell，不能据此承诺仍有可聊天的 QQ 窗口。Framework 是官方桌面模式候选，目标是在桌面 QQ 进程中加载 NapCat 并保留聊天；本机尚未执行注入，不能把桌面聊天和 OneBot 同时工作记为已通过。
 
 ## 在这台电脑启动
 
 1. 本机官方入口实际报“QQ installation was not found in the registry”。QQ 文件存在于 `D:/QQ/QQ.exe`，已提供不依赖注册表的入口：双击 `D:\ai制作的软件\消息提纯\packaging\napcat\Start-NapCat.cmd`。它沿用官方包的五项启动环境及启动器，直接指定实际 QQ 路径，不申请提权。不要运行 `KillQQ.bat`。
-2. 如果普通 QQ 正在使用同一个账号，先自行退出普通 QQ，再启动入口。按控制台提示完成对应 QQ 登录；探针不填密码、不代替用户操作。NapCat 窗口就是可正常使用的 QQ 窗口。
+2. 这是 Shell 入口。若要执行 Shell 真实探针，同一账号的普通 QQ 必须先退出；按控制台提示完成对应 QQ 登录。探针不填密码、不代替用户操作，也不把 Shell 当作桌面聊天窗口验收。
 3. 打开控制台显示的本机 WebUI 地址，在网络配置添加“WebSocket 服务端”：启用，Host `127.0.0.1`，Port `3001`，消息格式 `array`，设置 Token，关闭 debug。保存后保持 NapCat 运行。
 4. 本项目只读探针连接 `ws://127.0.0.1:3001/`，Token 通过 `MESSAGEPURIFY_NAPCAT_TOKEN` 环境变量传入。不把 Token 放入 URL、聊天、Git 或验证报告。
 
-本轮未改动 `D:/QQ` 文件。官方入口因注册表缺失失败；替代入口已通过 `-CheckOnly` 路径与依赖验证。用户曾扫码，但 NapCat 返回同一账号已在普通 QQ 登录；之后进程已退出，当前不能记录为 OneBot 已接入。下次启动前先关闭普通 QQ，接入完成后日常可使用 NapCat QQ 窗口。
+本轮未改动 `D:/QQ` 文件。官方 Shell 入口因注册表缺失失败；替代 Shell 入口已通过 `-CheckOnly` 路径与依赖验证。用户曾扫码，但 NapCat 返回同一账号已在普通 QQ 登录；之后进程已退出，当前不能记录为 OneBot 已接入。Framework 包已下载并核对当前 QQ 版本映射，但尚未安装、注入或重启 QQ。
+
+## Framework 桌面模式（待实测）
+
+`packaging/napcat/Start-NapCat-Framework.cmd` 是已准备的显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll` 和 `nativeLoader.cjs`，不依赖 QQ 注册表。它只完成启动准备，不绕过 QQ 登录，也不发送消息。执行前需要关闭当前 QQ 并允许 QQ 重启；在得到真实桌面操作结果前，不要把它当作已经兼容本机环境。
 
 ## 可复现来源
 
 - [官方 Shell 启动说明](https://doc.napneko.icu/guide/boot/Shell)
+- [官方 Framework 启动说明](https://doc.napneko.icu/guide/boot/Framework)
 - [官方 v4.18.37 发布](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37)，发布于 2026-10-10。
 - 资产 `NapCat.Shell.zip`，35,880,104 字节。已下载到 `.tools/napcat/NapCat.Shell-v4.18.37.zip` 并解压。
 - SHA256 已实查相符：`db39b28192714f8f54b3dcdccb84f9898be409faebb05da6627995b998517859`。
+- 资产 `NapCat.Framework.zip`，36,723,625 字节。已下载到 `.tools/napcat/framework/v4.18.37/NapCat.Framework.zip` 并解压到 `package/`。
+- Framework SHA256 已实查相符：`59d9538c1f1b66ff1269c362069fcd7d1b1d6793c35255ae80e699b91e37401c`。
 - 包内 `launcher-user.bat` 从系统 QQ 安装项确定程序路径，调用 `NapCatWinBootMain.exe` 与 `NapCatWinBootHook.dll`；本项目不修改包内启动脚本。
+- Framework 包内 `napiLoader.bat` 同样默认读取注册表；本项目的 Framework 入口改为直接调用 `napimain.exe` 并传入 `D:/QQ/QQ.exe`，避免把注册表缺失误判为 QQ 不存在。
 - WebSocket 配置字段已核对[官方配置源码](https://github.com/NapNeko/NapCatQQ/blob/6797143b0446c00e34111930b22e6aa08deb053e/packages/napcat-onebot/config/config.ts)。根路径提供 API 与事件；`/api` 仅接口，不适合作为本探针事件连接。
 
 QQ 探针调用 get_status、get_login_info、get_version_info、get_group_list 和 get_group_msg_history；默认一群一页、每页 20 条，并限时监听。没有发送消息功能，不声称补全七天。

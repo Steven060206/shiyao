@@ -54,7 +54,9 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'docs/verification/integration-probes.md',
     'docs/integrations/napcat-setup.md',
     'packaging/probe/README.md', 'packaging/probe/Install-Probe.ps1', 'packaging/probe/Run-Probe.ps1',
-    'packaging/napcat/Start-NapCat.ps1', 'packaging/napcat/Start-NapCat.cmd'
+    'packaging/napcat/Start-NapCat.ps1', 'packaging/napcat/Start-NapCat.cmd',
+    'packaging/napcat/Start-NapCat-Framework.ps1', 'packaging/napcat/Start-NapCat-Framework.cmd',
+    'tests/napcat-framework-launcher.test.mjs'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
@@ -105,6 +107,22 @@ test('QQ 登录与实际连接状态分别记录', () => {
     const content = read(file);
     assert.match(content, /用户.*QQ.*(?:电脑|本机)登录/, `${file} 需记录用户确认的登录`);
     assert.match(content, /尚未验证 OneBot 连接|不作为 OneBot 连接成功/, `${file} 需区分登录和接入`);
+  }
+});
+
+test('NapCat Shell 与 Framework 的聊天边界保持明确', () => {
+  const files = [
+    'docs/requirements.md',
+    'docs/HANDOFF.md',
+    'docs/integrations/napcat-setup.md',
+    'docs/verification/integration-probes.md',
+    'docs/superpowers/specs/2026-10-10-windows-app-design.md'
+  ];
+  for (const file of files) {
+    const content = read(file);
+    assert.match(content, /Shell[^\n]*无界面|无界面[^\n]*Shell/, `${file} 需说明 Shell 无界面边界`);
+    assert.match(content, /Framework[^\n]*(?:候选|待验证|未实测|尚未验证)|(?:候选|待验证|未实测|尚未验证)[^\n]*Framework/, `${file} 需保留 Framework 未验证状态`);
+    assert.doesNotMatch(content, /Shell[^\n]*正常聊天|NapCat 启动的 QQ 窗口仍可正常聊天|NapCat 窗口就是可正常使用/, `${file} 不能承诺 Shell 有可聊天窗口`);
   }
 });
 
