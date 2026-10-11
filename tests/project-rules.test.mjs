@@ -178,15 +178,27 @@ test('M3 正在实施，实测条件不被协议模拟替代', () => {
   assert.match(report, /包含冷启动修复的正式发布产物重发/, '保留此前运行产物范围');
   assert.match(report, /用户实际点击通过/, '同步用户已经确认的点击结果');
   assert.match(report, /点击记录与发送 Probe ID 一致/, '真实点击须与对应提醒核对');
-  assert.match(report, /静音提醒呈现.*仍未验收/, '点击通过不能替代其他验收');
+  assert.match(report, /静音呈现及用户实际点击通过/, '同步静音提醒的真实验收');
+  assert.match(report, /长期通知稳定性仍未验收/, '一次提醒不替代长期稳定性');
   assert.match(report, /controlled-shell-/, '受控 Shell 分发应与真实点击区分');
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
     const current = read(file).split('## 2.')[0];
     assert.match(current, /M3.*正在实施/, file);
     assert.match(current, /用户实际点击通过/, file);
     const overview = current.split("###")[0];
+    assert.match(overview, /静音.*(显示|呈现).*点击.*通过/, `${file} 同步静音验收`);
     assert.doesNotMatch(overview, /用户实际通知点击.*仍未验收|实际点击仍未观察到激活回调|实际点击.*仍待反馈/, `${file} 当前总览不保留过时点击结论`);
   }
+});
+
+test('历史分页说明区分读取范围和未补全原因', () => {
+  const readme = read('tools/MessagePurify.QqProbe/README.md');
+  for (const term of ['--history-days', '--history-pages', 'all', 'reverse_order=true', 'real_seq', 'message_seq', 'history-no-progress', 'history-page-limit', '1200 不等同于空页']) {
+    assert.ok(readme.includes(term), `历史分页说明缺失：${term}`);
+  }
+  assert.match(readme, /不保证完整七天记录/);
+  assert.match(readme, /不输出.*历史游标/);
+  assert.match(read('docs/verification/integration-probes.md'), /历史分页.*真实/);
 });
 
 test('第一版统一静音，取消声音开关及声音播放验收', () => {

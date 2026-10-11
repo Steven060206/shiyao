@@ -81,7 +81,7 @@ public sealed class OneBotClient : IAsyncDisposable
         if (count is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(count));
         var parameters = new Dictionary<string, object>
         {
-            ["group_id"] = groupId, ["count"] = count, ["reverse_order"] = false,
+            ["group_id"] = groupId, ["count"] = count, ["reverse_order"] = messageSequence is not null,
             ["disable_get_url"] = true, ["parse_mult_msg"] = false, ["quick_reply"] = false
         };
         if (messageSequence is not null) parameters["message_seq"] = messageSequence;

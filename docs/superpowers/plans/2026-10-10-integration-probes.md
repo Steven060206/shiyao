@@ -28,14 +28,15 @@
 
 **Files:** `src/MessagePurify.Infrastructure/MessagePurify.Infrastructure.csproj`、`NapCat/OneBotClient.cs`、`NapCat/OneBotMessageParser.cs`、`NapCat/OneBotModels.cs`；`tests/MessagePurify.Infrastructure.Tests/`；`tools/MessagePurify.QqProbe/`。
 
-**Contract:** 客户端连 loopback WebSocket 根路径，以 Authorization Bearer 注入本地环境中的 Token；单接收循环将 echo 响应交给对应请求、群事件交给独立队列。解析器消费 JSON 和已核对账号，返回包含 Core `SchoolMessage` 的群事件或明确忽略／账号不匹配结果。CLI 消费 `--url`、`--listen-seconds`、`--history-groups`、`--history-count`、`--output`，输出脱敏汇总和非零失败码。
+**Contract:** 客户端连 loopback WebSocket 根路径，以 Authorization Bearer 注入本地环境中的 Token；单接收循环将 echo 响应交给对应请求、群事件交给独立队列。解析器消费 JSON 和已核对账号，返回包含 Core `SchoolMessage` 的群事件或明确忽略／账号不匹配结果。CLI 消费 `--url`、`--listen-seconds`、`--history-groups`（含 `all`）、`--history-count`、`--history-days`、`--history-pages`、`--output`，输出脱敏汇总和非零失败码。
 
 - [x] 编写乱序 echo／事件交错、失败 retcode、未知 echo、请求超时、连接关闭、数值大 ID、群/私聊、账号不匹配、text/image/reply 回归。例：数值 `9007199254740993` 必须得到同一十进制字符串；群事件插在响应之间不能丢失。
 - [x] 执行缺实现失败，再实现只读客户端和解析器；保留原始协议字段但不把未知段当作可执行行动。
 - [x] 实现 CLI：核对 status/login/version、读取群列表、一群一页历史并监听限定时间；历史使用返回游标，不对 message_seq 作算术。空群、未登录、无接口、认证或连接失败分别记录。
 - [x] 用本机受控 WebSocket 服务运行真实传输回归（服务不接 QQ）；运行依赖未就绪路径，验证安全失败报告和退出码。
 - [x] NapCat Framework 服务就绪后执行真实只读探针；限定范围取得 52 个群、一群一页 7 条历史，并在 180 秒监听中观察到 1 条群文本事件。
-- [ ] 完成所有群七天历史分页、失败重试与长期实时稳定性验证；此前 11 个历史接口失败中，仅复测一个失败样本及一个成功对照，失败样本为 NapCat 对底层空历史返回 `retcode 1200/data=null`，不等于全部失败已复测或七天补漏完成。
+- [x] 扩展分页只读探针：按实际返回最早游标向旧读取、去重边界消息、窗口过滤、限制重试及页数、逐群报告停止原因。Infrastructure Release 60/60；真实方向对照定位并修正带游标的 `reverse_order`，3 群重复页修复。
+- [ ] 完成所有群七天历史补漏、断线恢复及长期实时稳定性验证。本轮最终全群读取 41/52 到达停止边界、窗口内去重 1098 条；11 群持续 `retcode 1200`，每群重试一次后保留失败，CLI 退出码 1。1200 不等同于空页，到达边界也不保证 QQ 返回历史完整。
 
 ## Task 2：离线 OCR 工作进程
 
@@ -62,7 +63,7 @@
 - [x] 实现可视桌面附着并修正父窗为 `SHELLDLL_DefView`；真实产物核对父窗、子窗/不激活/非置顶样式、物理边界及无多余状态窗，实际鼠标缩放回归通过。用户确认 Win+D 可见、拖动/缩放正常、不覆盖其他软件。
 - [ ] Explorer 重启、睡眠恢复、多屏/DPI 切换和布局持久化尚未验收，不主动重启 Explorer 或让电脑休眠。
 - [x] 发布到独立当前用户固定目录，验证 AppNotificationManager 提权约束检查。已修正管理员组身份与令牌完整性混淆，并在 Publish 后从官方 Windows App SDK 2.5.1 MSIX 提取 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`；中等完整性进程注册与提交测试提醒成功。
-- [x] 修复 SDK 首次冷启动参数消费及 Windows 追加的 `-Embedding` 参数处理，受控 COM 回调和正式发布脚本均通过。通知探针改用专用 URI 点击入口；用户实际点击通过，反馈出现事项窗口，点击记录与发送 Probe ID 一致。声音提醒已取消；静音提醒呈现和长期通知稳定性仍需人工验收。
+- [x] 修复 SDK 首次冷启动参数消费及 Windows 追加的 `-Embedding` 参数处理，受控 COM 回调和正式发布脚本均通过。通知探针改用专用 URI 点击入口；用户实际点击通过，反馈出现事项窗口，点击记录与发送 Probe ID 一致。声音提醒已取消；本轮静音提醒 ID 36667 的显示与点击已由用户确认通过，点击 Probe ID 与发送一致。长期通知稳定性仍未验收。
 - [x] 运行现有核心、协议、OCR、Windows 参数测试、四文件 Node（21/21）、探针实际命令及 diff 检查；同步五项实测清单和剩余步骤。独立复核发现并修正 OneBot Dispose 竞态和 OCR 严格 JSONL 边界。
 
 ## 验证与完成条件

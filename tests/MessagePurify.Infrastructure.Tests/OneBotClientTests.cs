@@ -163,7 +163,7 @@ public sealed class OneBotClientTests
         var parameters = request.GetProperty("params");
         Assert.Equal("9007199254740993", parameters.GetProperty("group_id").GetString());
         Assert.Equal("-987", parameters.GetProperty("message_seq").GetString());
-        Assert.False(parameters.GetProperty("reverse_order").GetBoolean());
+        Assert.True(parameters.GetProperty("reverse_order").GetBoolean());
         socket.Push(Response(request, "{\"messages\":[{\"message_id\":1}]}"));
         Assert.Single(await history);
     }

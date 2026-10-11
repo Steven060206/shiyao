@@ -6,23 +6,24 @@
 
 | 项目 | 实际结果 | 证据与边界 |
 | --- | --- | --- |
-| OneBot 协议与客户端 | 通过受控 loopback：46 项 | `tests/MessagePurify.Infrastructure.Tests` Release 46/46；含真实 ClientWebSocket、乱序 echo、事件交错、账号隔离、历史字段、并发释放回归。受控服务不代表真实 QQ 已连接。 |
+| OneBot 协议与客户端 | 通过受控 loopback：60 项 | `tests/MessagePurify.Infrastructure.Tests` Release 60/60；含真实 ClientWebSocket、乱序 echo、事件交错、账号隔离、分页游标/方向/去重/重试、历史字段、并发释放回归。受控服务不代表真实 QQ 已连接。 |
 | QQ 真实只读连接 | 接口和实时群事件限定范围通过 | 前四次探针接口通过、实时群消息 0；用户反馈刚收到新群消息后，13:42:06（北京时间）开始的第五次 180 秒探针实际观察到 1 条。QQ 在线、账号核对、NapCat 4.18.37 / v11、群 52 个、历史群成功 1/1、历史消息 7 条、去重后 8 条、无失败，退出码 0。实时群事件限定范围通过（观察到 1 条），不作为七天补漏或长期稳定性验收。最新脱敏报告 `.tools/m3-results/qq-framework-user-feedback.md`。 |
+| 历史分页真实读取 | 41/52 到达停止边界；11 群接口失败 | 20:50:00（北京时间）开始，7 天窗口、每页 100 条、每群最多 20 页；39 群 `date-boundary`、2 群 `empty-page`、11 群持续 1200（各重试一次）。历史计数 1103、窗口内去重 1098、实时群 0；退出码 1 如实反映未补全。方向修复后 3 群分页不再重复，不保证 QQ 返回历史完整。报告 `.tools/m3-results/qq-paged-history-fixed-20261011.md`。 |
 | Framework 桌面模式 | 已加载，用户确认窗口正常 | 官方 v4.18.37 在 QQ `9.9.36-53644` 中实际启动，已加载 `napiloader.dll` 并自动登录；6099 与 localhost 3001 属于同一 QQ 主进程。用户从托盘打开后确认“聊天列表和窗口正常显示”。启动日志曾有 `updateWindowSizeProperties` 的 TypeError，保留问题记录；长期稳定性尚未验收。 |
 | OCR 协议与合成图 | 通过：25 项 Python | `./.tools/ocr/venv/Scripts/python.exe -m pip check` 和 `./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 均通过。真实 CPU 模型识别合成中文通知、长图日期、空白图和损坏图后继续；有限数值、代理码点 UTF-8 和离线模型回归已覆盖。 |
 | 用户 QQ 截图 OCR | 群列表与学校通知正文识别通过；日期角色需确认 | 本机 worker 离线处理用户提供的真实学校通知截图：1828×674、15 行、退出码 0、stderr 为空，关键日期行最低置信度 0.98118。识别到消息时间、学年、填写日期范围及“10月12日之前交齐”；填写范围仍按 `Ambiguous` 进入人工确认，“交齐”候选日期只作为 `SuggestedTime`。原图和完整 OCR 文本仅在 `.tools/m3-results/`。 |
 | WPF/WebView2 隐藏桥 | 通过 | 发布后运行 `Run-Probe.ps1 -Mode Bridge`；报告 `C:\Users\Administrator\AppData\Local\MessagePurify\IntegrationProbe\results\Bridge-20261010-225528.json`。本轮重新 publish 并安装到含空格路径 `.tools/m3-install space`，运行 `Run-Probe.ps1 -Mode Bridge -WaitSeconds 20` 退出码 0，报告 `.tools/m3-install space/results/Bridge-20261011-013731.json`。WebView2 `155.0.4283.45`，echo→reply→ack、secure context、特殊文字保留均通过，PNG 已核对。 |
-| Windows 通知 | 资源发布、提交及用户实际点击通过；第一版取消声音提醒 | 专用 URI 入口的普通测试提醒 ID 36649，用户确认“出现了事项窗口”；点击记录与发送 Probe ID 一致，`activationObserved=true`、`activationKind=protocol`、账号匹配、`error=null`。受控 COM 冷启动和 Shell URI 分发分别通过。静音提醒呈现及长期通知稳定性仍未验收。 |
+| Windows 通知 | 资源发布、提交、静音呈现及用户实际点击通过 | 专用 URI 入口的普通测试提醒 ID 36649 用户点击通过；本轮静音测试提醒 ID 36667，用户确认“看到了，点击能打开”，点击记录与发送 Probe ID 一致，`activationObserved=true`、`activationKind=protocol`、账号匹配、`error=null`。第一版取消声音提醒，载荷固定静音；受控 COM 冷启动和 Shell URI 分发分别通过。长期通知稳定性仍未验收。 |
 | 桌面卡片 | 用户基本操作通过 | 修正父窗为 `SHELLDLL_DefView`，扩大带箭头的缩放手柄并在成功时隐藏状态窗。真实发布产物挂载/样式/边界/无多余窗口/鼠标缩放回归通过；用户确认 Win+D 可见、拖动和缩放正常、没有白色窗口、不会覆盖其他软件。多屏、Explorer 重启、睡眠恢复及布局持久化未验收。 |
 
 ## 代码和自动化验证
 
 - Core Release：296/296。
-- Infrastructure Release：46/46。
+- Infrastructure Release：60/60，本轮新增分页参数和受控读取回归。
 - Windows 参数/桥/通知路由/桌面几何及真实令牌完整性：本次 Release 57/57，退出码 0；IntegrationProbe 自包含 `win-x64` publish 退出码 0。此前权限修正阶段为 45/45。
 - OCR：25/25，使用项目隔离解释器运行；`./.tools/ocr/venv/Scripts/python.exe -m pip check` 无坏依赖。
-- Node 文档、NapCat 启动路径和当前用户探针打包：本轮运行四文件命令，21/21、退出码 0；其中打包测试覆盖官方通知资源提取、缺资源拒绝安装、重复安装和路径空格。
-- demo 浏览器：107 项。
+- Node 文档、NapCat 启动路径和当前用户探针打包：本轮四文件 23/23、退出码 0，文档 18 项。打包测试覆盖官方通知资源提取、缺资源拒绝安装、重复安装和路径空格。
+- demo 浏览器：本轮重新运行 108 项通过。
 - `tests/notification_cold_activation_test.py`：正式自包含发布产物受控 COM 冷启动回归退出码 0，输出 `PASS: cold COM callback located the synthetic account and item.`；受控回调不是用户点击验收。
 - `git diff --check`：退出码 0（仅显示工作区换行提示）。
 
@@ -38,7 +39,7 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 - 新增 `ProcessIntegrity.cs`，通过 `GetTokenInformation(TokenIntegrityLevel)` 获取当前令牌的完整性 RID；权限报告和阻止规则与 SDK 一致。新增 Windows 回归独立执行 `whoami /groups /fo csv /nh`，核对原生查询值；实际 Windows 45/45、编译无警告。
 - 修复后实际执行 `.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/IntegrationProbe --configuration Release --runtime win-x64 --self-contained true --no-restore --output ".tools/windows-probe-publish fixed"`，再执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory ".tools/windows-probe-publish fixed"`，均退出码 0。发布后由 `Copy-NotificationResource.ps1` 从匹配的官方 Windows App SDK 2.5.1 MSIX 提取 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`；安装脚本会拒绝缺少该资源的产物，Node 打包回归覆盖提取、覆盖旧文件和缺失资源失败。
 - 本机一次性测试通过 Windows Basic User 运行独立 Python 辅助进程，再只降低该辅助进程令牌的完整性；没有改变系统策略或已有应用。`results/medium-launch-20261011.json` 记录 RID 12288→8192。资源修复后，中等完整性测试进程的普通通知报告为 `notificationStatus=submitted`；最新用户重发报告为 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json`，仍未观察到用户激活回调。
-- 只读核查 WpnService 与当前 WpnUserService 均 Running。错误分为两层：Codex 子进程继承包身份（状态 122），SDK 注册返回 `0x80070490`；经真实 Explorer 启动后无包身份（状态 15700），才暴露缺少通知资源的 `0x8007007E`。补齐匹配资源后注册与提交成功；仅降低完整性不能消除包身份。用户已确认普通提醒呈现；本次修复后的用户实际点击通过，静音呈现仍需验收，声音提醒已取消。
+- 只读核查 WpnService 与当前 WpnUserService 均 Running。错误分为两层：Codex 子进程继承包身份（状态 122），SDK 注册返回 `0x80070490`；经真实 Explorer 启动后无包身份（状态 15700），才暴露缺少通知资源的 `0x8007007E`。补齐匹配资源后注册与提交成功；仅降低完整性不能消除包身份。用户已确认普通提醒呈现；本次修复后的用户实际点击通过；当时静音呈现未验收，后续 20:33 静音提醒的显示/点击通过，声音提醒已取消。
 
 ## 通知资源与冷启动回归
 
@@ -58,13 +59,19 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 - 经真实 Explorer 辅助进程运行最终发布产物的 `tests/notification_cold_activation_test.py`，`.tools/m3-results/cold-protocol-final-test-result.json` 为退出码 0、`PASS: cold COM callback located the synthetic account and item.`；该受控检查验证兼容的 COM 回调，不替代用户实际通知点击验收。
 - 最终产物通过 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-protocol-final` 安装到 `%LOCALAPPDATA%/MessagePurify/IntegrationProbe`，退出码 0；安装 DLL 的 SHA256 与最终发布产物一致，没有覆盖仍打开的 `.tools/windows-probe-protocol/` 事项窗口。协议注册仍指向实际点击验证的运行副本，下次从安装入口发送会更新注册。
 - 本次实际重跑四文件 Node 文档/打包/启动回归，21/21、退出码 0；初跑 20/21 仅为受控检查边界说明的文档断言不匹配，补齐说明后通过。本次通知修复没有重跑未改动的 Core、Infrastructure、OCR 和 demo 套件，先前完整回归与本次范围分开记录。
-- 静音提醒呈现和长期通知稳定性仍未验收。正式应用尚未接入通知探针能力，M3 不因一次点击通过而完成。
+- 当时静音提醒呈现未验收；后续 20:33 测试的显示与点击已由用户确认通过，见下节。长期通知稳定性仍未验收，正式应用尚未接入通知探针能力，M3 不因一次点击通过而完成。
 
 ## 统一静音的最新规则
 
-2026-10-11 用户取消声音提醒，第一版所有 Windows 通知均静音，不再进行声音播放验收，也不提供声音开关。此前声音未验收的记录仅反映旧方案；当前仍需验证静音通知呈现、桌面操作和长期稳定性。普通模式入口保留兼容名称，实际载荷同样请求静音。
+2026-10-11 用户取消声音提醒，第一版所有 Windows 通知均静音，不再进行声音播放验收，也不提供声音开关。此前声音未验收的记录仅反映旧方案；当前静音呈现/点击和桌面基本操作通过，长期稳定性及桌面恢复/多屏仍未验收。普通模式入口保留兼容名称，实际载荷同样请求静音。
 
 本次实际运行 Windows Release 57/57、四文件 Node 22/22、demo 浏览器 108 项，均退出码 0；静音载荷及旧声音偏好清理均有回归覆盖。实际 publish 到 `.tools/windows-probe-silent` 并更新当前用户安装，退出码 0，安装 DLL 与发布 SHA256 一致。没有发送新的通知或把自动载荷检查当作静音呈现人工验收。
+
+### 后续静音呈现及实际点击
+
+- 20:33:12（北京时间）提交静音测试提醒，ID 36667，发送报告 `.tools/m3-results/silent-presentation-20261011.json` 为 `submitted`、`silent`、通知权限 `Enabled`、`error=null`。用户明确反馈“看到了，点击能打开”。
+- 20:33:15 的点击报告 `%LOCALAPPDATA%/MessagePurify/IntegrationProbe/results/protocol-0fb7539916ae42e0b5dd7bfb24a350aa.json` 与发送 Probe ID 一致；`activationObserved=true`、`activationKind=protocol`、`activationAccountMatched=true`、`error=null`。静音提醒显示与点击通过，不重复发送这项测试。
+- Explorer 辅助进程看不到当前用户安装 EXE，本次使用已核对 DLL 相同的 `.tools/windows-probe-desktop-grip-fixed/MessagePurify.Windows.IntegrationProbe.exe`。这是本机合成事项验证，没有读取或发送 QQ 消息；长期通知稳定性仍未验收。
 
 ## 桌面可见性、缩放手柄与状态窗修复
 
@@ -75,7 +82,7 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 - 最终当前用户安装命令 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-desktop-grip-fixed` 退出码 0，安装 DLL SHA256 与发布一致。已打开 `--interactive-desktop --wait-seconds 600 --report .tools/m3-results/desktop-grip-fixed-20261011.json`，父窗 `SHELLDLL_DefView`、DPI 120、`error=null`；捕获 `desktop-grip-fixed-render-20261011.png` 已检查，箭头可见。
 - 用户确认“缩放正常，也没有白色窗口”，随后确认“正常，不会盖住其他软件”。结合此前“看到了，拖动正常”，基本人工项（Win+D 可见、拖动、缩放、普通软件遮挡、无多余状态窗）通过。自动报告的 `manualChecks` 保持模板 `notTested`，本节单独记录真实用户反馈。
 - 本轮完整自动回归 Core Release 295/295、Infrastructure Release 46/46、Windows Release 57/57、OCR `pip check` 与 unittest 25/25、四文件 Node 22/22、demo 108 项，均退出码 0。手柄及状态窗追加修正后，Windows 57/57 和真实鼠标回归再次通过；未重新运行未改动的 Core/Infrastructure/OCR/demo。
-- 多屏/DPI 切换、Explorer 重启、睡眠恢复、布局持久化、长期稳定性尚未验收。学校通知正文 OCR 已通过，但日期角色人工确认、正式任务生成、静音呈现和七天补漏仍待验证，正式应用尚未接入探针；M3 仍为“正在实施”。
+- 多屏/DPI 切换、Explorer 重启、睡眠恢复、布局持久化、长期稳定性尚未验收。学校通知正文 OCR 和静音呈现/点击已通过，但日期角色人工确认、正式任务生成和完整七天补漏仍待验证，正式应用尚未接入探针；M3 仍为“正在实施”。
 
 ## 当前 QQ 接入说明
 
@@ -95,4 +102,17 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 
 用户随后确认从托盘打开 QQ 后聊天列表和窗口正常显示；QQ 主窗口句柄存在，主进程同时监听 6099/3001。启动时曾出现两次 `TypeError: undefined is not a function`，调用点为 `updateWindowSizeProperties`。该错误对长期使用的影响尚未验证；目前没有用户确认的窗口显示故障，不盲目替换加载器。未发送消息，也没有成功生成 QQ 窗口截图。
 
-M3 仍为“正在实施”。下一步继续历史补漏、实时接收稳定性、桌面人工操作及静音通知呈现验收；不重复要求已经完成的退出、扫码或登录准备。
+M3 仍为“正在实施”。下一步继续历史补漏、实时接收稳定性及桌面恢复/多屏验证；静音呈现/点击和桌面基本操作已通过，不重复要求已经完成的退出、扫码或登录准备。
+
+## 本轮历史分页真实读取及方向修复
+
+- 普通 QQ 重新启动后接口未监听；用户确认从托盘退出，已用 `packaging/napcat/Start-NapCat-Framework.ps1` 恢复。3001/6099 同属 QQ PID 10824；0 群、0 秒基线报告 `.tools/m3-results/qq-framework-resume-20261011.md` 为在线、账号核对、52 群、NapCat 4.18.37 / v11、退出码 0。没有重复要求退出或扫码。
+- `ProbeArguments` 新增 `--history-days 0..7`、`--history-pages 1..50` 和 `--history-groups all`；默认保留一群一页。分页页大小至少 2；逐群记录成功页数、窗口内去重消息及停止原因。每页 API/超时失败最多重试一次；整页核对账号/群后才记录，账号不符停止。短页继续，重复页/游标、缺失/歧义游标及页上限作为未完成。
+- 首先复制 Release 运行产物到独立忽略目录，运行 3 群、7 天、每页 100 条、最多 20 页、0 秒监听；3/3 `date-boundary`、窗口内消息 0、退出码 0，报告 `.tools/m3-results/qq-paged-history-sample-20261011.md`。仅证明前三群返回内容已超出窗口。
+- 初次全群运行 `python .tools/m3-results/run-current-framework-probe.py .tools/m3-results/qq-paged-run-20261011/MessagePurify.QqProbe.dll --history-groups all --history-count 100 --history-days 7 --history-pages 20 --listen-seconds 60 --output .tools/m3-results/qq-paged-history-20261011.md`：38/52 到达边界、11 持续 1200、3 `history-no-progress`；历史 1093、去重 815、退出码 1。没有把失败当作空页。
+- 本地 NapCat 源码表明 `message_seq` 为短 ID，不能排序或作算术；`real_seq` 只能用于同秒消歧。`getMsgsIncludeSelf` 包含边界消息，`reverse_order` 传入原生读取；源码未包含原生实现，单靠参数名不足以证明方向。
+- 实际运行 `python .tools/m3-results/diagnose-history-direction-20261011.py`，对本次列表序号 22、37、51 使用同一最早游标对照，只调用状态/账号/群列表及 9 次历史读取：`false` 三群均 0 新增且无更早时间，`true` 分别新增 99/96/85 条，全部早于游标。脱敏报告 `.tools/m3-results/qq-history-direction-20261011.json`，脚本退出码 0。据此将 `OneBotClient` 带游标请求改为 `reverse_order=true`，首次最新页不变。
+- 方向回归先运行失败，定位第二页的 `false`；修复后旧客户端测试的方向断言也同步为 `true`。随后 Infrastructure Release 60/60、退出码 0。覆盖乱序页最早游标、同秒超 Int64 数值序列、窗口过滤、边界重叠、短页、无进展、页上限、游标不足、整页解析不部分计数、失败重试及继续下一群；既有实时/历史去重和只读 action 检查仍通过。
+- 最终独立运行目录 `.tools/m3-results/qq-paged-fixed-run-20261011/`，用同样参数复测并输出 `.tools/m3-results/qq-paged-history-fixed-20261011.md`。20:50:00（北京时间）开始，41/52 到达边界（39 日期边界、2 成功空页），11 群持续 1200、11 次重试；历史计数 1103 含 5 条页面重叠，窗口内去重 1098、实时群 0、排除私聊 1、其他事件 6，退出码 1。原 3 群分别读取 3/2/3 页后到达日期边界，方向问题解决；不存在页上限/游标/无进展失败。
+- 本轮重新运行 Core Release 296/296、Infrastructure Release 60/60、Windows Release 57/57、OCR `pip check` 和 unittest 25/25、demo 108 项，均退出码 0；本机真实历史复测的退出码 1 与自动测试分开记录。11 群未补全、历史完整性、断线补漏、正式持久化/任务生成、长期实时接收及桌面恢复/多屏仍未验收。
+- 最终运行 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，23/23、退出码 0；新增分页文档边界检查并同步静音通过/长期未验收的断言。需求、设计、计划、交接及真实结果已人工核对一致。

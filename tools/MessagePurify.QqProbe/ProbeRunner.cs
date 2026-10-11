@@ -1,5 +1,8 @@
 using System.Net.WebSockets;
+using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
+using MessagePurify.Core;
 using MessagePurify.Infrastructure.NapCat;
 
 namespace MessagePurify.QqProbe;
@@ -9,7 +12,7 @@ public static class ProbeRunner
     public static async Task<ProbeReport> RunAsync(ProbeArguments options, string? accessToken,
         CancellationToken cancellationToken = default)
     {
-        var report = new ProbeReport();
+        var report = new ProbeReport { HistoryDays = options.HistoryDays, HistoryPageLimit = options.HistoryPages };
         using var session = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         Task? consuming = null;
         try
@@ -25,20 +28,12 @@ public static class ProbeRunner
             var groups = await client.GetGroupListAsync(session.Token);
             report.GroupCount = groups.Count;
             consuming = ConsumeAsync(client, login.AccountId, report, session);
+            var groupIndex = 0;
             foreach (var group in groups.Take(options.HistoryGroups))
             {
                 session.Token.ThrowIfCancellationRequested();
                 report.HistoryGroupsAttempted++;
-                try
-                {
-                    var messages = await client.GetGroupMessageHistoryAsync(group.GroupId, count: options.HistoryCount, cancellationToken: session.Token);
-                    foreach (var message in messages)
-                        report.Record(OneBotMessageParser.ParseGroupMessage(message, login.AccountId, group.GroupId), history: true);
-                    report.HistoryGroupsSucceeded++;
-                }
-                catch (OneBotProtocolException exception) when (exception.Code == "account-mismatch") { throw; }
-                catch (Exception exception) when (exception is OneBotApiException or OneBotProtocolException or OneBotRequestTimeoutException)
-                { report.Fail(SafeFailure(exception)); }
+                await ReadHistoryAsync(client, login.AccountId, group.GroupId, ++groupIndex, options, report, session.Token);
             }
             await Task.Delay(TimeSpan.FromSeconds(options.ListenSeconds), session.Token);
             session.Cancel();
@@ -57,6 +52,87 @@ public static class ProbeRunner
             if (consuming is not null) await consuming;
         }
         return report;
+    }
+
+    private static async Task ReadHistoryAsync(OneBotClient client, string accountId, string groupId, int groupIndex,
+        ProbeArguments options, ProbeReport report, CancellationToken cancellationToken)
+    {
+        var seen = new HashSet<MessageKey>();
+        var cursors = new HashSet<string>(StringComparer.Ordinal);
+        var cutoff = options.HistoryDays > 0 ? report.StartedAt.AddDays(-options.HistoryDays) : (DateTimeOffset?)null;
+        var sampling = options.HistoryDays == 0 && options.HistoryPages == 1;
+        string? cursor = null;
+        var pagesRead = 0;
+        var uniqueInWindow = 0;
+        void Finish(string reason) => report.FinishHistoryGroup(new(groupIndex, pagesRead, uniqueInWindow, reason));
+        try
+        {
+            while (pagesRead < options.HistoryPages)
+            {
+                IReadOnlyList<JsonElement> page;
+                try { page = await client.GetGroupMessageHistoryAsync(groupId, cursor, options.HistoryCount, cancellationToken); }
+                catch (Exception exception) when (exception is OneBotApiException or OneBotRequestTimeoutException)
+                {
+                    report.HistoryRetries++;
+                    await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+                    page = await client.GetGroupMessageHistoryAsync(groupId, cursor, options.HistoryCount, cancellationToken);
+                }
+                // Parse the complete page before recording it, so an account/group mismatch cannot partially pass.
+                var messages = page.Select(message => OneBotMessageParser.ParseGroupMessage(message, accountId, groupId)).ToArray();
+                pagesRead++;
+                if (messages.Length == 0) { Finish("empty-page"); return; }
+                var priorCount = seen.Count;
+                foreach (var message in messages)
+                {
+                    var added = seen.Add(message.Message.Key);
+                    if (cutoff is null || message.Message.SentAt >= cutoff)
+                    {
+                        report.Record(message, history: true);
+                        if (added) uniqueInWindow++;
+                    }
+                }
+                if (sampling) { Finish("sampled"); return; }
+                if (cutoff is not null && messages.Any(message => message.Message.SentAt < cutoff))
+                { Finish("date-boundary"); return; }
+                if (seen.Count == priorCount) throw new OneBotProtocolException("history-no-progress");
+                var next = OldestCursor(messages);
+                if (!cursors.Add(next)) throw new OneBotProtocolException("history-no-progress");
+                cursor = next;
+            }
+            throw new OneBotProtocolException("history-page-limit");
+        }
+        catch (OneBotProtocolException exception) when (exception.Code == "account-mismatch")
+        { Finish(exception.Code); throw; }
+        catch (Exception exception) when (exception is OneBotApiException or OneBotProtocolException or OneBotRequestTimeoutException)
+        {
+            var failure = SafeFailure(exception) with { GroupIndex = groupIndex };
+            report.Fail(failure);
+            Finish(failure.Code);
+        }
+        catch (OperationCanceledException) { Finish("cancelled"); throw; }
+    }
+
+    private static string OldestCursor(IReadOnlyList<ParsedOneBotMessage> messages)
+    {
+        var oldestTime = messages.Min(message => message.Message.SentAt);
+        var oldest = messages.Where(message => message.Message.SentAt == oldestTime)
+            .DistinctBy(message => message.Message.Key).ToArray();
+        var selected = oldest[0];
+        if (oldest.Length > 1)
+        {
+            var ordered = new List<(ParsedOneBotMessage Message, BigInteger Sequence)>();
+            foreach (var message in oldest)
+            {
+                if (!BigInteger.TryParse(message.RealSequence, NumberStyles.None, CultureInfo.InvariantCulture, out var sequence))
+                    throw new OneBotProtocolException("history-cursor-ambiguous");
+                ordered.Add((message, sequence));
+            }
+            var minimum = ordered.Min(item => item.Sequence);
+            var first = ordered.Where(item => item.Sequence == minimum).ToArray();
+            if (first.Length != 1) throw new OneBotProtocolException("history-cursor-ambiguous");
+            selected = first[0].Message;
+        }
+        return selected.MessageSequence ?? throw new OneBotProtocolException("history-cursor-missing");
     }
 
     private static async Task ConsumeAsync(OneBotClient client, string accountId, ProbeReport report, CancellationTokenSource session)
