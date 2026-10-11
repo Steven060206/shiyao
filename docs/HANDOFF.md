@@ -6,9 +6,9 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；本轮自动回归为 Core 295/295、Infrastructure 46/46、Windows 45/45、OCR 25/25、Node 19/19、demo 107 项。Framework 已加载并自动登录，真实 OneBot 只读接口限定范围通过；用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。普通 QQ 登录不作为 OneBot 连接成功；实时群事件、完整历史补漏、桌面卡片人工操作和非提权 Windows 通知尚未验收，正式应用尚未接入探针能力。**
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；通知权限修正阶段完整回归为 Core 295/295、Infrastructure 46/46、Windows 45/45、OCR 25/25、Node 19/19、demo 107 项。本次仅更新文档与相关回归：四文件 Node 20/20、OneBotTransportTests 5/5。Framework 已加载并自动登录，真实 OneBot 只读接口及实时群事件限定范围通过（观察到 1 条）；用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。普通 QQ 登录不作为 OneBot 连接成功；完整历史补漏、长期稳定性、桌面卡片人工操作和 Windows 通知尚未验收，正式应用尚未接入探针能力。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`；NapCat Shell 与 Framework 的显式路径启动准备位于 `packaging/napcat/`，对应路径回归在 `tests/napcat-launcher.test.mjs` 和 `tests/napcat-framework-launcher.test.mjs`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
-- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；没有注册正式自启动，实时群事件、长期稳定性、桌面人工操作和非提权系统通知点击仍未验收。
+- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；没有注册正式自启动，长期稳定性、桌面人工操作和系统通知点击仍未验收。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
 ### 本轮接续 M3 真实集成探针
@@ -17,12 +17,15 @@
 - 已只读检测普通 QQ 安装及进程（`D:/QQ`、版本目录 `9.9.36-53644`）。官方 Shell 入口依赖注册表而失败，已提供 `packaging/napcat/Start-NapCat.cmd` 直接指定 QQ 路径。用户确认退出普通 QQ 后，本轮启动 Framework 并自动登录；QQ 主进程加载 `napiloader.dll`，WebUI 6099 与 OneBot 3001 已监听。普通 QQ 登录不等于 OneBot 连接，实际只读连接结果单独记录。当前执行会话提权，通知须在支持的非提权环境实测；尚无 M3 完成结论。
 - 用户已提供真实 QQ 截图并确认六处红框中的群均为学校相关群；名称通常正规，也有非正式名称，群名只辅助候选，不能据此排除。截图是群列表和私聊界面，没有完整学校通知正文及日期；可用于真实截图 OCR，不作为通知日期提取验收。原图及识别全文仅用于本机，不写 Git。
 - 用户反馈担心接入后无法继续使用 QQ。已纠正此前关于 Shell 桌面聊天能力的说明：Shell 是无界面接管路线，同一账号不能与普通 QQ 并行登录。Framework 本轮已实际加载，用户从托盘打开后确认“聊天列表和窗口正常显示”；窗口打开期间同一进程的只读接口复测通过。启动日志曾出现 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证；没有确认的窗口显示故障，不盲目替换加载器或重新登录。
-- M3 当前实际结果见[集成探针验证记录](verification/integration-probes.md)：本轮自动回归 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 19、demo 107 均通过。本轮真实只读探针分别监听 30、60、60、300 秒，四次均退出码 0；群 52 个、历史成功 1/1、历史消息 7 条、实时群消息 0 条。不把接口通过替代实时接收、七天补漏、正式任务生成或 M3 完成。通知高完整性检查受阻，独立中等完整性尝试有接口错误；桌面卡片人工项仍待操作。本阶段已有提交 `fbef082`、`42c939a`、`3d87f4f`、`1fd1b1c`、`f980c51` 和 `4128526`。
+- M3 当前实际结果见[集成探针验证记录](verification/integration-probes.md)：本轮自动回归 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 19、demo 107 均通过。前四次真实只读探针分别监听 30、60、60、300 秒，四次均退出码 0；群 52 个、历史成功 1/1、历史消息 7 条、实时群消息 0 条。第五次 180 秒探针实际收到 1 条实时群消息，退出码 0。不把接口通过替代实时接收、七天补漏、正式任务生成或 M3 完成。通知高完整性检查受阻，独立中等完整性尝试有接口错误；桌面卡片人工项仍待操作。本阶段已有提交 `fbef082`、`42c939a`、`3d87f4f`、`1fd1b1c`、`f980c51` 和 `4128526`。
 - 本轮启动入口为 `packaging/napcat/Start-NapCat-Framework.ps1`，实际探针运行 `.tools/dotnet/dotnet.exe tools/MessagePurify.QqProbe/bin/Release/net10.0/MessagePurify.QqProbe.dll --listen-seconds 30 --output .tools/m3-results/qq-framework-current.md`，随后以 60 秒输出 `qq-framework-events.md`、`qq-framework-desktop-open.md`，均退出码 0。原始日志、配置备份和脱敏报告只在 `.tools/m3-results/`；Token 只保存在本机配置和子进程环境，不写入文档或 Git。
 - 本轮更新文档回归：初次运行四文件 Node 测试 18/19，通过结果报告缺少明确“实时群事件尚未验收”正文而失败；补齐范围后重跑 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，19/19、退出码 0，`git diff --check` 退出码 0。本轮未改产品代码，也未重跑此前 Core/Infrastructure/Windows/OCR/demo 套件。已人工核对需求、设计、交接、报告和本机实际状态；下一步继续实时群事件与 M3 剩余人工验收。
 - 上述接入检查已保存为 `4128526`。随后继续 Windows 通知验证，发现原权限检测只判断管理员组，不能识别 Basic User 进程仍保持高完整性；新增 `ProcessIntegrity.cs` 改为查询真实令牌完整性，并新增独立 `whoami` 回归，Windows 45/45、Release publish 和当前用户安装退出码 0。Basic User 复跑正确返回 `blockedElevated`；独立本机测试进程实际降到中等完整性后，通知接口返回 `COMException:0x80070490`，没有通知 ID。WpnService 与当前用户通知服务均运行；根因待排查，通知呈现、声音与点击未验收，未改系统策略或 QQ 进程。详见集成探针记录。
 - 通知检查后实际重跑 Core Release 295、Windows Release 45、OCR pip check 与 unittest 25、四文件 Node 19、demo 107，全部退出码 0。Infrastructure 初次构建因本轮仍在运行的 300 秒只读探针锁住 DLL 而退出码 1，代码未改；先执行同项目 `--no-build --no-restore --configuration Release`，46 项通过、退出码 0。监听正常结束后再执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release`，构建与 46 项均通过、退出码 0；没有关闭 QQ。
-- 300 秒只读探针报告为 `.tools/m3-results/qq-framework-live-observation.md`，退出码 0、历史 7 条、实时群消息 0、其他事件 11、无失败。已询问用户是否刚收到新的群消息，尚未收到该问题反馈；不据时间经过推断答案。后续若用户反馈有新群消息，对照实际监听时间复跑，不发送消息。保持 Framework QQ 运行；下一步定位通知 `0x80070490`，继续实时事件及 M3 人工验收。已人工核对需求、设计、交接、源码、测试和本机报告一致，未找到的上下文清理技能继续按项目规则手工核对，不删除文件。
+- 300 秒只读探针报告为 `.tools/m3-results/qq-framework-live-observation.md`，退出码 0、历史 7 条、实时群消息 0、其他事件 11、无失败。用户现已回答“刚收到新的群消息”；第五次探针复制运行产物到独立忽略目录，再实际运行 `.tools/dotnet/dotnet.exe .tools/m3-results/qq-live-run-20261011-feedback/MessagePurify.QqProbe.dll --listen-seconds 180 --output .tools/m3-results/qq-framework-user-feedback.md`，退出码 0，13:42:06（北京时间）开始、实时群消息 1、历史 7、去重后 8、无失败。实时群事件限定范围通过（观察到 1 条），不代表所有群、图片事件或长期稳定性通过。保持 Framework QQ 运行；下一步定位通知 `0x80070490`，继续历史补漏及 M3 人工验收。
+- 运行 `python .tools/m3-results/check-recent-group-traffic.py`，每群仅一页 5 条：52 群尝试、41 成功、11 接口失败、历史合计 178 条，近十分钟 2 条分属 2 群，最新时间 13:42:10；退出码 0仅表示诊断完成，不作为全部群历史通过。原统计在 `.tools/m3-results/qq-recent-group-traffic.json`，失败原因未定位。群名、账号、正文及 Token 不输出、不提交；历史诊断不代替实时探针。
+- 用户询问是否会往学校群发送消息，已核对源代码及既有 loopback 读取 action 断言。QQ 接入只读，不向 QQ 群或私聊发送消息；学校群通知及测试提醒不通过 QQ 发送，提醒采用本机 Windows 通知。需求及设计同步明确此边界，不修改 NapCat 本身提供的接口能力。
+- 本次文档检查初跑 19/20，报告缺少明确的长期稳定性未验收状态；补齐正文并纠正设计、M3 计划及测试说明中的旧实时状态。实际重跑 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，20/20、退出码 0；实际运行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-build --no-restore --configuration Release --filter FullyQualifiedName~OneBotTransportTests`，5/5、退出码 0，精确断言探针只调用五个读取 action。本次未改产品源码，未重跑完整 Core/Infrastructure/Windows/OCR/demo 套件；已人工核对需求、交接、设计、计划及本机脱敏报告，不把一条实时事件作为长期或七天补漏验收。
 
 ### 上轮 M2 本地规则与样本
 
@@ -186,6 +189,7 @@
 
 - **已决定使用 NapCat**，用户计划用于自己的 QQ 大号。该接入选择已经讨论确认，不需要重新开启选型或账号风险讨论。
 - 范围为所有群聊，排除私人对话和经用户确认的机器人账号。
+- QQ 接入只读，不向 QQ 群或私聊发送消息；任务提醒采用本机 Windows 通知，不向学校群发测试消息。
 - 软件按本地规则提出疑似机器人账号，用户确认后才排除；同一账号后续自动忽略，支持撤销。确认前不能因重复内容就排除老师或同学。
 - 首次启动尝试回溯最近 7 天；后续断线重连时尝试补漏。历史读取能力取决于 QQ 返回结果，失败时展示对应群和原因。
 - 界面显示连接状态并自动重连；每次持续断开超过 5 分钟后提醒一次，同一次断线期间不反复通知。恢复连接后重新计时。
@@ -298,8 +302,8 @@
 4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态决定与本地来源／目标候选已测试；真实发布者关系获取、记录保存和通知尚未实现。
 5. **下一步：M3 真实 Windows、QQ、OCR 与通知小规模验证**。M1、M2 已完成；M2 的合成样本基线只用于可重复回归，不代表真实独立 QQ 样本已验收。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
 6. 数据模型、SQLite、正式提醒调度、数据保留和正式打包已有开发者方案，见设计稿；尚未完成。消息桥、OCR 进程通信和探针打包已有 M3 实现与验证。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
-7. NapCat 真实只读连接和一群一页历史已通过；实时群事件、七天补漏、本地规则真实样本误判/漏判、学校通知日期 OCR、桌面宿主层级及安装包通知激活仍须真实验证。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
-8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。Framework 已在本机 QQ 加载并自动登录，用户确认聊天列表和窗口正常显示；实时群事件及长期稳定性尚未验证。
+7. NapCat 真实只读连接、一群一页历史及实时群事件限定范围通过（观察到 1 条）；七天补漏、接收稳定性、本地规则真实样本误判/漏判、学校通知日期 OCR、桌面宿主层级及安装包通知激活仍须真实验证。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
+8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。Framework 已在本机 QQ 加载并自动登录，用户确认聊天列表和窗口正常显示；实时群事件限定范围通过（观察到 1 条），长期稳定性尚未验证。
 9. 安静时段已明确延期：Windows 第一版只保留“暂未启用”的设置入口，具体时间及自动静音行为留待未来若规划手机版时再讨论；手机版开发尚未确定。
 10. **2026-10-10 七项复核补充已并入设计（需求已确认，M1 仅完成相关核心决定，端到端流程尚未实现）**：
     - 归档：详情操作及恢复、已归档筛选、移出待办与卡片、停止时间提醒及清理旧通知，证据和处理记录保留；归档后新要求先待确认。
@@ -399,3 +403,4 @@
 | 2026-10-11 | 用户询问是否可让普通 QQ 与 NapCat 定时自动切换 | 仅记录为未决定方案：可在空闲时切换并恢复普通 QQ，但仍非并行运行；尚未确认开发，不进入有效需求 |
 | 2026-10-11 | Framework 真实只读接入及桌面窗口反馈 | 用户确认已退出普通 QQ 后实际启动 Framework 并自动登录；三个限定范围探针退出码 0，群 52 个、一群一页历史 7 条、实时群消息 0 条。用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过；启动窗口初始化 TypeError 保留记录，实时群事件、长期稳定性、完整历史补漏及 M3 剩余人工项未验收。同步当前正文与相关回归，Node 19/19、diff 检查通过，不提交私人日志或配置 |
 | 2026-10-11 | 修正 Windows 权限检测并继续真实验证 | 新增令牌完整性查询和独立 whoami 回归，Windows 45/45；Basic User 高完整性误判已修正。中等完整性测试实际运行，但通知接口 `0x80070490`、未提交提醒；服务均运行，原因仍待定位。第四次 QQ 探针监听 300 秒退出码 0，未观察到实时群事件。完整回归 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 19、demo 107 及 Release publish/安装通过；Infrastructure 初次构建 DLL 锁问题在探针结束后复跑通过，QQ 保持运行 |
+| 2026-10-11 | 收到真实群事件并明确 QQ 只读边界 | 用户反馈新群消息后，第五次 180 秒探针收到 1 条、历史 7 条、退出码 0；历史诊断 52 群中 41 成功、11 失败，原因待查。用户询问是否会发群消息，已核对没有发送接口调用，需求明确只读及本机 Windows 提醒。相关文档和测试同步，Node 20/20、OneBotTransportTests 5/5 通过；长期稳定性、七天补漏及 M3 人工项仍未验收 |

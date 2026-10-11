@@ -118,6 +118,7 @@ test('NapCat 两种模式、真实接口与桌面反馈的验证范围一致', (
     'docs/HANDOFF.md',
     'docs/integrations/napcat-setup.md',
     'docs/verification/integration-probes.md',
+    'docs/superpowers/plans/2026-10-10-integration-probes.md',
     'docs/superpowers/specs/2026-10-10-windows-app-design.md'
   ];
   for (const file of files) {
@@ -126,10 +127,19 @@ test('NapCat 两种模式、真实接口与桌面反馈的验证范围一致', (
     assert.match(content, /Framework.*已(?:加载|实际加载|通过)|通过 Framework/, `${file} 需同步 Framework 已运行`);
     assert.match(content, /只读(?:接口|连接|探针).*通过/, `${file} 需同步真实只读结果`);
     assert.match(content, /用户确认聊天列表和窗口正常显示|用户.*确认.*聊天列表和窗口正常显示/, `${file} 需区分用户桌面反馈与接口验证`);
-    assert.match(content, /实时群事件.*尚未(?:验证|验收)/, `${file} 不得以历史接口代替实时事件验收`);
+    assert.match(content, /实时群事件限定范围通过（观察到 1 条）/, `${file} 需同步真实群事件的限定验证结果`);
+    assert.match(content, /长期稳定性.*尚未(?:验证|验收)/, `${file} 不得以单条事件代替长期稳定性验收`);
     const current = content.split('## 2.')[0];
     assert.doesNotMatch(current, /OneBot 尚未接入|OneBot 尚未真实连接|尚未向 QQ 注入|本机尚未(?:执行注入|注入或重启)/, `${file} 当前状态不能保留启动前结论`);
     assert.doesNotMatch(content, /Shell[^\n]*正常聊天|NapCat 启动的 QQ 窗口仍可正常聊天|NapCat 窗口就是可正常使用/, `${file} 不能承诺 Shell 有可聊天窗口`);
+  }
+});
+
+test('QQ 接入保持只读，学校群不承载测试或任务提醒', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/integrations/napcat-setup.md']) {
+    const content = read(file);
+    assert.match(content, /QQ 接入只读，不向 QQ 群或私聊发送消息/, file);
+    assert.match(content, /Windows 通知|Windows 测试提醒/, file);
   }
 });
 

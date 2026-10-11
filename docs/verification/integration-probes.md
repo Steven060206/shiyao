@@ -7,8 +7,8 @@
 | 项目 | 实际结果 | 证据与边界 |
 | --- | --- | --- |
 | OneBot 协议与客户端 | 通过受控 loopback：46 项 | `tests/MessagePurify.Infrastructure.Tests` Release 46/46；含真实 ClientWebSocket、乱序 echo、事件交错、账号隔离、历史字段、并发释放回归。受控服务不代表真实 QQ 已连接。 |
-| QQ 真实只读连接 | 限定范围通过 | Framework 启动后运行 DLL，30 秒、60 秒、窗口打开后 60 秒及 300 秒探针均退出码 0；QQ 在线、账号核对、NapCat 4.18.37 / v11、群 52 个、历史群成功 1/1、历史消息 7 条。四次实时群消息均为 0，实时群事件尚未验收，不作为七天补漏验收。四份脱敏报告在 `.tools/m3-results/`，最新为 `qq-framework-live-observation.md`。 |
-| Framework 桌面模式 | 已加载，用户确认窗口正常 | 官方 v4.18.37 在 QQ `9.9.36-53644` 中实际启动，已加载 `napiloader.dll` 并自动登录；6099 与 localhost 3001 属于同一 QQ 主进程。用户从托盘打开后确认“聊天列表和窗口正常显示”。启动日志曾有 `updateWindowSizeProperties` 的 TypeError，保留问题记录，不能据此承诺长期稳定性。 |
+| QQ 真实只读连接 | 接口和实时群事件限定范围通过 | 前四次探针接口通过、实时群消息 0；用户反馈刚收到新群消息后，13:42:06（北京时间）开始的第五次 180 秒探针实际观察到 1 条。QQ 在线、账号核对、NapCat 4.18.37 / v11、群 52 个、历史群成功 1/1、历史消息 7 条、去重后 8 条、无失败，退出码 0。实时群事件限定范围通过（观察到 1 条），不作为七天补漏或长期稳定性验收。最新脱敏报告 `.tools/m3-results/qq-framework-user-feedback.md`。 |
+| Framework 桌面模式 | 已加载，用户确认窗口正常 | 官方 v4.18.37 在 QQ `9.9.36-53644` 中实际启动，已加载 `napiloader.dll` 并自动登录；6099 与 localhost 3001 属于同一 QQ 主进程。用户从托盘打开后确认“聊天列表和窗口正常显示”。启动日志曾有 `updateWindowSizeProperties` 的 TypeError，保留问题记录；长期稳定性尚未验收。 |
 | OCR 协议与合成图 | 通过：25 项 Python | `./.tools/ocr/venv/Scripts/python.exe -m pip check` 和 `./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 均通过。真实 CPU 模型识别合成中文通知、长图日期、空白图和损坏图后继续；有限数值、代理码点 UTF-8 和离线模型回归已覆盖。 |
 | 用户 QQ 截图 OCR | 真实截图文字通过，通知日期不验收 | 本机 worker 处理用户群列表截图：55 行、6 个红框群名均识别、原图字节未变。截图没有完整学校通知正文和日期，不能证明日期提取。全文只在 `.tools/m3-results/`。 |
 | WPF/WebView2 隐藏桥 | 通过 | 发布后运行 `Run-Probe.ps1 -Mode Bridge`；报告 `C:\Users\Administrator\AppData\Local\MessagePurify\IntegrationProbe\results\Bridge-20261010-225528.json`。本轮重新 publish 并安装到含空格路径 `.tools/m3-install space`，运行 `Run-Probe.ps1 -Mode Bridge -WaitSeconds 20` 退出码 0，报告 `.tools/m3-install space/results/Bridge-20261011-013731.json`。WebView2 `155.0.4283.45`，echo→reply→ack、secure context、特殊文字保留均通过，PNG 已核对。 |
@@ -29,6 +29,8 @@ QQ 接入检查完成后继续通知验证，发现并修正一处权限检测�
 
 本轮回归实际执行：三个测试项目的 `.tools/dotnet/dotnet.exe test tests/<项目> --no-restore --configuration Release`，OCR 的 pip check / unittest discover，四文件 Node 测试及 `node tests/prototype-qa.mjs`。Infrastructure 初次构建因正在监听的 QQ 探针锁住运行目录 DLL 而退出码 1；先用同项目 `--no-build --no-restore --configuration Release` 验证 46 项，退出码 0。300 秒监听正常结束后，复跑 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release`，构建与 46 项均通过、退出码 0；没有关闭 QQ。
 
+后续实时事件和只读政策文档更新未改产品代码。四文件 Node 检查初跑 19/20，缺少明确的长期稳定性未验收状态；补齐后实际重跑同一命令，20/20、退出码 0。实际运行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-build --no-restore --configuration Release --filter FullyQualifiedName~OneBotTransportTests`，5/5、退出码 0，含精确读取 action 列表断言。本次没有重跑上述完整套件。
+
 ## Windows 权限检测与通知尝试
 
 - 原 `NotificationProbe.IsElevated` 根据管理员组成员身份判断权限。`runas /trustlevel:0x20000` 运行诊断时报告 `elevated=false`，但 SDK 的 `IsSupported` 返回 false。核对 [Windows App SDK 的完整性判断源码](https://github.com/microsoft/WindowsAppSDK/blob/main/dev/Common/Security.IntegrityLevel.h) 与 [AppNotificationManager 实现](https://github.com/microsoft/WindowsAppSDK/blob/main/dev/AppNotifications/AppNotificationManager.cpp)：通知按令牌完整性是否达到 High 判断，不按管理员组是否启用。
@@ -43,8 +45,14 @@ QQ 接入检查完成后继续通知验证，发现并修正一处权限检测�
 
 用户确认退出普通 QQ 后，实际通过隐藏 PowerShell 启动 `packaging/napcat/Start-NapCat-Framework.ps1`。日志确认 Framework 初始化完成，进程加载 `napiloader.dll`、`major.node`、`wrapper.node`；WebUI 返回在线。正向 WebSocket 配置仅监听 `127.0.0.1:3001`，array 格式、debug 关闭，随机 Token 仅保存在本机忽略目录及探针子进程环境。原配置备份为 `.tools/m3-results/framework-onebot-before.json`，启动日志在同目录，不提交原日志或私人内容。
 
-实际运行命令：`.tools/dotnet/dotnet.exe tools/MessagePurify.QqProbe/bin/Release/net10.0/MessagePurify.QqProbe.dll --listen-seconds 30 --output .tools/m3-results/qq-framework-current.md`，以及将监听改为 60 秒、输出分别改为 `qq-framework-events.md`、`qq-framework-desktop-open.md` 的同一命令；三次退出码 0。随后以 `--listen-seconds 300 --output .tools/m3-results/qq-framework-live-observation.md` 运行同一 DLL，退出码 0，历史 7 条、实时群消息 0、其他事件 11、无失败。每次仅查询一群一页历史，未进行七天历史分页、断线补漏、正式持久化或任务生成。已询问用户是否刚收到新群消息，尚未收到该问题反馈，不据时间经过推断答案。
+实际运行命令：`.tools/dotnet/dotnet.exe tools/MessagePurify.QqProbe/bin/Release/net10.0/MessagePurify.QqProbe.dll --listen-seconds 30 --output .tools/m3-results/qq-framework-current.md`，以及将监听改为 60 秒、输出分别改为 `qq-framework-events.md`、`qq-framework-desktop-open.md` 的同一命令；三次退出码 0。随后以 `--listen-seconds 300 --output .tools/m3-results/qq-framework-live-observation.md` 运行同一 DLL，退出码 0，历史 7 条、实时群消息 0、其他事件 11、无失败。每次仅查询一群一页历史，未进行七天历史分页、断线补漏、正式持久化或任务生成。
+
+用户回答“刚收到新的群消息”后，把已有探针运行文件复制到独立忽略目录以避免构建 DLL 锁，实际运行 `.tools/dotnet/dotnet.exe .tools/m3-results/qq-live-run-20261011-feedback/MessagePurify.QqProbe.dll --listen-seconds 180 --output .tools/m3-results/qq-framework-user-feedback.md`，退出码 0。报告起始 2026-10-11 13:42:06（北京时间）、实时群消息 1、历史 7、去重后 8、排除私聊 0、其他事件 7、无失败。只验证收到一条群文本事件，没有验证所有群、图片事件或长期接收。
+
+随后运行 `python .tools/m3-results/check-recent-group-traffic.py`，只调用群列表及历史读取，每群最多读一页 5 条：52 群尝试、41 成功、11 接口失败、历史合计 178 条，其中近十分钟 2 条分属 2 群，最新原始时间为 13:42:10。脚本退出码 0表示诊断已完成，不表示 52 群历史全部通过；11 个失败原因未进一步定位。统计保存在 `.tools/m3-results/qq-recent-group-traffic.json`，不保存账号、群名、正文或 Token，不把这些历史作为实时事件验收。
+
+用户询问是否会向学校群发送消息，已核对项目 QQ 客户端、探针和启动脚本没有 QQ 发送接口调用。QQ 接入只读，不向 QQ 群或私聊发送消息；现有受控 loopback 回归精确断言探针仅调用五个读取 action，提醒使用本机 Windows 通知。
 
 用户随后确认从托盘打开 QQ 后聊天列表和窗口正常显示；QQ 主窗口句柄存在，主进程同时监听 6099/3001。启动时曾出现两次 `TypeError: undefined is not a function`，调用点为 `updateWindowSizeProperties`。该错误对长期使用的影响尚未验证；目前没有用户确认的窗口显示故障，不盲目替换加载器。未发送消息，也没有成功生成 QQ 窗口截图。
 
-M3 仍为“正在实施”。下一步继续真实群事件、历史补漏、桌面人工操作和非提权通知验收；不重复要求已经完成的退出、扫码或登录准备。
+M3 仍为“正在实施”。下一步继续历史补漏、实时接收稳定性、桌面人工操作和 Windows 通知验收；不重复要求已经完成的退出、扫码或登录准备。
