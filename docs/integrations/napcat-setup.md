@@ -13,7 +13,9 @@
 
 ## Framework 桌面模式（已启动，继续验收）
 
-`packaging/napcat/Start-NapCat-Framework.cmd` 是显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll` 和 `nativeLoader.cjs`，不依赖 QQ 注册表。对应 PowerShell 脚本已实际启动当前 QQ `9.9.36-53644` 并自动登录，没有绕过登录或发送消息。当前 QQ 已由该入口运行，不要在已有进程上重复启动。
+`packaging/napcat/Start-NapCat-Framework.cmd` 是显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll`，不依赖 QQ 注册表。此前通过官方 `nativeLoader.cjs` 实际启动当前 QQ `9.9.36-53644` 并自动登录，没有绕过登录或发送消息。当前 QQ 已运行，不要在已有进程上重复启动。
+
+2026-10-11 用户新增“只读取置顶的群聊消息”。入口现已改为启动前运行 `Prepare-PinnedGroups.ps1`，生成 `messagepurify-napcat.mjs` 副本并使用项目 `nativeLoaderPinned.cjs` 注册唯一读取桥；官方 `napcat.mjs` 和 `nativeLoader.cjs` 保留。用户退出后新入口已加载，真实字段为 `topFlag` 数字 0/1，快照/排序均 139 项；52 个已加入群中仅 9 个置顶群进入实际历史读取。缺标记或接口失败时探针停止，不回退到全群；普通 NapCat/Shell 未安装项目桥也会停止读取。
 
 WebUI 6099 与 OneBot `127.0.0.1:3001` 均属于同一 QQ 主进程。只读探针取得 52 个群及一群一页的 7 条历史消息；用户确认从托盘打开后聊天列表和窗口正常显示。前四次监听未观察到实时群事件；用户反馈新群消息后，第五次 180 秒探针收到 1 条真实群文本事件、退出码 0。七天补漏尚未验收；启动日志有 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证。后续启动仍先正常退出当前 QQ，再用 Framework 入口重开；这与在两个进程中双开同账号不同。
 
@@ -30,6 +32,6 @@ WebUI 6099 与 OneBot `127.0.0.1:3001` 均属于同一 QQ 主进程。只读探�
 - Framework 包内 `napiLoader.bat` 同样默认读取注册表；本项目的 Framework 入口改为直接调用 `napimain.exe` 并传入 `D:/QQ/QQ.exe`，避免把注册表缺失误判为 QQ 不存在。
 - WebSocket 配置字段已核对[官方配置源码](https://github.com/NapNeko/NapCatQQ/blob/6797143b0446c00e34111930b22e6aa08deb053e/packages/napcat-onebot/config/config.ts)。根路径提供 API 与事件；`/api` 仅接口，不适合作为本探针事件连接。
 
-QQ 探针调用 get_status、get_login_info、get_version_info、get_group_list 和 get_group_msg_history；默认一群一页、每页 20 条，并限时监听。没有发送消息功能，不声称补全七天。
+QQ 探针调用 get_status、get_login_info、get_version_info、get_group_list、get_group_msg_history 和项目读取桥 messagepurify_get_pinned_groups；只读取置顶群，默认一群一页、每页 20 条，并限时监听。没有发送消息功能，不声称补全七天。
 
 QQ 接入只读，不向 QQ 群或私聊发送消息；Windows 测试提醒是本机系统通知。NapCat 自身提供的发送接口没有被项目调用。

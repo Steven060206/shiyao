@@ -74,6 +74,19 @@ public sealed class OneBotClient : IAsyncDisposable
         return OneBotJson.Array(data).Select(item => new OneBotGroup(OneBotJson.Id(item, "group_id"), OneBotJson.String(item, "group_name"))).ToArray();
     }
 
+    public async Task<IReadOnlySet<string>> GetPinnedGroupIdsAsync(string accountId, CancellationToken cancellationToken = default)
+    {
+        var data = await CallAsync("messagepurify_get_pinned_groups", new { }, cancellationToken);
+        try
+        {
+            if (OneBotJson.Id(data, "self_id") != accountId) throw new OneBotProtocolException("account-mismatch");
+            return OneBotJson.Array(OneBotJson.Property(data, "group_ids"))
+                .Select(item => OneBotJson.Id(item, "group_id")).ToHashSet(StringComparer.Ordinal);
+        }
+        catch (OneBotProtocolException exception) when (exception.Code != "account-mismatch")
+        { throw new OneBotProtocolException("pinned-state-invalid"); }
+    }
+
     public async Task<IReadOnlyList<JsonElement>> GetGroupMessageHistoryAsync(string groupId, string? messageSequence = null,
         int count = 20, CancellationToken cancellationToken = default)
     {

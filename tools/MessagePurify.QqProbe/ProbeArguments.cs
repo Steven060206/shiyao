@@ -7,7 +7,7 @@ public sealed record ProbeArguments(Uri Url, int ListenSeconds, int HistoryGroup
     public int HistoryDays { get; init; }
     public int HistoryPages { get; init; } = 1;
     public int ReconnectRounds { get; init; }
-    public const string Usage = "用法：MessagePurify.QqProbe [--url 本机WS根地址] [--listen-seconds 0..300] [--history-groups 0..20|all] [--history-count 1..100] [--history-days 0..7] [--history-pages 1..50] [--reconnect-rounds 0..2] [--output 报告.md]；每轮均读取历史并监听，轮间主动断开自身连接2秒；分页每页至少2条；Token仅使用MESSAGEPURIFY_NAPCAT_TOKEN环境变量。";
+    public const string Usage = "用法：MessagePurify.QqProbe [--url 本机WS根地址] [--listen-seconds 0..300] [--history-groups 0..20|all] [--history-count 1..100] [--history-days 0..7] [--history-pages 1..50] [--reconnect-rounds 0..2] [--output 报告.md]；仅读取置顶群，all表示所有置顶群；每轮均读取历史并监听，轮间主动断开自身连接2秒；分页每页至少2条；Token仅使用MESSAGEPURIFY_NAPCAT_TOKEN环境变量。";
 
     public static ProbeArguments Parse(string[] args)
     {

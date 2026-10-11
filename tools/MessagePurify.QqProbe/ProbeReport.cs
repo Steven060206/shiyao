@@ -21,6 +21,8 @@ public sealed class ProbeReport
     public bool AccountVerified { get; internal set; }
     public OneBotVersion? Version { get; internal set; }
     public int GroupCount { get; internal set; }
+    public int? PinnedGroupCount { get; internal set; }
+    public int UnpinnedGroupEventsIgnored { get; internal set; }
     public int HistoryGroupsAttempted { get; internal set; }
     public int HistoryGroupsSucceeded { get; internal set; }
     public int HistoryDays { get; internal set; }
@@ -60,7 +62,7 @@ public sealed class ProbeReport
     internal void FinishHistoryGroup(HistoryGroupResult result)
     {
         historyResults.Add(result);
-        if (result.StopReason is "sampled" or "empty-page" or "date-boundary") HistoryGroupsSucceeded++;
+        if (result.StopReason is "sampled" or "empty-page" or "date-boundary" or "unpinned") HistoryGroupsSucceeded++;
     }
 
     public string ToMarkdown()
@@ -80,6 +82,7 @@ public sealed class ProbeReport
         output.AppendLine($"| 账号 | {(AccountVerified ? "已读取并核对，标识已脱敏" : "未核对")} |");
         output.AppendLine($"| NapCat / 协议版本 | {SafeVersion(Version?.AppVersion)} / {SafeVersion(Version?.ProtocolVersion)} |");
         output.AppendLine($"| 群总数 | {GroupCount} |");
+        output.AppendLine($"| 连接时置顶群数 / 已排除非置顶群事件 | {(PinnedGroupCount.HasValue ? PinnedGroupCount.Value.ToString() : "未知")} / {UnpinnedGroupEventsIgnored} |");
         output.AppendLine($"| 历史群成功 / 尝试 | {HistoryGroupsSucceeded} / {HistoryGroupsAttempted} |");
         output.AppendLine($"| 历史窗口 / 每群页上限 / 重试次数 | {(HistoryDays == 0 ? "未限定天数" : HistoryDays + " 天")} / {HistoryPageLimit} / {HistoryRetries} |");
         output.AppendLine($"| 历史消息 / 实时群消息 | {HistoryMessages} / {RealtimeGroupMessages} |");
@@ -89,7 +92,7 @@ public sealed class ProbeReport
         output.AppendLine();
         output.AppendLine("## 本次读取的群历史范围");
         output.AppendLine();
-        output.AppendLine("群序号仅对应该连接的群列表顺序，不是群 ID；消息数为该轮窗口内去重后的历史消息，跨连接重复另行去重。短页不视为读取结束。");
+        output.AppendLine("范围仅限 QQ 中置顶的群聊，all 也只表示所有置顶群。每页历史和实时群事件处理前重新读取置顶状态；取得失败立即停止，不回退到全群。unpinned 表示取消置顶后停止该群读取。群序号仅对应该连接选中的置顶群顺序，不是群 ID；消息数为该轮窗口内去重后的历史消息，跨连接重复另行去重。短页不视为读取结束。");
         output.AppendLine();
         output.AppendLine("| 连接序号 | 群序号 | 成功读取页数 | 窗口内消息 | 停止原因 |");
         output.AppendLine("| --- | --- | --- | --- | --- |");

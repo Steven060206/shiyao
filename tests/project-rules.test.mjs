@@ -149,6 +149,20 @@ test('QQ 接入保持只读，学校群不承载测试或任务提醒', () => {
   }
 });
 
+test('置顶群规则同步至需求、交接、设计、计划与探针，未知状态不能回退全群', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md',
+    'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-integration-probes.md',
+    'tools/MessagePurify.QqProbe/README.md']) {
+    const content = read(file);
+    assert.match(content, /只读取(?:当前 QQ (?:中|账号中))?置顶的群聊(?:消息)?|只读取当前 QQ 账号中置顶的群聊消息/, file);
+    assert.match(content, /不回退(?:到)?全群|不回退到所有群/, file);
+  }
+  assert.doesNotMatch(read('docs/requirements.md'), /使用 NapCat，监听所有群聊/);
+  assert.doesNotMatch(read('docs/HANDOFF.md'), /范围为所有群聊/);
+  assert.match(read('docs/HANDOFF.md'), /真实名单\/历史限定验证通过/);
+  assert.match(read('docs/HANDOFF.md'), /没有真实实时群样本/);
+});
+
 test('真实 QQ 接入报告保留历史范围、窗口异常和剩余验收', () => {
   const report = read('docs/verification/integration-probes.md');
   assert.match(report, /群 52 个|52 个群/);

@@ -39,7 +39,9 @@ if (Get-Process -Name 'QQ' -ErrorAction SilentlyContinue) {
 $OutputEncoding = [Console]::OutputEncoding
 Push-Location -LiteralPath $napPackage
 try {
-    & $napLauncher $napQq $napDll $napScript
+    & (Join-Path $PSScriptRoot 'Prepare-PinnedGroups.ps1') -PackageDirectory $napPackage
+    $napPinnedScript = Join-Path $napPackage 'nativeLoaderPinned.cjs'
+    & $napLauncher $napQq $napDll $napPinnedScript
     $napExit = $LASTEXITCODE
 } finally { Pop-Location }
 exit $napExit

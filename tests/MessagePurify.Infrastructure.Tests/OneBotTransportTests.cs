@@ -30,7 +30,9 @@ public sealed class OneBotTransportTests
         Assert.Equal(1, report.RealtimeGroupMessages);
         Assert.Equal(1, report.UniqueMessages);
         Assert.Equal(1, report.PrivateEventsIgnored);
-        Assert.Equal(["get_status", "get_login_info", "get_version_info", "get_group_list", "get_group_msg_history"], server.Actions);
+        Assert.Equal(["get_status", "get_login_info", "get_version_info", "get_group_list"], server.Actions.Take(4));
+        Assert.Equal(3, server.Actions.Count(action => action == "messagepurify_get_pinned_groups"));
+        Assert.Equal(1, server.Actions.Count(action => action == "get_group_msg_history"));
         var markdown = report.ToMarkdown();
         foreach (var sentinel in new[] { "9007199254740993", "9007199254740995", "9007199254740997", "opaque-message-id", "private-body-sentinel", "private-group-sentinel", "private-nickname-sentinel", "synthetic-test-token" })
             Assert.DoesNotContain(sentinel, markdown);

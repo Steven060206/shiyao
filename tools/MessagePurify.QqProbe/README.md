@@ -2,7 +2,9 @@
 
 此工具连接已经启动并登录的本机 NapCat OneBot 11 正向 WebSocket。默认根地址 `ws://127.0.0.1:3001/`，NapCat 须配置 `messagePostFormat=array`。不连接 `/api`，该路径不会推送事件。
 
-只提供 `get_status`、`get_login_info`、`get_version_info`、`get_group_list` 和 `get_group_msg_history`。默认读取群列表中第一个群的一页历史（最多 20 条），随后监听 30 秒。选择顺序来自接口，不按群名判断是否学校群；本探针不建立课程或任务。
+只提供 `get_status`、`get_login_info`、`get_version_info`、`get_group_list`、`get_group_msg_history` 和项目的 `messagepurify_get_pinned_groups` 读取桥。只读取置顶的群聊消息：默认读取第一个置顶群的一页历史（最多 20 条），随后监听 30 秒；`--history-groups all` 只表示所有置顶群。每页及重试前、每个实时群事件解析正文前重新核对置顶状态，重连重新筛群；名单缺失、格式错误或接口失败立即停止，不回退到全群。非置顶事件直接排除，不统计消息段或保存正文；没有置顶群时不请求历史。取消置顶不清理既有事项或证据。本探针不建立课程或任务。
+
+置顶桥源码位于 `packaging/napcat/pinned-groups.mjs`，由项目 Framework 入口生成独立运行副本并注册，保留官方原文件。真实 QQ 已加载，置顶使用原生 `topFlag` 数字 0/1，校验快照成功、排序与变更列表长度一致及不足 10000 上限；缺标记或未知取值必须失败，不能根据最近会话顺序推断置顶。2026-10-11 当前规则下 52 个已加入群中只读取 9 个置顶群，两轮历史 18/18 到达日期边界、去重 341、重连 1/1、退出码 0；未观察到真实实时群事件，不替代动态置顶人工或长期验收。旧全群报告仅代表规则修改前的执行结果。
 
 在当前运行进程环境中提供 `MESSAGEPURIFY_NAPCAT_TOKEN`，工具使用 Authorization Bearer 发送它。不要把 Token 放在命令、URL、项目文档或报告里。
 

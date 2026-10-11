@@ -38,7 +38,7 @@ public sealed class ReconnectProbeTests
         Assert.Equal(["date-boundary", "date-boundary"], report.HistoryResults.Select(result => result.StopReason));
         Assert.False(server.HistoryParameters[0].TryGetProperty("message_seq", out _));
         Assert.False(server.HistoryParameters[2].TryGetProperty("message_seq", out _));
-        Assert.All(server.Actions, action => Assert.Contains(action, new[] { "get_status", "get_login_info", "get_version_info", "get_group_list", "get_group_msg_history" }));
+        Assert.All(server.Actions, action => Assert.Contains(action, new[] { "get_status", "get_login_info", "get_version_info", "get_group_list", "get_group_msg_history", "messagepurify_get_pinned_groups" }));
         var markdown = report.ToMarkdown();
         foreach (var secret in new[] { "9007199254740993", "9007199254740995", "9007199254740997", "old-session-cursor", "new-session-cursor", "private-body-sentinel", "synthetic-test-token" })
             Assert.DoesNotContain(secret, markdown);

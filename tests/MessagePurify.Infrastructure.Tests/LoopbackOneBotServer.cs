@@ -21,6 +21,9 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
     public bool EmitHistoryEvents { get; init; } = true;
     public int ConnectionCount { get; private set; }
     public Func<int, string>? AccountForConnection { get; init; }
+    public Func<int, int, (int Retcode, object? Data)>? PinnedResponder { get; set; }
+    public int PinnedReads { get; private set; }
+    public IReadOnlyList<object> EventsOnFirstPinnedRead { get; init; } = [];
     public Func<JsonElement, int, (int Retcode, object? Data)>? HistoryResponder { get; set; }
     public List<JsonElement> HistoryParameters { get; } = [];
 
@@ -68,9 +71,12 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
                 "get_login_info" => new { user_id = AccountForConnection?.Invoke(ConnectionCount) ?? "9007199254740993", nickname = "private-nickname-sentinel" },
                 "get_version_info" => new { app_name = "NapCat.Onebot", app_version = "4.0.0", protocol_version = "v11" },
                 "get_group_list" => Groups(),
+                "messagepurify_get_pinned_groups" => PinnedData(out historyRetcode),
                 "get_group_msg_history" => HistoryData(request.RootElement.GetProperty("params"), out historyRetcode),
                 _ => throw new InvalidOperationException("Unexpected write operation")
             };
+            if (action == "messagepurify_get_pinned_groups" && PinnedReads == 1)
+                foreach (var groupEvent in EventsOnFirstPinnedRead) await SendAsync(groupEvent);
             if (action == "get_group_msg_history")
             {
                 if (EmitHistoryEvents && historyRetcode == 0)
@@ -93,6 +99,20 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
     {
         group_id = GroupId(index), group_name = $"private-group-sentinel-{index + 1}"
     }).ToArray();
+
+    private object PinnedData(out int retcode)
+    {
+        PinnedReads++;
+        if (PinnedResponder is not null)
+        {
+            var response = PinnedResponder(ConnectionCount, PinnedReads);
+            retcode = response.Retcode;
+            return response.Data ?? JsonSerializer.SerializeToElement<object?>(null);
+        }
+        retcode = 0;
+        return new { self_id = AccountForConnection?.Invoke(ConnectionCount) ?? "9007199254740993",
+            group_ids = Enumerable.Range(0, Math.Max(0, GroupCount)).Select(index => new { group_id = GroupId(index) }).ToArray() };
+    }
 
     private object HistoryData(JsonElement parameters, out int retcode)
     {

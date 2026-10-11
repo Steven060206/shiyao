@@ -26,6 +26,7 @@ public static class ProbeRunner
                 report.TransportConnected = false;
                 report.AccountVerified = false;
                 report.QqOnline = null;
+                report.PinnedGroupCount = null;
                 await using var client = await OneBotClient.ConnectAsync(options.Url, accessToken, cancellationToken: session.Token);
                 report.TransportConnected = true;
                 var status = await client.GetStatusAsync(session.Token);
@@ -40,9 +41,11 @@ public static class ProbeRunner
                 report.Version = await client.GetVersionInfoAsync(session.Token);
                 var groups = await client.GetGroupListAsync(session.Token);
                 report.GroupCount = groups.Count;
+                var pinnedGroups = await client.GetPinnedGroupIdsAsync(login.AccountId, session.Token);
+                report.PinnedGroupCount = groups.Count(group => pinnedGroups.Contains(group.GroupId));
                 consuming = ConsumeAsync(client, login.AccountId, connectionIndex, report, session);
                 var groupIndex = 0;
-                foreach (var group in groups.Take(options.HistoryGroups))
+                foreach (var group in groups.Where(group => pinnedGroups.Contains(group.GroupId)).Take(options.HistoryGroups))
                 {
                     session.Token.ThrowIfCancellationRequested();
                     report.HistoryGroupsAttempted++;
@@ -87,12 +90,17 @@ public static class ProbeRunner
         {
             while (pagesRead < options.HistoryPages)
             {
+                // Check again before every page: an unpinned group must stop immediately.
+                var pinnedGroups = await client.GetPinnedGroupIdsAsync(accountId, cancellationToken);
+                if (!pinnedGroups.Contains(groupId)) { Finish("unpinned"); return; }
                 IReadOnlyList<JsonElement> page;
                 try { page = await client.GetGroupMessageHistoryAsync(groupId, cursor, options.HistoryCount, cancellationToken); }
                 catch (Exception exception) when (exception is OneBotApiException or OneBotRequestTimeoutException)
                 {
                     report.HistoryRetries++;
                     await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+                    pinnedGroups = await client.GetPinnedGroupIdsAsync(accountId, cancellationToken);
+                    if (!pinnedGroups.Contains(groupId)) { Finish("unpinned"); return; }
                     page = await client.GetGroupMessageHistoryAsync(groupId, cursor, options.HistoryCount, cancellationToken);
                 }
                 // Parse the complete page before recording it, so an account/group mismatch cannot partially pass.
@@ -119,8 +127,11 @@ public static class ProbeRunner
             }
             throw new OneBotProtocolException("history-page-limit");
         }
-        catch (OneBotProtocolException exception) when (exception.Code == "account-mismatch")
+        catch (OneBotProtocolException exception) when (exception.Code is "account-mismatch" or "pinned-state-invalid")
         { Finish(exception.Code); throw; }
+        catch (Exception exception) when (exception is OneBotApiException { Action: "messagepurify_get_pinned_groups" }
+            or OneBotRequestTimeoutException { Action: "messagepurify_get_pinned_groups" })
+        { Finish("pinned-state-unavailable"); throw; }
         catch (Exception exception) when (exception is OneBotApiException or OneBotProtocolException or OneBotRequestTimeoutException)
         {
             var failure = SafeFailure(exception) with { GroupIndex = groupIndex, ConnectionIndex = connectionIndex };
@@ -171,7 +182,12 @@ public static class ProbeRunner
                 if (type.ValueKind == JsonValueKind.String && type.GetString() == "private")
                     report.PrivateEventsIgnored++;
                 else if (type.ValueKind == JsonValueKind.String && type.GetString() == "group")
+                {
+                    var groupId = OneBotJsonId(packet, "group_id");
+                    var pinnedGroups = await client.GetPinnedGroupIdsAsync(accountId, session.Token);
+                    if (!pinnedGroups.Contains(groupId)) { report.UnpinnedGroupEventsIgnored++; continue; }
                     report.Record(OneBotMessageParser.ParseGroupMessage(packet, accountId), history: false, connectionIndex);
+                }
                 else report.OtherEvents++;
             }
         }
@@ -183,6 +199,14 @@ public static class ProbeRunner
             return false;
         }
         return true;
+    }
+
+    private static string OneBotJsonId(JsonElement packet, string name)
+    {
+        if (!packet.TryGetProperty(name, out var value)) throw new OneBotProtocolException("missing-field");
+        if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())) return value.GetString()!;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetUInt64(out _)) return value.GetRawText();
+        throw new OneBotProtocolException("invalid-id");
     }
 
     private static ProbeFailure SafeFailure(Exception exception) => exception switch
