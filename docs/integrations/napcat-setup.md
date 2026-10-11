@@ -15,7 +15,7 @@
 
 `packaging/napcat/Start-NapCat-Framework.cmd` 是显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll` 和 `nativeLoader.cjs`，不依赖 QQ 注册表。对应 PowerShell 脚本已实际启动当前 QQ `9.9.36-53644` 并自动登录，没有绕过登录或发送消息。当前 QQ 已由该入口运行，不要在已有进程上重复启动。
 
-WebUI 6099 与 OneBot `127.0.0.1:3001` 均属于同一 QQ 主进程。只读探针取得 52 个群及一群一页的 7 条历史消息；用户确认从托盘打开后聊天列表和窗口正常显示。三次限时监听未观察到实时群事件，七天补漏尚未验收；启动日志有 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证。后续启动仍先正常退出当前 QQ，再用 Framework 入口重开；这与在两个进程中双开同账号不同。
+WebUI 6099 与 OneBot `127.0.0.1:3001` 均属于同一 QQ 主进程。只读探针取得 52 个群及一群一页的 7 条历史消息；用户确认从托盘打开后聊天列表和窗口正常显示。四次限时监听（最长 300 秒）未观察到实时群事件，七天补漏尚未验收；启动日志有 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证。后续启动仍先正常退出当前 QQ，再用 Framework 入口重开；这与在两个进程中双开同账号不同。
 
 ## 可复现来源
 

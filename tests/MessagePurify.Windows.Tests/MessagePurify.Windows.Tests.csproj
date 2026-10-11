@@ -16,5 +16,6 @@
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/NotificationRoute.cs" Link="NotificationRoute.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/ProbeOptions.cs" Link="ProbeOptions.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/DesktopGeometry.cs" Link="DesktopGeometry.cs" />
+    <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/ProcessIntegrity.cs" Link="ProcessIntegrity.cs" />
   </ItemGroup>
 </Project>

@@ -56,7 +56,9 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'packaging/probe/README.md', 'packaging/probe/Install-Probe.ps1', 'packaging/probe/Run-Probe.ps1',
     'packaging/napcat/Start-NapCat.ps1', 'packaging/napcat/Start-NapCat.cmd',
     'packaging/napcat/Start-NapCat-Framework.ps1', 'packaging/napcat/Start-NapCat-Framework.cmd',
-    'tests/napcat-framework-launcher.test.mjs'
+    'tests/napcat-framework-launcher.test.mjs',
+    'src/MessagePurify.Windows/IntegrationProbe/ProcessIntegrity.cs',
+    'tests/MessagePurify.Windows.Tests/ProcessIntegrityTests.cs'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);

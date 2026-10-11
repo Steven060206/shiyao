@@ -33,7 +33,7 @@ M3 已创建 OneBot、Windows 探针和 OCR 测试项目。实际验证命令为
 node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs
 ```
 
-实际计数：Infrastructure 46 项、Windows 44 项、OCR 25 项此前通过；本轮更新文档回归后，打包/启动 Node 4 个测试文件共 19 项通过，见[集成探针记录](../docs/verification/integration-probes.md)。受控未就绪 QQ CLI 退出码 1；本轮 Framework 真实只读探针退出码 0，用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。实时群事件、完整历史补漏、非提权通知和桌面人工操作仍单独验收。
+本轮实际回归计数：Core 295、Infrastructure 46、Windows 45、OCR 25、打包/启动 Node 4 个测试文件共 19、demo 107，均通过，见[集成探针记录](../docs/verification/integration-probes.md)。受控未就绪 QQ CLI 退出码 1；本轮 Framework 四次真实只读探针退出码 0，用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。实时群事件、完整历史补漏、Windows 通知和桌面人工操作仍单独验收。
 
 需要 Node.js 22 或更新版本和 Chrome。默认使用 `C:/Program Files/Google/Chrome/Application/chrome.exe`；其他安装位置可通过环境变量 `CHROME_PATH` 指定。浏览器检查使用独立临时配置，不访问个人浏览器会话。普通测试不会覆盖预览图；仅在主动更新预览时运行 `node tests/prototype-qa.mjs --screenshots`，生成课程选择、待确认、主界面及桌面卡片的六张预览。
 

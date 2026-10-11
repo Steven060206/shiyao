@@ -1,4 +1,3 @@
-using System.Security.Principal;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
@@ -9,11 +8,7 @@ public sealed class NotificationProbe : IDisposable
     public const string SyntheticAccount = "demo-account";
     private bool registered;
 
-    public static bool IsElevated()
-    {
-        using var identity = WindowsIdentity.GetCurrent();
-        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
-    }
+    public static bool IsElevated() => ProcessIntegrity.IsElevated();
 
     public bool Register(ProbeReport report, Action<string> onInvoked)
     {
