@@ -17,7 +17,7 @@
 - 已只读检测普通 QQ 安装及进程（`D:/QQ`、版本目录 `9.9.36-53644`）。官方 Shell 入口依赖注册表而失败，已提供 `packaging/napcat/Start-NapCat.cmd` 直接指定 QQ 路径；NapCat WebUI 6099 曾返回 HTTP 200，但当前进程已退出，OneBot 3001 未启用。普通 QQ 登录不等于 OneBot 连接。当前执行会话提权，通知须在支持的非提权环境实测。Windows、OneBot、OCR 代码及探针正在实施，尚无 M3 完成结论。
 - 用户已提供真实 QQ 截图并确认六处红框中的群均为学校相关群；名称通常正规，也有非正式名称，群名只辅助候选，不能据此排除。截图是群列表和私聊界面，没有完整学校通知正文及日期；可用于真实截图 OCR，不作为通知日期提取验收。原图及识别全文仅用于本机，不写 Git。
 - 用户反馈担心接入后无法继续使用 QQ。已纠正此前关于 Shell 桌面聊天能力的说明：Shell 是无界面接管路线，同一账号不能与普通 QQ 并行登录。官方 Framework 桌面模式是待验证候选，目标是在桌面 QQ 中保留聊天并提供接口；本机尚未注入或重启 QQ，不把双开或 Framework 兼容性写成已解决。
-- M3 当前实际结果见[集成探针验证记录](verification/integration-probes.md)：Core 295、Infrastructure 46、Windows 44、OCR 25、Node 18、demo 107 均已运行通过；真实 QQ 只读探针退出 1（3001 未就绪），通知因提权 blocked，Framework 桌面聊天和桌面人工项未操作。普通 QQ 登录不作为 OneBot 连接成功，当前尚未验证 OneBot 连接。本阶段已提交 `fbef082`（M3 探针与本地 OCR）、`42c939a`（空格路径桥接实测）和 `3d87f4f`（接入边界文档）；本轮变更待提交。
+- M3 当前实际结果见[集成探针验证记录](verification/integration-probes.md)：Core 295、Infrastructure 46、Windows 44、OCR 25、Node 18、demo 107 均已运行通过；真实 QQ 只读探针退出 1（3001 未就绪），通知因提权 blocked，Framework 桌面聊天和桌面人工项未操作。普通 QQ 登录不作为 OneBot 连接成功，当前尚未验证 OneBot 连接。本阶段已提交 `fbef082`（M3 探针与本地 OCR）、`42c939a`（空格路径桥接实测）、`3d87f4f`（接入边界文档）和 `1fd1b1c`（Shell/Framework 边界与 Framework 入口准备）。
 
 ### 上轮 M2 本地规则与样本
 
