@@ -46,6 +46,7 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 - `NotificationProbe` 在 `Register()` 后读取 SDK 首次激活参数，修复冷启动点击参数没有被消费的问题。受控回归 `.tools/m3-results/cold-notification-regression-summary.json` 显示修复前 `activationObserved=false`，修复后 `activationObserved=true`、`activationKind=cold`、账号匹配；`tests/notification_cold_activation_test.py` 对正式发布产物退出码 0。
 - 2026-10-11 14:28:38 通过真实 Explorer 打开本机 `.lnk`（目标为 `pythonw.exe` 辅助脚本）重发，报告 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json` 为 `submitted`、通知 ID 36646、`error=null`、`activationObserved=false`。辅助进程无包身份，完整性 RID 8192。此运行副本包含资源修复，尚未包含冷启动修复；用户此前确认看到过提醒并点击无反应，最新一次呈现及真实点击仍等待反馈，声音未验收。
 - 冷启动回归对正式产物 `.tools/windows-probe-publish fixed/MessagePurify.Windows.IntegrationProbe.exe` 实际执行 `python tests/notification_cold_activation_test.py --executable <该产物绝对路径>`。经真实 Explorer 启动的辅助进程运行，最新 `.tools/m3-results/cold-test-result.json` 为退出码 0、PASS；直接从 Codex 运行包装脚本会继承包身份，本轮曾得到 COM `0x80080005`，随后改用实际 Explorer 重跑通过。该测试不发送通知，不能作为用户点击结果。
+- 保存修复后，14:40:56 通过真实 Explorer 使用包含冷启动修复的正式发布产物重发。最新报告 `.tools/windows-probe-publish fixed/results/normal-medium-user-resend-fixed-20261011.json` 为 `submitted`、通知 ID 36648、`error=null`、`activationObserved=false`；无包身份、完整性 RID 8192，等待点击 600 秒。该次呈现、真实点击及声音仍等待用户反馈。
 
 ## 当前 QQ 接入说明
 

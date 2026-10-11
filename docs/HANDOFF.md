@@ -32,6 +32,7 @@
 - 14:28:38 已按用户要求通过真实 Explorer `.lnk` 重发普通测试提醒，报告 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json` 为 `submitted`、ID 36646、`error=null`、`activationObserved=false`；无包身份 15700、完整性 RID 8192。用户此前已看到一条提醒但点击没有反应；最新提醒点击与声音仍未验收，运行副本尚未包含冷启动修复。直接从 Codex 运行辅助脚本继承包身份 122，会再次出现 `0x80070490`；无包身份后缺资源错误为 `0x8007007E`，两者分别定位。
 - 群历史错误诊断实际运行 `python .tools/m3-results/diagnose-group-history-errors-20261011.py`，退出码 0；状态一次、群列表一次、历史两次。报告 `.tools/m3-results/qq-history-errors-diagnosis-20261011.json` 复现一个失败样本 `retcode 1200/data=null`；成功对照返回 5 条消息。失败样本为 NapCat 对底层空历史返回接口错误，未逐群复测全部 11 个失败；仍需在正式同步中逐群展示失败并完成七天补漏策略，不修改 QQ/NapCat 客户端。
 - 保存前重新执行 Windows Release 测试，45/45、退出码 0；通过真实 Explorer 辅助进程运行正式发布产物的冷启动回归，`.tools/m3-results/cold-test-result.json` 为退出码 0、PASS。直接从 Codex 运行包装脚本的包身份环境错误已与产品回归区分；无需再次退出或登录 QQ。未找到 `maintain-context-hygiene` 技能，已人工核对交接、需求、实际源码及验证边界。
+- 通知修复、测试和文档已保存为 `bdffc7b`。14:28 测试等待结束后，14:40:56 使用包含冷启动修复的正式发布产物再次发送本机提醒；报告 `.tools/windows-probe-publish fixed/results/normal-medium-user-resend-fixed-20261011.json` 为 `submitted`、ID 36648、`error=null`，等待点击 600 秒。最新用户实际呈现、点击及声音仍待反馈；下一步直接核对该报告，不再重复登录 QQ 或无必要地发送提醒。最新文档边界断言与交付文件检查已更新，实际运行 `node --test tests/project-rules.test.mjs` 为 16/16，`git diff --check` 退出码 0。
 
 ### 上轮 M2 本地规则与样本
 
