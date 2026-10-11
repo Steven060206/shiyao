@@ -64,11 +64,32 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'src/MessagePurify.Windows/IntegrationProbe/NotificationProtocol.cs',
     'tests/MessagePurify.Windows.Tests/NotificationProtocolTests.cs',
     'tests/notification_protocol_activation_test.py',
-    'tests/desktop_attachment_test.py'
+    'tests/desktop_attachment_test.py',
+    'docs/superpowers/plans/2026-10-11-task-lifecycle.md',
+    'src/MessagePurify.Infrastructure/Tasks/TaskStoreModels.cs',
+    'src/MessagePurify.Infrastructure/Tasks/TaskLifecycleService.cs',
+    'tests/MessagePurify.Infrastructure.Tests/TaskLifecycleTests.cs'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
   }
+});
+
+test('M4 生命周期进度明确区分存储验证和消息宿主联调', () => {
+  const planFile = 'docs/superpowers/plans/2026-10-11-task-lifecycle.md';
+  for (const match of read(planFile).matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+    assert.ok(fs.existsSync(path.resolve(root, path.dirname(planFile), match[1])), `生命周期计划链接缺失：${match[1]}`);
+  }
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'tests/README.md']) {
+    const current = read(file).split('## 2.')[0];
+    assert.match(current, /生命周期/, file);
+    assert.match(current, /Infrastructure(?: Release)? \d+\/\d+/, file);
+    assert.match(current, /自动路由|自动转事项/, file);
+    assert.match(current, /真实 QQ.*(?:未完成|未.*联调|未接入|宿主联调)/, file);
+  }
+  assert.match(read(planFile), /SuggestedTime.*(?:永远|不能)/);
+  assert.match(read(planFile), /expectedTaskVersion/);
+  assert.match(read(planFile), /普通通知转换.*后续|普通通知转换.*不在本段/);
 });
 
 test('新版演示交付链接可用，保存说明与真实集成阶段一致', () => {
