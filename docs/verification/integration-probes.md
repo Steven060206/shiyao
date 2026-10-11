@@ -10,14 +10,14 @@
 | QQ 真实只读连接 | 接口和实时群事件限定范围通过 | 前四次探针接口通过、实时群消息 0；用户反馈刚收到新群消息后，13:42:06（北京时间）开始的第五次 180 秒探针实际观察到 1 条。QQ 在线、账号核对、NapCat 4.18.37 / v11、群 52 个、历史群成功 1/1、历史消息 7 条、去重后 8 条、无失败，退出码 0。实时群事件限定范围通过（观察到 1 条），不作为七天补漏或长期稳定性验收。最新脱敏报告 `.tools/m3-results/qq-framework-user-feedback.md`。 |
 | Framework 桌面模式 | 已加载，用户确认窗口正常 | 官方 v4.18.37 在 QQ `9.9.36-53644` 中实际启动，已加载 `napiloader.dll` 并自动登录；6099 与 localhost 3001 属于同一 QQ 主进程。用户从托盘打开后确认“聊天列表和窗口正常显示”。启动日志曾有 `updateWindowSizeProperties` 的 TypeError，保留问题记录；长期稳定性尚未验收。 |
 | OCR 协议与合成图 | 通过：25 项 Python | `./.tools/ocr/venv/Scripts/python.exe -m pip check` 和 `./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 均通过。真实 CPU 模型识别合成中文通知、长图日期、空白图和损坏图后继续；有限数值、代理码点 UTF-8 和离线模型回归已覆盖。 |
-| 用户 QQ 截图 OCR | 真实截图文字通过，通知日期不验收 | 本机 worker 处理用户群列表截图：55 行、6 个红框群名均识别、原图字节未变。截图没有完整学校通知正文和日期，不能证明日期提取。全文只在 `.tools/m3-results/`。 |
+| 用户 QQ 截图 OCR | 群列表与学校通知正文识别通过；日期角色需确认 | 本机 worker 离线处理用户提供的真实学校通知截图：1828×674、15 行、退出码 0、stderr 为空，关键日期行最低置信度 0.98118。识别到消息时间、学年、填写日期范围及“10月12日之前交齐”；填写范围仍按 `Ambiguous` 进入人工确认，“交齐”候选日期只作为 `SuggestedTime`。原图和完整 OCR 文本仅在 `.tools/m3-results/`。 |
 | WPF/WebView2 隐藏桥 | 通过 | 发布后运行 `Run-Probe.ps1 -Mode Bridge`；报告 `C:\Users\Administrator\AppData\Local\MessagePurify\IntegrationProbe\results\Bridge-20261010-225528.json`。本轮重新 publish 并安装到含空格路径 `.tools/m3-install space`，运行 `Run-Probe.ps1 -Mode Bridge -WaitSeconds 20` 退出码 0，报告 `.tools/m3-install space/results/Bridge-20261011-013731.json`。WebView2 `155.0.4283.45`，echo→reply→ack、secure context、特殊文字保留均通过，PNG 已核对。 |
 | Windows 通知 | 资源发布、提交及用户实际点击通过；第一版取消声音提醒 | 专用 URI 入口的普通测试提醒 ID 36649，用户确认“出现了事项窗口”；点击记录与发送 Probe ID 一致，`activationObserved=true`、`activationKind=protocol`、账号匹配、`error=null`。受控 COM 冷启动和 Shell URI 分发分别通过。静音提醒呈现及长期通知稳定性仍未验收。 |
 | 桌面卡片 | 用户基本操作通过 | 修正父窗为 `SHELLDLL_DefView`，扩大带箭头的缩放手柄并在成功时隐藏状态窗。真实发布产物挂载/样式/边界/无多余窗口/鼠标缩放回归通过；用户确认 Win+D 可见、拖动和缩放正常、没有白色窗口、不会覆盖其他软件。多屏、Explorer 重启、睡眠恢复及布局持久化未验收。 |
 
 ## 代码和自动化验证
 
-- Core Release：295/295。
+- Core Release：296/296。
 - Infrastructure Release：46/46。
 - Windows 参数/桥/通知路由/桌面几何及真实令牌完整性：本次 Release 57/57，退出码 0；IntegrationProbe 自包含 `win-x64` publish 退出码 0。此前权限修正阶段为 45/45。
 - OCR：25/25，使用项目隔离解释器运行；`./.tools/ocr/venv/Scripts/python.exe -m pip check` 无坏依赖。
@@ -26,7 +26,7 @@
 - `tests/notification_cold_activation_test.py`：正式自包含发布产物受控 COM 冷启动回归退出码 0，输出 `PASS: cold COM callback located the synthetic account and item.`；受控回调不是用户点击验收。
 - `git diff --check`：退出码 0（仅显示工作区换行提示）。
 
-QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，再定位并修复自包含发布缺少官方通知资源的问题。本轮已重跑 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 21、demo 107，全部通过；该阶段受控冷启动回调通过；本次专用 URI 修复后的用户实际点击通过，声音验收已取消，所有未人工操作的 M3 项仍保持未验收。
+QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，再定位并修复自包含发布缺少官方通知资源的问题。本轮此前已重跑 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 21、demo 107，全部通过；本次学校通知 OCR 与“交齐”规则补充后，Core 为 296/296，OCR 仍为 25/25；受控冷启动回调通过；专用 URI 修复后的用户实际点击通过，声音验收已取消，正式任务生成、日期人工确认、提醒投递和其他未人工操作的 M3 项仍保持未验收。
 
 本轮回归实际执行：三个测试项目的 `.tools/dotnet/dotnet.exe test tests/<项目> --no-restore --configuration Release`，OCR 的 pip check / unittest discover，四文件 Node 测试及 `node tests/prototype-qa.mjs`。Infrastructure 初次构建因正在监听的 QQ 探针锁住运行目录 DLL 而退出码 1；先用同项目 `--no-build --no-restore --configuration Release` 验证 46 项，退出码 0。300 秒监听正常结束后，复跑 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release`，构建与 46 项均通过、退出码 0；没有关闭 QQ。
 
@@ -75,7 +75,7 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 - 最终当前用户安装命令 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-desktop-grip-fixed` 退出码 0，安装 DLL SHA256 与发布一致。已打开 `--interactive-desktop --wait-seconds 600 --report .tools/m3-results/desktop-grip-fixed-20261011.json`，父窗 `SHELLDLL_DefView`、DPI 120、`error=null`；捕获 `desktop-grip-fixed-render-20261011.png` 已检查，箭头可见。
 - 用户确认“缩放正常，也没有白色窗口”，随后确认“正常，不会盖住其他软件”。结合此前“看到了，拖动正常”，基本人工项（Win+D 可见、拖动、缩放、普通软件遮挡、无多余状态窗）通过。自动报告的 `manualChecks` 保持模板 `notTested`，本节单独记录真实用户反馈。
 - 本轮完整自动回归 Core Release 295/295、Infrastructure Release 46/46、Windows Release 57/57、OCR `pip check` 与 unittest 25/25、四文件 Node 22/22、demo 108 项，均退出码 0。手柄及状态窗追加修正后，Windows 57/57 和真实鼠标回归再次通过；未重新运行未改动的 Core/Infrastructure/OCR/demo。
-- 多屏/DPI 切换、Explorer 重启、睡眠恢复、布局持久化、长期稳定性尚未验收。学校通知日期 OCR、静音呈现和七天补漏仍待验证，正式应用尚未接入探针；M3 仍为“正在实施”。
+- 多屏/DPI 切换、Explorer 重启、睡眠恢复、布局持久化、长期稳定性尚未验收。学校通知正文 OCR 已通过，但日期角色人工确认、正式任务生成、静音呈现和七天补漏仍待验证，正式应用尚未接入探针；M3 仍为“正在实施”。
 
 ## 当前 QQ 接入说明
 

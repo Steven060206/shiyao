@@ -156,7 +156,7 @@ public static class MessageRuleExtractor
         if (Match(text, "延期|延后|推迟|延至|改到|调整到")) return RuleAction.Postpone;
         if (Match(text, "补交|重新(?:提交|交|做)|重交|补做|新增要求|新要求|还需|追加|再交")) return RuleAction.NewRequirement;
         if (Match(text, "催交|提醒.*(?:交|提交)|尚未.*(?:交|提交)|还没.*交|尽快.*(?:交|提交)")) return RuleAction.Remind;
-        if (Match(text, "提交|上交|交.{0,12}(?:作业|报告|论文|实验|材料|表|文件|习题|笔记|总结)|(?:作业|报告|论文|练习|材料).*(?:截止|交)|交第|交费|缴费|缴纳|上传|递交")) return RuleAction.Submit;
+        if (Match(text, "提交|上交|交齐|交.{0,12}(?:作业|报告|论文|实验|材料|表|文件|习题|笔记|总结)|(?:作业|报告|论文|练习|材料).*(?:截止|交)|交第|交费|缴费|缴纳|上传|递交")) return RuleAction.Submit;
         if (Match(text, "完成|做.*(?:作业|习题|练习)|写.*(?:作业|报告|论文)")) return RuleAction.Complete;
         if (Match(text, "报名|登记|填报")) return RuleAction.Register;
         if (Match(text, "考试|测验|签到|参加|活动.*(?:开始|举行)|开会|集合|讲座.*(?:开始|举行)|比赛.*(?:开始|举行)")) return RuleAction.Attend;

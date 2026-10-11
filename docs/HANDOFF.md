@@ -6,7 +6,7 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；通知权限修正阶段完整回归为 Core 295/295、Infrastructure 46/46、Windows 45/45、OCR 25/25、Node 21/21、demo 107 项。Windows App SDK 通知资源发布和冷启动参数消费已修正；本次通知探针改用专用 URI 入口，用户实际点击通过，已确认出现事项窗口，程序记录与发送 Probe ID 一致。Windows Release 57/57；声音提醒已取消，静音提醒呈现和长期通知稳定性仍未验收。Framework 已加载并自动登录，真实 OneBot 只读接口及实时群事件限定范围通过（观察到 1 条）；用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。普通 QQ 登录不作为 OneBot 连接成功；桌面卡片基本人工项已由用户确认通过；完整历史补漏、长期稳定性和桌面恢复/多屏仍未验收，正式应用尚未接入探针能力。**
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；通知权限修正阶段完整回归为 Core 295/295、Infrastructure 46/46、Windows 45/45、OCR 25/25、Node 21/21、demo 107 项；本次学校通知 OCR 与“交齐”规则补充后当前 Core 为 296/296。Windows App SDK 通知资源发布和冷启动参数消费已修正；本次通知探针改用专用 URI 入口，用户实际点击通过，已确认出现事项窗口，程序记录与发送 Probe ID 一致。Windows Release 57/57；声音提醒已取消，静音提醒呈现和长期通知稳定性仍未验收。Framework 已加载并自动登录，真实 OneBot 只读接口及实时群事件限定范围通过（观察到 1 条）；真实学校通知截图的离线 OCR 正文识别通过，日期角色仍需人工确认；用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。普通 QQ 登录不作为 OneBot 连接成功；桌面卡片基本人工项已由用户确认通过；完整历史补漏、长期稳定性和桌面恢复/多屏仍未验收，正式应用尚未接入探针能力。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`；NapCat Shell 与 Framework 的显式路径启动准备位于 `packaging/napcat/`，对应路径回归在 `tests/napcat-launcher.test.mjs` 和 `tests/napcat-framework-launcher.test.mjs`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。没有注册正式自启动；桌面基本操作通过，静音提醒呈现、长期稳定性及桌面恢复/多屏仍未验收；声音提醒已取消。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
@@ -20,8 +20,16 @@
 - 用户确认父窗修复版“看到了，拖动正常”，随后反馈“无法缩放，只能拖动位置”，且白色状态窗伴随卡片显示。实际鼠标诊断发现：在原 18 DIP 小灰块内拖动，尺寸从 850×375 变为 910×405，位置不变；离右下角 30 像素的区域拖动，大小没有变化。扩大手柄至 32 DIP，增加“↘”箭头及缩放提示；成功挂载时不再显示状态窗，失败处理入口保留。
 - 扩展真实发布产物回归：成功挂载不能有可见的顶层状态窗；`--mouse` 在扩大后的手柄区域实际拖动，验证宽高分别增加 60/30 物理像素且左上角不变，并恢复指针。原版成功状态窗回归退出码 1；最终 `.tools/windows-probe-desktop-grip-fixed` 的 `python tests/desktop_attachment_test.py --executable .tools/windows-probe-desktop-grip-fixed/MessagePurify.Windows.IntegrationProbe.exe --mouse` 退出码 0。鼠标回归前短暂 `Shell.Application.MinimizeAll()`，结束后 `UndoMinimizeALL()`，未操作 QQ 消息。
 - 最终 Release publish 与当前用户安装退出码 0，安装 DLL SHA256 与发布一致。最新运行报告 `.tools/m3-results/desktop-grip-fixed-20261011.json`，捕获 `desktop-grip-fixed-render-20261011.png` 显示箭头。用户确认“缩放正常，也没有白色窗口”，随后确认“正常，不会盖住其他软件”。桌面基本人工项（Win+D 可见、拖动、缩放、普通窗口遮挡及无多余状态窗）通过；程序报告的 `manualChecks` 是自动模板，用户验收以本段反馈为准。
-- 实际完整回归：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release` 295/295、同参数 Infrastructure 46/46、Windows 57/57，OCR `pip check` 与 unittest 25/25、四文件 Node 22/22、`node tests/prototype-qa.mjs` 108 项，均退出码 0。后续手柄与状态窗只改 Windows 探针及说明，Windows 57/57 和真实鼠标回归再次通过。多屏、Explorer 重启、睡眠恢复、布局持久化和长期稳定性未验收，M3 继续实施；下一步学校通知日期 OCR、静音呈现及剩余稳定性/补漏验证。
+- 桌面修复阶段实际完整回归：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release` 295/295、同参数 Infrastructure 46/46、Windows 57/57，OCR `pip check` 与 unittest 25/25、四文件 Node 22/22、`node tests/prototype-qa.mjs` 108 项，均退出码 0。后续手柄与状态窗只改 Windows 探针及说明，Windows 57/57 和真实鼠标回归再次通过。多屏、Explorer 重启、睡眠恢复、布局持久化和长期稳定性未验收，M3 继续实施；下一步静音呈现、学校通知日期角色确认及剩余稳定性/补漏验证。
 - 已按项目规则人工核对需求、交接、源码、报告和剩余验收范围；本机仍未找到 `maintain-context-hygiene` 技能，没有为缩短上下文删除文件或改无关文档。
+
+### 本次学校通知截图 OCR 实测与“交齐”规则补充
+
+- 用户提供一张真实学校群通知截图（原图只保存在本机临时目录，不写 Git）。使用项目本地 RapidOCR worker 离线处理，图片 1828×674，识别 15 行，退出码 0，stderr 为空；原图未改写，网络 guard 未发现连接尝试。关键日期行最低置信度 0.98118，截图消息时间识别为 `2026/09/26 12:43`。
+- OCR 正确识别出 2025-2026 学年、填写日期范围 9 月 26 日至 10 月 16 日，以及“10 月 12 日之前交齐”的截止表达。日期角色不相同：消息时间是元数据，9 月 26 日至 10 月 16 日是表格落款范围，不应直接作为提醒；“10 月 12 日之前交齐”才是提交候选。
+- 真实 OCR 的完整日期角色仍需确认：日期范围按 `MessageDateParser` 返回 `Ambiguous`；OCR 图片中的日期只能作为 `SuggestedTime`，不能直接建立正式提醒。原图及完整 OCR 文本仅在 `.tools/m3-results/user-school-notice-ocr*.{jsonl,txt,json}` 留存，交付文档不写姓名、QQ 号或全文。
+- 这次实测暴露规则缺口：`GetAction` 原先不识别“交齐”，导致整图不能形成待确认候选。已补充 `交齐` 为提交动作，并新增脱敏回归 `ImageNoticeWithSubmitAllByDeadlineKeepsDateAsSuggestion`：单独 OCR 行得到 `Submit/Pending`，建议日期为 2026-10-12、正式时间为空，仍要求查看原图确认。没有把该截图直接写入测试。
+- 实际回归：OCR `pip check` 与 `unittest` 25/25，新增后 Core Release 296/296，四文件 Node 22/22；原图 OCR 运行报告为 `.tools/m3-results/user-school-notice-ocr-summary.json`。这证明本地 OCR 和动作/建议日期边界，不证明正式应用已完成学校通知任务生成、日期人工确认或提醒投递。
 
 ### 本次取消声音提醒
 
@@ -37,7 +45,7 @@
 - 已只读检测普通 QQ 安装及进程（`D:/QQ`、版本目录 `9.9.36-53644`）。官方 Shell 入口依赖注册表而失败，已提供 `packaging/napcat/Start-NapCat.cmd` 直接指定 QQ 路径。用户确认退出普通 QQ 后，本轮启动 Framework 并自动登录；QQ 主进程加载 `napiloader.dll`，WebUI 6099 与 OneBot 3001 已监听。普通 QQ 登录不等于 OneBot 连接，实际只读连接结果单独记录。当前执行会话提权，通知须在支持的非提权环境实测；尚无 M3 完成结论。
 - 用户已提供真实 QQ 截图并确认六处红框中的群均为学校相关群；名称通常正规，也有非正式名称，群名只辅助候选，不能据此排除。截图是群列表和私聊界面，没有完整学校通知正文及日期；可用于真实截图 OCR，不作为通知日期提取验收。原图及识别全文仅用于本机，不写 Git。
 - 用户反馈担心接入后无法继续使用 QQ。已纠正此前关于 Shell 桌面聊天能力的说明：Shell 是无界面接管路线，同一账号不能与普通 QQ 并行登录。Framework 本轮已实际加载，用户从托盘打开后确认“聊天列表和窗口正常显示”；窗口打开期间同一进程的只读接口复测通过。启动日志曾出现 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证；没有确认的窗口显示故障，不盲目替换加载器或重新登录。
-- M3 当前实际结果见[集成探针验证记录](verification/integration-probes.md)：本轮自动回归 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 21、demo 107 均通过。前四次真实只读探针分别监听 30、60、60、300 秒，四次均退出码 0；群 52 个、历史成功 1/1、历史消息 7 条、实时群消息 0 条。第五次 180 秒探针实际收到 1 条实时群消息，退出码 0。不把接口通过替代实时接收、七天补漏、正式任务生成或 M3 完成。高完整性进程按预期阻止通知；发布时补齐官方资源后，独立中等完整性进程注册并提交测试提醒成功。当时用户点击未观察到激活回调；本次专用 URI 修复后的用户实际点击通过，桌面卡片人工项仍待操作。本阶段已有提交 `fbef082`、`42c939a`、`3d87f4f`、`1fd1b1c`、`f980c51` 和 `4128526`。
+- M3 当前实际结果见[集成探针验证记录](verification/integration-probes.md)：本轮自动回归 Core 296、Infrastructure 46、Windows 45、OCR 25、Node 21、demo 107 均通过。前四次真实只读探针分别监听 30、60、60、300 秒，四次均退出码 0；群 52 个、历史成功 1/1、历史消息 7 条、实时群消息 0 条。第五次 180 秒探针实际收到 1 条实时群消息，退出码 0。不把接口通过替代实时接收、七天补漏、正式任务生成、日期人工确认或 M3 完成。高完整性进程按预期阻止通知；发布时补齐官方资源后，独立中等完整性进程注册并提交测试提醒成功。当时用户点击未观察到激活回调；本次专用 URI 修复后的用户实际点击通过，桌面卡片人工项已基本通过，仍未验收多屏、恢复和长期稳定性。本阶段已有提交 `fbef082`、`42c939a`、`3d87f4f`、`1fd1b1c`、`f980c51` 和 `4128526`。
 - 本轮启动入口为 `packaging/napcat/Start-NapCat-Framework.ps1`，实际探针运行 `.tools/dotnet/dotnet.exe tools/MessagePurify.QqProbe/bin/Release/net10.0/MessagePurify.QqProbe.dll --listen-seconds 30 --output .tools/m3-results/qq-framework-current.md`，随后以 60 秒输出 `qq-framework-events.md`、`qq-framework-desktop-open.md`，均退出码 0。原始日志、配置备份和脱敏报告只在 `.tools/m3-results/`；Token 只保存在本机配置和子进程环境，不写入文档或 Git。
 - 本轮更新文档回归：初次运行四文件 Node 测试 18/19，通过结果报告缺少明确“实时群事件尚未验收”正文而失败；补齐范围后重跑 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，19/19、退出码 0，`git diff --check` 退出码 0。本轮未改产品代码，也未重跑此前 Core/Infrastructure/Windows/OCR/demo 套件。已人工核对需求、设计、交接、报告和本机实际状态；下一步继续实时群事件与 M3 剩余人工验收。
 - 上述接入检查已保存为 `4128526`。随后继续 Windows 通知验证，发现原权限检测只判断管理员组，不能识别 Basic User 进程仍保持高完整性；新增 `ProcessIntegrity.cs` 改为查询真实令牌完整性，并新增独立 `whoami` 回归，Windows 45/45、Release publish 和当前用户安装退出码 0。Basic User 复跑正确返回 `blockedElevated`；当时独立进程降到中等完整性后仍返回 `0x80070490`、没有通知 ID。后续已分别定位包身份与资源缺失并成功提交，见下文；未改系统策略或 QQ 进程。
@@ -60,7 +68,7 @@
 - 新增 `src/MessagePurify.Windows/IntegrationProbe/NotificationProtocol.cs`，以当前用户注册的 `messagepurify-probe` URI 打开合成事项；严格校验字段，点击只显示详情，不注册或发送通知、不读取 QQ。发送与点击报告使用同一 Probe ID，声音意图与静音载荷保留。新增 `tests/MessagePurify.Windows.Tests/NotificationProtocolTests.cs`、`tests/notification_protocol_activation_test.py`；受控 Shell 分发与实际通知点击分开记录。
 - 14:52:34 发送的普通测试提醒为 ID 36649，发送报告 `.tools/windows-probe-protocol/results/normal-protocol.json`；用户回答“出现了事项窗口”。14:54:38 的 `%LOCALAPPDATA%/MessagePurify/IntegrationProbe/results/protocol-*.json` 点击记录与发送 Probe ID 一致，`activationObserved=true`、`activationKind=protocol`、账号匹配、`error=null`。用户实际点击通过，不再等待同一项反馈。
 - 实际运行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release`，57/57、退出码 0；发布 `.tools/windows-probe-protocol-final` 退出码 0。`python tests/notification_protocol_activation_test.py --executable .tools/windows-probe-protocol/MessagePurify.Windows.IntegrationProbe.exe` 退出码 0，受控报告使用 `controlled-shell-` Probe ID；带 `-Embedding` 的最终产物受控 COM 回归 `.tools/m3-results/cold-protocol-final-test-result.json` 为退出码 0、PASS。
-- 实际通知运行副本为 `.tools/windows-probe-protocol/`，最终发布产物为 `.tools/windows-probe-protocol-final/`；执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-protocol-final` 更新当前用户安装，退出码 0，安装 DLL 的 SHA256 与发布一致，没有覆盖仍打开的事项窗口。当前用户协议注册仍指向实际通知运行副本，后续从新的安装入口发送会重新注册到对应可执行文件。声音验收已取消；静音提醒呈现、桌面人工项、学校通知日期 OCR、长期稳定性及七天补漏仍未验收；M3 继续实施。
+- 实际通知运行副本为 `.tools/windows-probe-protocol/`，最终发布产物为 `.tools/windows-probe-protocol-final/`；执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-protocol-final` 更新当前用户安装，退出码 0，安装 DLL 的 SHA256 与发布一致，没有覆盖仍打开的事项窗口。当前用户协议注册仍指向实际通知运行副本，后续从新的安装入口发送会重新注册到对应可执行文件。声音验收已取消；静音提醒呈现、桌面人工项、学校通知日期角色人工确认、正式任务生成、长期稳定性及七天补漏仍未验收；M3 继续实施。
 - 本次四文件 Node 回归初跑 20/21：文档断言要求同一行明确“受控检查不替代实际点击”，更新后的说明分散在两行；补齐说明后实际重跑 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，21/21、退出码 0。本次没有重跑未改动的 Core、Infrastructure、OCR 和 demo 套件；已人工核对当前需求、设计、交接、源码、报告及剩余验收一致，未找到的 `maintain-context-hygiene` 技能继续以项目规定的人工核对替代。
 
 ### 上轮 M2 本地规则与样本
@@ -243,7 +251,7 @@
 
 ### 图片
 
-- 已同意以 **RapidOCR** 作为本地图片文字识别方案；本机已安装隔离运行环境并完成 25 项回归和用户群列表截图识别。截图缺少完整通知正文与日期，通知日期提取仍未验收。
+- 已同意以 **RapidOCR** 作为本地图片文字识别方案；本机已安装隔离运行环境并完成 25 项回归、用户群列表截图识别和真实学校通知截图识别。通知正文文字、位置和置信度通过；日期范围与“交齐”截止的角色仍需人工确认，正式任务生成和提醒投递未验收。
 - 文字消息完整时，原图及 OCR 文字作为辅助信息加入事项详情。
 - 文字消息缺少完整时间或其他关键信息时进入待确认；用户查看原图/OCR 后手动填写。
 - **图片中的日期经用户确认后才能用于提醒**；OCR 不能自动覆盖或确立正式截止时间。
@@ -336,7 +344,7 @@
 4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态决定与本地来源／目标候选已测试；真实发布者关系获取、记录保存和通知尚未实现。
 5. **下一步：M3 真实 Windows、QQ、OCR 与通知小规模验证**。M1、M2 已完成；M2 的合成样本基线只用于可重复回归，不代表真实独立 QQ 样本已验收。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
 6. 数据模型、SQLite、正式提醒调度、数据保留和正式打包已有开发者方案，见设计稿；尚未完成。消息桥、OCR 进程通信和探针打包已有 M3 实现与验证。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
-7. NapCat 真实只读连接、一群一页历史及实时群事件限定范围通过（观察到 1 条）；七天补漏、接收稳定性、本地规则真实样本误判/漏判、学校通知日期 OCR、桌面宿主层级、静音通知呈现仍须真实验证；当前通知探针的用户实际点击通过，正式应用通知能力尚未接入。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
+7. NapCat 真实只读连接、一群一页历史及实时群事件限定范围通过（观察到 1 条）；学校通知正文 OCR 已通过，但日期角色人工确认、正式任务生成、七天补漏、接收稳定性、本地规则真实样本误判/漏判、桌面宿主层级和静音通知呈现仍须真实验证；当前通知探针的用户实际点击通过，正式应用通知能力尚未接入。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
 8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。Framework 已在本机 QQ 加载并自动登录，用户确认聊天列表和窗口正常显示；实时群事件限定范围通过（观察到 1 条），长期稳定性尚未验证。
 9. 安静时段已明确延期：Windows 第一版只保留“暂未启用”的设置入口，具体时间及自动静音行为留待未来若规划手机版时再讨论；手机版开发尚未确定。
 10. **2026-10-10 七项复核补充已并入设计（需求已确认，M1 仅完成相关核心决定，端到端流程尚未实现）**：
@@ -440,5 +448,6 @@
 | 2026-10-11 | 收到真实群事件并明确 QQ 只读边界 | 用户反馈新群消息后，第五次 180 秒探针收到 1 条、历史 7 条、退出码 0；历史诊断 52 群中 41 成功、11 失败，原因待查。用户询问是否会发群消息，已核对没有发送接口调用，需求明确只读及本机 Windows 提醒。相关文档和测试同步，Node 20/20、OneBotTransportTests 5/5 通过；长期稳定性、七天补漏及 M3 人工项仍未验收 |
 | 2026-10-11 | 通知资源发布、冷启动回调修复及用户要求重发 | 发布补齐匹配 SDK 官方资源并拒绝缺资源安装；冷启动读取 SDK 首次参数，受控 COM 正式产物回归退出 0，Windows 45/45、四文件 Node 21/21。14:28:38 本机提醒提交 ID 36646，实际点击和声音仍待用户反馈；QQ 只读。历史只复测一个失败样本及一个对照，定位空历史错误，不代表七天补漏通过 |
 | 2026-10-11 | 修复通知点击入口，用户确认出现事项窗口 | 探针改用专用 URI 打开合成事项，并补齐 Windows COM 的 `-Embedding` 参数处理；14:52:34 提醒 ID 36649 的实际点击记录与发送 Probe ID 一致，用户实际点击通过。Windows 57/57、Node 21/21、Release 发布、当前用户安装及受控 Shell/COM 回归通过；声音、静音呈现、桌面人工项、长期稳定性及七天补漏未验收，M3 继续实施 |
+| 2026-10-11 | 完成真实学校通知截图 OCR 实测并补齐“交齐”规则 | 本地 RapidOCR 离线识别真实通知截图 15 行、退出码 0、stderr 为空，正文文字、位置和置信度通过；识别出的填写日期范围进入人工确认，“10月12日之前交齐”作为提交候选，图片日期只保存为 `SuggestedTime`。新增脱敏 Core 回归，Core Release 296/296、OCR 25/25、四文件 Node 22/22 通过；正式任务生成、日期人工确认及提醒投递仍未验收，原图和全文未入 Git |
 | 2026-10-11 | 用户取消声音提醒，第一版统一静音 | 替代此前按任务类别播放声音及声音总开关的规则；demo 删除开关并清理旧声音偏好，通知载荷固定静音，声音验收项移除。Windows 57/57、Node 22/22、浏览器 108 项及 Release 发布/当前用户安装通过；静音呈现和 M3 其余人工项仍未验收 |
 | 2026-10-11 | 修复桌面卡片不可见、缩放手柄不明显及多余状态窗 | 父窗改为 `SHELLDLL_DefView`，扩大右下角箭头手柄，成功时隐藏状态窗；真实产物/鼠标回归通过。用户确认可见、拖动和缩放正常、无白色窗口、不覆盖其他软件，基本桌面人工项通过；完整自动回归及最终 Windows 57/57、发布/安装通过。多屏、Explorer 重启、睡眠恢复和布局持久化未验收，M3 继续实施 |
