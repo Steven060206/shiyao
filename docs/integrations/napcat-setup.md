@@ -1,6 +1,6 @@
 # NapCat 本机接入准备
 
-当前已准备官方 **v4.18.37 Shell** 和 **Framework** 包。Shell 是无界面接管路线；同一账号不能同时登录普通桌面 QQ 和 Shell，不能据此承诺仍有可聊天的 QQ 窗口。Framework 是官方桌面模式候选，目标是在桌面 QQ 进程中加载 NapCat 并保留聊天；本机尚未执行注入，不能把桌面聊天和 OneBot 同时工作记为已通过。
+当前已准备官方 **v4.18.37 Shell** 和 **Framework** 包。Shell 是无界面接管路线；同一账号不能同时登录普通桌面 QQ 和 Shell，不能据此承诺仍有可聊天的 QQ 窗口。本机已通过 Framework 在桌面 QQ 进程中加载 NapCat 并自动登录，真实 OneBot 只读接口限定范围通过；用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。实时群事件及长期稳定性尚未验证。
 
 ## 在这台电脑启动
 
@@ -9,11 +9,13 @@
 3. 打开控制台显示的本机 WebUI 地址，在网络配置添加“WebSocket 服务端”：启用，Host `127.0.0.1`，Port `3001`，消息格式 `array`，设置 Token，关闭 debug。保存后保持 NapCat 运行。
 4. 本项目只读探针连接 `ws://127.0.0.1:3001/`，Token 通过 `MESSAGEPURIFY_NAPCAT_TOKEN` 环境变量传入。不把 Token 放入 URL、聊天、Git 或验证报告。
 
-本轮未改动 `D:/QQ` 文件。官方 Shell 入口因注册表缺失失败；替代 Shell 入口已通过 `-CheckOnly` 路径与依赖验证。用户曾扫码，但 NapCat 返回同一账号已在普通 QQ 登录；之后进程已退出，当前不能记录为 OneBot 已接入。Framework 包已下载并核对当前 QQ 版本映射，但尚未安装、注入或重启 QQ。
+未改动 `D:/QQ` 文件。官方 Shell 入口因注册表缺失失败；替代 Shell 入口已通过 `-CheckOnly` 路径与依赖验证。此前 Shell 因同账号已在普通 QQ 登录而未完成接入，随后退出；本轮用户确认退出普通 QQ 后，通过 Framework 自动登录并完成只读接口探针，不需要重复扫码。
 
-## Framework 桌面模式（待实测）
+## Framework 桌面模式（已启动，继续验收）
 
-`packaging/napcat/Start-NapCat-Framework.cmd` 是已准备的显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll` 和 `nativeLoader.cjs`，不依赖 QQ 注册表。它只完成启动准备，不绕过 QQ 登录，也不发送消息。执行前需要关闭当前 QQ 并允许 QQ 重启；在得到真实桌面操作结果前，不要把它当作已经兼容本机环境。
+`packaging/napcat/Start-NapCat-Framework.cmd` 是显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll` 和 `nativeLoader.cjs`，不依赖 QQ 注册表。对应 PowerShell 脚本已实际启动当前 QQ `9.9.36-53644` 并自动登录，没有绕过登录或发送消息。当前 QQ 已由该入口运行，不要在已有进程上重复启动。
+
+WebUI 6099 与 OneBot `127.0.0.1:3001` 均属于同一 QQ 主进程。只读探针取得 52 个群及一群一页的 7 条历史消息；用户确认从托盘打开后聊天列表和窗口正常显示。三次限时监听未观察到实时群事件，七天补漏尚未验收；启动日志有 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证。后续启动仍先正常退出当前 QQ，再用 Framework 入口重开；这与在两个进程中双开同账号不同。
 
 ## 可复现来源
 
