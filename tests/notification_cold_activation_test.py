@@ -53,7 +53,7 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix='message-purify-cold-') as temporary:
             report_path = Path(temporary) / 'cold.json'
-            process = subprocess.Popen([str(executable), '----AppNotificationActivated:',
+            process = subprocess.Popen([str(executable), '----AppNotificationActivated:', '-Embedding',
                 '--wait-seconds', '15', '--report', str(report_path)])
             deadline = time.monotonic() + 10
             registered = None

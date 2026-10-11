@@ -1,5 +1,4 @@
 using Microsoft.Windows.AppNotifications;
-using Microsoft.Windows.AppNotifications.Builder;
 using Microsoft.Windows.AppLifecycle;
 
 namespace MessagePurify.Windows.IntegrationProbe;
@@ -41,17 +40,14 @@ public sealed class NotificationProbe : IDisposable
             return;
         }
         var probeId = Guid.NewGuid().ToString("N");
-        var builder = new AppNotificationBuilder()
-            .AddArgument("action", "view")
-            .AddArgument("account", SyntheticAccount)
-            .AddArgument("item", "demo-item")
-            .AddArgument("probe", probeId)
-            .SetGroup("integration-demo-account")
-            .SetTag("probe-" + mode)
-            .AddText("消息提纯：集成测试提醒")
-            .AddText("合成内容。点击验证账号与事项定位。");
-        if (mode == "silent") builder.MuteAudio();
-        var notification = builder.BuildNotification();
+        NotificationProtocol.Register();
+        var notification = new AppNotification(NotificationProtocol.BuildPayload(
+            new(SyntheticAccount, "demo-item", probeId), mode == "silent"))
+        {
+            Group = "integration-demo-account", Tag = "probe-" + mode
+        };
+        report.NotificationActivationTransport = "protocol";
+        report.NotificationProbeId = probeId;
         report.NotificationStatus = "submitting";
         AppNotificationManager.Default.Show(notification);
         report.NotificationId = notification.Id;

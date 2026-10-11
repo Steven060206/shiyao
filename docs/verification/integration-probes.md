@@ -12,21 +12,21 @@
 | OCR 协议与合成图 | 通过：25 项 Python | `./.tools/ocr/venv/Scripts/python.exe -m pip check` 和 `./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 均通过。真实 CPU 模型识别合成中文通知、长图日期、空白图和损坏图后继续；有限数值、代理码点 UTF-8 和离线模型回归已覆盖。 |
 | 用户 QQ 截图 OCR | 真实截图文字通过，通知日期不验收 | 本机 worker 处理用户群列表截图：55 行、6 个红框群名均识别、原图字节未变。截图没有完整学校通知正文和日期，不能证明日期提取。全文只在 `.tools/m3-results/`。 |
 | WPF/WebView2 隐藏桥 | 通过 | 发布后运行 `Run-Probe.ps1 -Mode Bridge`；报告 `C:\Users\Administrator\AppData\Local\MessagePurify\IntegrationProbe\results\Bridge-20261010-225528.json`。本轮重新 publish 并安装到含空格路径 `.tools/m3-install space`，运行 `Run-Probe.ps1 -Mode Bridge -WaitSeconds 20` 退出码 0，报告 `.tools/m3-install space/results/Bridge-20261011-013731.json`。WebView2 `155.0.4283.45`，echo→reply→ack、secure context、特殊文字保留均通过，PNG 已核对。 |
-| Windows 通知 | 资源发布与提交通过；用户点击/声音未验收 | 高完整性进程仍返回 `blockedElevated`，符合 SDK 约束。补齐 `Microsoft.WindowsAppRuntime.Insights.Resource.dll` 后，独立中等完整性进程可注册并提交普通测试提醒；用户已看到过一条提醒但点击没有反应，最新重发报告 `activationObserved=false`。受控 COM 冷启动回归已通过（`activationObserved=true`、`activationKind=cold`、账号匹配），只证明回调路由，不替代用户实际呈现、声音或点击验收。 |
+| Windows 通知 | 资源发布、提交及用户实际点击通过；声音未验收 | 专用 URI 入口的普通测试提醒 ID 36649，用户确认“出现了事项窗口”；点击记录与发送 Probe ID 一致，`activationObserved=true`、`activationKind=protocol`、账号匹配、`error=null`。受控 COM 冷启动和 Shell URI 分发分别通过。声音、静音提醒呈现及长期通知稳定性仍未验收。 |
 | 桌面卡片 | 未完成人工操作 | WPF 产物、父窗/DPI/样式及拖动几何测试通过；未执行 Win+D、遮挡、鼠标拖动/缩放、多屏、Explorer 重启或睡眠恢复人工验收。 |
 
 ## 代码和自动化验证
 
 - Core Release：295/295。
 - Infrastructure Release：46/46。
-- Windows 参数/桥/通知路由/桌面几何及真实令牌完整性：45/45；本轮重新 test、IntegrationProbe 自包含 `win-x64` publish、安装均退出码 0。
+- Windows 参数/桥/通知路由/桌面几何及真实令牌完整性：本次 Release 57/57，退出码 0；IntegrationProbe 自包含 `win-x64` publish 退出码 0。此前权限修正阶段为 45/45。
 - OCR：25/25，使用项目隔离解释器运行；`./.tools/ocr/venv/Scripts/python.exe -m pip check` 无坏依赖。
 - Node 文档、NapCat 启动路径和当前用户探针打包：本轮运行四文件命令，21/21、退出码 0；其中打包测试覆盖官方通知资源提取、缺资源拒绝安装、重复安装和路径空格。
 - demo 浏览器：107 项。
 - `tests/notification_cold_activation_test.py`：正式自包含发布产物受控 COM 冷启动回归退出码 0，输出 `PASS: cold COM callback located the synthetic account and item.`；受控回调不是用户点击验收。
 - `git diff --check`：退出码 0（仅显示工作区换行提示）。
 
-QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，再定位并修复自包含发布缺少官方通知资源的问题。本轮已重跑 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 21、demo 107，全部通过；受控冷启动回调通过，用户实际点击、声音和所有未人工操作的 M3 项仍保持未验收。
+QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，再定位并修复自包含发布缺少官方通知资源的问题。本轮已重跑 Core 295、Infrastructure 46、Windows 45、OCR 25、Node 21、demo 107，全部通过；该阶段受控冷启动回调通过；本次专用 URI 修复后的用户实际点击通过，声音和所有未人工操作的 M3 项仍保持未验收。
 
 本轮回归实际执行：三个测试项目的 `.tools/dotnet/dotnet.exe test tests/<项目> --no-restore --configuration Release`，OCR 的 pip check / unittest discover，四文件 Node 测试及 `node tests/prototype-qa.mjs`。Infrastructure 初次构建因正在监听的 QQ 探针锁住运行目录 DLL 而退出码 1；先用同项目 `--no-build --no-restore --configuration Release` 验证 46 项，退出码 0。300 秒监听正常结束后，复跑 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release`，构建与 46 项均通过、退出码 0；没有关闭 QQ。
 
@@ -38,15 +38,27 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 - 新增 `ProcessIntegrity.cs`，通过 `GetTokenInformation(TokenIntegrityLevel)` 获取当前令牌的完整性 RID；权限报告和阻止规则与 SDK 一致。新增 Windows 回归独立执行 `whoami /groups /fo csv /nh`，核对原生查询值；实际 Windows 45/45、编译无警告。
 - 修复后实际执行 `.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/IntegrationProbe --configuration Release --runtime win-x64 --self-contained true --no-restore --output ".tools/windows-probe-publish fixed"`，再执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory ".tools/windows-probe-publish fixed"`，均退出码 0。发布后由 `Copy-NotificationResource.ps1` 从匹配的官方 Windows App SDK 2.5.1 MSIX 提取 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`；安装脚本会拒绝缺少该资源的产物，Node 打包回归覆盖提取、覆盖旧文件和缺失资源失败。
 - 本机一次性测试通过 Windows Basic User 运行独立 Python 辅助进程，再只降低该辅助进程令牌的完整性；没有改变系统策略或已有应用。`results/medium-launch-20261011.json` 记录 RID 12288→8192。资源修复后，中等完整性测试进程的普通通知报告为 `notificationStatus=submitted`；最新用户重发报告为 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json`，仍未观察到用户激活回调。
-- 只读核查 WpnService 与当前 WpnUserService 均 Running。错误分为两层：Codex 子进程继承包身份（状态 122），SDK 注册返回 `0x80070490`；经真实 Explorer 启动后无包身份（状态 15700），才暴露缺少通知资源的 `0x8007007E`。补齐匹配资源后注册与提交成功；仅降低完整性不能消除包身份。用户已确认一次普通提醒呈现，静音呈现、声音和用户实际点击仍需验收。
+- 只读核查 WpnService 与当前 WpnUserService 均 Running。错误分为两层：Codex 子进程继承包身份（状态 122），SDK 注册返回 `0x80070490`；经真实 Explorer 启动后无包身份（状态 15700），才暴露缺少通知资源的 `0x8007007E`。补齐匹配资源后注册与提交成功；仅降低完整性不能消除包身份。用户已确认普通提醒呈现；本次修复后的用户实际点击通过，静音呈现和声音仍需验收。
 
 ## 通知资源与冷启动回归
 
 - Windows App SDK 2.5.1 的自包含发布目录不会自动携带 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`。`packaging/probe/Copy-NotificationResource.ps1` 在 Publish 后从匹配的官方 `Microsoft.WindowsAppRuntime.2.msix` 提取该资源，`Install-Probe.ps1` 在安装前检查资源存在；资源提取和安装检查已由四文件 Node 回归覆盖。
 - `NotificationProbe` 在 `Register()` 后读取 SDK 首次激活参数，修复冷启动点击参数没有被消费的问题。受控回归 `.tools/m3-results/cold-notification-regression-summary.json` 显示修复前 `activationObserved=false`，修复后 `activationObserved=true`、`activationKind=cold`、账号匹配；`tests/notification_cold_activation_test.py` 对正式发布产物退出码 0。
-- 2026-10-11 14:28:38 通过真实 Explorer 打开本机 `.lnk`（目标为 `pythonw.exe` 辅助脚本）重发，报告 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json` 为 `submitted`、通知 ID 36646、`error=null`、`activationObserved=false`。辅助进程无包身份，完整性 RID 8192。此运行副本包含资源修复，尚未包含冷启动修复；用户此前确认看到过提醒并点击无反应，最新一次呈现及真实点击仍等待反馈，声音未验收。
+- 2026-10-11 14:28:38 通过真实 Explorer 打开本机 `.lnk`（目标为 `pythonw.exe` 辅助脚本）重发，报告 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json` 为 `submitted`、通知 ID 36646、`error=null`、`activationObserved=false`。辅助进程无包身份，完整性 RID 8192。此运行副本包含资源修复，尚未包含冷启动修复；用户此前确认看到过提醒并点击无反应；这是当时运行副本的历史结果，当前专用 URI 入口的点击通过，声音未验收。
 - 冷启动回归对正式产物 `.tools/windows-probe-publish fixed/MessagePurify.Windows.IntegrationProbe.exe` 实际执行 `python tests/notification_cold_activation_test.py --executable <该产物绝对路径>`。经真实 Explorer 启动的辅助进程运行，最新 `.tools/m3-results/cold-test-result.json` 为退出码 0、PASS；直接从 Codex 运行包装脚本会继承包身份，本轮曾得到 COM `0x80080005`，随后改用实际 Explorer 重跑通过。该测试不发送通知，不能作为用户点击结果。
-- 保存修复后，14:40:56 通过真实 Explorer 使用包含冷启动修复的正式发布产物重发。最新报告 `.tools/windows-probe-publish fixed/results/normal-medium-user-resend-fixed-20261011.json` 为 `submitted`、通知 ID 36648、`error=null`、`activationObserved=false`；无包身份、完整性 RID 8192，等待点击 600 秒。该次呈现、真实点击及声音仍等待用户反馈。
+- 保存修复后，14:40:56 通过真实 Explorer 使用包含冷启动修复的正式发布产物重发。最新报告 `.tools/windows-probe-publish fixed/results/normal-medium-user-resend-fixed-20261011.json` 为 `submitted`、通知 ID 36648、`error=null`、`activationObserved=false`；无包身份、完整性 RID 8192，等待点击 600 秒。用户随后反馈该条提醒多次点击无反应，COM 激活超时；当前专用 URI 入口的点击通过，声音仍未验收。
+
+## 专用 URI 点击入口与实际用户验收
+
+- 旧通知 ID 36648 的 COM 激活出现 DistributedCOM 10010 超时。Explorer 完整性 RID 12288、发送进程 RID 8192，但真实 Explorer 辅助进程在不同完整性下均出现 COM 超时，不能将完整性差异记为唯一根因。确定的代码缺口是 `ProbeOptions.Parse` 拒绝 Windows COM 追加的 `-Embedding`；现已修复，受控冷启动脚本带该参数。
+- 当前普通及静音通知使用 `activationType=protocol`，由当前用户的 `messagepurify-probe` URI 打开合成事项；命令直接执行探针 EXE，字段严格校验，URI 模式只显示详情，不注册或发送通知、不读取 QQ。详情窗口保持至手动关闭或最多 600 秒；发送报告与独立点击报告通过 Probe ID 关联。
+- 2026-10-11 14:52:34 普通测试提醒 ID 36649 已提交，报告 `.tools/windows-probe-protocol/results/normal-protocol.json`。14:54:38 的 `%LOCALAPPDATA%/MessagePurify/IntegrationProbe/results/protocol-*.json` 点击记录与发送 Probe ID 一致，`activationObserved=true`、`activationKind=protocol`、`activationAccountMatched=true`、`error=null`；用户随后确认“出现了事项窗口”。用户实际点击通过。
+- 实际执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release`，57/57、退出码 0；执行 `.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/IntegrationProbe --configuration Release --runtime win-x64 --self-contained true --no-restore --output .tools/windows-probe-protocol-final`，退出码 0，官方通知资源自动提取。
+- `python tests/notification_protocol_activation_test.py --executable .tools/windows-probe-protocol/MessagePurify.Windows.IntegrationProbe.exe` 输出 `PASS: Windows shell protocol opened the visible synthetic item window.`，退出码 0；该检查不发送通知，受控报告 Probe ID 为 `controlled-shell-` 前缀，与实际通知点击分开。
+- 经真实 Explorer 辅助进程运行最终发布产物的 `tests/notification_cold_activation_test.py`，`.tools/m3-results/cold-protocol-final-test-result.json` 为退出码 0、`PASS: cold COM callback located the synthetic account and item.`；该受控检查验证兼容的 COM 回调，不替代用户实际通知点击验收。
+- 最终产物通过 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-protocol-final` 安装到 `%LOCALAPPDATA%/MessagePurify/IntegrationProbe`，退出码 0；安装 DLL 的 SHA256 与最终发布产物一致，没有覆盖仍打开的 `.tools/windows-probe-protocol/` 事项窗口。协议注册仍指向实际点击验证的运行副本，下次从安装入口发送会更新注册。
+- 本次实际重跑四文件 Node 文档/打包/启动回归，21/21、退出码 0；初跑 20/21 仅为受控检查边界说明的文档断言不匹配，补齐说明后通过。本次通知修复没有重跑未改动的 Core、Infrastructure、OCR 和 demo 套件，先前完整回归与本次范围分开记录。
+- 声音、静音提醒呈现和长期通知稳定性仍未验收。正式应用尚未接入通知探针能力，M3 不因一次点击通过而完成。
 
 ## 当前 QQ 接入说明
 
@@ -66,4 +78,4 @@ QQ 接入检查完成后继续通知验证，先修正令牌完整性检测，�
 
 用户随后确认从托盘打开 QQ 后聊天列表和窗口正常显示；QQ 主窗口句柄存在，主进程同时监听 6099/3001。启动时曾出现两次 `TypeError: undefined is not a function`，调用点为 `updateWindowSizeProperties`。该错误对长期使用的影响尚未验证；目前没有用户确认的窗口显示故障，不盲目替换加载器。未发送消息，也没有成功生成 QQ 窗口截图。
 
-M3 仍为“正在实施”。下一步继续历史补漏、实时接收稳定性、桌面人工操作和 Windows 通知验收；不重复要求已经完成的退出、扫码或登录准备。
+M3 仍为“正在实施”。下一步继续历史补漏、实时接收稳定性、桌面人工操作及通知声音、静音呈现验收；不重复要求已经完成的退出、扫码或登录准备。

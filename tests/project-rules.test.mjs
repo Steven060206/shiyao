@@ -60,7 +60,10 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'src/MessagePurify.Windows/IntegrationProbe/ProcessIntegrity.cs',
     'tests/MessagePurify.Windows.Tests/ProcessIntegrityTests.cs',
     'packaging/probe/Copy-NotificationResource.ps1',
-    'tests/notification_cold_activation_test.py'
+    'tests/notification_cold_activation_test.py',
+    'src/MessagePurify.Windows/IntegrationProbe/NotificationProtocol.cs',
+    'tests/MessagePurify.Windows.Tests/NotificationProtocolTests.cs',
+    'tests/notification_protocol_activation_test.py'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
@@ -171,10 +174,17 @@ test('M3 正在实施，实测条件不被协议模拟替代', () => {
   assert.match(plan, /M3 所有真实验收项完成前保持“正在实施”/);
   const report = read('docs/verification/integration-probes.md');
   assert.match(report, /受控.*不替代用户实际.*点击验收/, '受控回调不能替代用户点击');
-  assert.match(report, /包含冷启动修复的正式发布产物重发/, '最新提醒需明确运行产物');
-  assert.match(report, /该次呈现、真实点击及声音仍等待用户反馈/, '提交不能替代呈现或点击');
+  assert.match(report, /包含冷启动修复的正式发布产物重发/, '保留此前运行产物范围');
+  assert.match(report, /用户实际点击通过/, '同步用户已经确认的点击结果');
+  assert.match(report, /点击记录与发送 Probe ID 一致/, '真实点击须与对应提醒核对');
+  assert.match(report, /声音、静音提醒呈现.*仍未验收/, '点击通过不能替代其他验收');
+  assert.match(report, /controlled-shell-/, '受控 Shell 分发应与真实点击区分');
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
-    assert.match(read(file).split('## 2.')[0], /M3.*正在实施/, file);
+    const current = read(file).split('## 2.')[0];
+    assert.match(current, /M3.*正在实施/, file);
+    assert.match(current, /用户实际点击通过/, file);
+    const overview = current.split("###")[0];
+    assert.doesNotMatch(overview, /用户实际通知点击.*仍未验收|实际点击仍未观察到激活回调|实际点击.*仍待反馈/, `${file} 当前总览不保留过时点击结论`);
   }
 });
 

@@ -108,10 +108,14 @@ public class ProbeOptionsTests
         var options = ProbeOptions.Parse(["----AppNotificationActivated:"]);
         Assert.True(options.ColdActivation);
         Assert.False(options.Bridge);
+        var embedded = ProbeOptions.Parse(["----AppNotificationActivated:", "-Embedding"]);
+        Assert.True(embedded.ColdActivation);
+        Assert.False(embedded.Bridge);
     }
 
     [Theory]
     [InlineData("--wat")]
+    [InlineData("-Embedding")]
     [InlineData("--report")]
     [InlineData("--notification", "other")]
     [InlineData("--wait-seconds", "0")]

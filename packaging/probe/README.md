@@ -15,10 +15,12 @@
 | --- | --- |
 | Bridge.cmd | 本地 WebView2 隐藏桥往返并退出 |
 | Desktop.cmd | 显示桌面探针，检查 Win+D、拖动、缩放，关闭后退出 |
-| Notification.cmd | 发普通测试提醒，60 秒内点击验证热启动定位 |
-| SilentNotification.cmd | 发静音测试提醒，60 秒内点击验证定位 |
-| ColdNotification.cmd | 发测试提醒后退出，点击检查冷启动定位 |
+| Notification.cmd | 发普通测试提醒，点击通过专用 URI 打开合成事项 |
+| SilentNotification.cmd | 发静音测试提醒，点击通过专用 URI 打开合成事项 |
+| ColdNotification.cmd | 发测试提醒后退出，点击通过专用 URI 启动合成事项窗口 |
 
-报告保存在安装目录的 `results/`。报告中的提交、系统呈现和点击分别判断；自动命令不能证明用户看见或听见。高完整性进程会明确报告受阻，请从普通桌面双击入口，不选择“以管理员身份运行”。受控冷启动回调可用 `python tests/notification_cold_activation_test.py --executable <发布目录>\MessagePurify.Windows.IntegrationProbe.exe` 回归；这不是用户实际点击验收。
+发送报告保存在安装目录的 `results/`；专用 URI 点击报告独立保存在 `%LOCALAPPDATA%\MessagePurify\IntegrationProbe\results\protocol-*.json`，通过 Probe ID 与原提醒关联。发送时在当前用户注册 `messagepurify-probe` URI，点击仅显示合成事项，不发送通知或读取 QQ。事项窗口可手动关闭，最多保持 600 秒。
+
+报告中的提交、系统呈现和点击分别判断；自动命令不能证明用户看见或听见。高完整性发送进程会明确报告受阻，请从普通桌面双击入口，不选择“以管理员身份运行”。受控冷启动回调可用 `python tests/notification_cold_activation_test.py --executable <发布目录>\MessagePurify.Windows.IntegrationProbe.exe` 回归；受控 Shell 分发可用 `python tests/notification_protocol_activation_test.py --executable <已注册的探针绝对路径>` 回归，两者均不替代用户实际点击验收。2026-10-11 用户实际点击通过并确认出现事项窗口，声音和静音提醒呈现仍待验收。
 
 桌面探针用于核对实际附着、非置顶与操作行为。Explorer 重启、睡眠和多屏 DPI 项需要各自实际验证；本脚本不主动执行这些操作。

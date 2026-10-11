@@ -20,6 +20,8 @@ public sealed class ProbeReport
     public string? NotificationSetting { get; set; }
     public string? NotificationMode { get; set; }
     public uint? NotificationId { get; set; }
+    public string? NotificationActivationTransport { get; set; }
+    public string? NotificationProbeId { get; set; }
     public bool ActivationObserved { get; set; }
     public string? ActivationKind { get; set; }
     public bool? ActivationAccountMatched { get; set; }

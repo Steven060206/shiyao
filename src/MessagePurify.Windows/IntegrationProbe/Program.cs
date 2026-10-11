@@ -27,6 +27,8 @@ public static class Program
             return 2;
         }
         if (options.ColdActivation) defaultPath = Path.Combine(Path.GetDirectoryName(defaultPath)!, "cold-activation.json");
+        if (options.ProtocolActivation is not null) defaultPath = Path.Combine(Path.GetDirectoryName(defaultPath)!,
+            "protocol-" + Guid.NewGuid().ToString("N") + ".json");
         var reportPath = Path.GetFullPath(options.ReportPath ?? defaultPath);
         if (options.Help)
         {
@@ -46,6 +48,23 @@ public static class Program
             try
             {
                 report.Save(reportPath);
+                if (options.ProtocolActivation is not null)
+                {
+                    NotificationProtocol.TryParse(options.ProtocolActivation, out var route);
+                    report.NotificationActivationTransport = "protocol";
+                    report.NotificationProbeId = route!.ProbeId;
+                    report.ActivationObserved = true;
+                    report.ActivationKind = "protocol";
+                    report.ActivationAccountMatched = route.BelongsTo(NotificationProbe.SyntheticAccount);
+                    string detail = report.ActivationAccountMatched == true && route.ItemId == "demo-item"
+                        ? "已打开测试事项。\n这是合成内容，仅在本机显示。"
+                        : "这条提醒属于其他账号或事项。\n未读取当前账号数据。";
+                    mainWindow = CreateMainWindow(detail, Stop);
+                    mainWindow.Show();
+                    mainWindow.Activate();
+                    report.Save(reportPath);
+                    await Task.WhenAny(stop.Task, Task.Delay(TimeSpan.FromSeconds(options.WaitSeconds)));
+                }
                 if (options.Bridge) await RunBridgeAsync(options, report, reportPath).WaitAsync(TimeSpan.FromSeconds(options.WaitSeconds));
                 if (options.InteractiveDesktop)
                 {

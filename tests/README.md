@@ -33,7 +33,9 @@ M3 已创建 OneBot、Windows 探针和 OCR 测试项目。实际验证命令为
 node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs
 ```
 
-通知权限修正阶段的回归计数：Core 295、Infrastructure 46、Windows 45、OCR 25、打包/启动 Node 四个测试文件共 21、demo 107，均通过，见[集成探针记录](../docs/verification/integration-probes.md)。Node 覆盖文档 16 项、通知资源提取/安装/入口打包 3 项以及两个 NapCat 启动入口各 1 项。受控未就绪 QQ CLI 退出码 1；Framework 前四次真实只读探针退出码 0、实时群消息 0，第五次 180 秒探针收到 1 条真实群事件、退出码 0。用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。完整历史补漏、长期稳定性、Windows 通知的用户呈现/声音/点击和桌面人工操作仍单独验收；受控 COM 冷启动回调已通过。
+通知权限修正阶段的回归计数：Core 295、Infrastructure 46、Windows 45、OCR 25、打包/启动 Node 四个测试文件共 21、demo 107，均通过，见[集成探针记录](../docs/verification/integration-probes.md)。本次点击入口修复后 Windows Release 为 57/57，新增 URI 载荷、参数限制、字段校验、声音意图和 `-Embedding` 回归。Node 覆盖文档 16 项、通知资源提取/安装/入口打包 3 项以及两个 NapCat 启动入口各 1 项。受控未就绪 QQ CLI 退出码 1；Framework 前四次真实只读探针退出码 0、实时群消息 0，第五次 180 秒探针收到 1 条真实群事件、退出码 0。用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。Windows 通知探针的用户实际点击通过，用户确认出现事项窗口；声音、静音提醒呈现、完整历史补漏、长期稳定性和桌面人工操作仍单独验收。
+
+`tests/notification_protocol_activation_test.py --executable <已注册的探针绝对路径>` 检查 Windows Shell 的 URI 分发和合成事项窗口，不发送提醒；报告中的 `controlled-shell-` Probe ID 与用户实际通知点击区分。`tests/notification_cold_activation_test.py` 保留受控 COM 回调检查，并模拟 Windows 追加的 `-Embedding` 参数。这些受控检查均不替代用户实际点击验收。
 
 需要 Node.js 22 或更新版本和 Chrome。默认使用 `C:/Program Files/Google/Chrome/Application/chrome.exe`；其他安装位置可通过环境变量 `CHROME_PATH` 指定。浏览器检查使用独立临时配置，不访问个人浏览器会话。普通测试不会覆盖预览图；仅在主动更新预览时运行 `node tests/prototype-qa.mjs --screenshots`，生成课程选择、待确认、主界面及桌面卡片的六张预览。
 
