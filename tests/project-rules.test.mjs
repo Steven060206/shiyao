@@ -90,6 +90,7 @@ test('M4 生命周期进度明确区分存储验证和消息宿主联调', () =>
   assert.match(read(planFile), /SuggestedTime.*(?:永远|不能)/);
   assert.match(read(planFile), /expectedTaskVersion/);
   assert.match(read(planFile), /普通通知转换.*后续|普通通知转换.*不在本段/);
+  assert.match(read('docs/HANDOFF.md'), /恢复工作时先读.*docs\/HANDOFF\.md.*再读.*docs\/requirements\.md/);
 });
 
 test('新版演示交付链接可用，保存说明与真实集成阶段一致', () => {
