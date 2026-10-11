@@ -42,7 +42,7 @@ public sealed class NotificationProbe : IDisposable
         var probeId = Guid.NewGuid().ToString("N");
         NotificationProtocol.Register();
         var notification = new AppNotification(NotificationProtocol.BuildPayload(
-            new(SyntheticAccount, "demo-item", probeId), mode == "silent"))
+            new(SyntheticAccount, "demo-item", probeId)))
         {
             Group = "integration-demo-account", Tag = "probe-" + mode
         };

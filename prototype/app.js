@@ -14,7 +14,7 @@ const seed = [
   {id:'n1',kind:'notice',state:'active',title:'图书馆开放时间调整',course:'校园通知',group:'学校综合群',due:'',time:'',sender:'图书馆老师',sent:'10月9日 08:10',text:'本周六图书馆开放时间调整为09:00—17:00。\n请同学们合理安排借阅时间。'},
   {id:'n2',kind:'notice',state:'active',title:'校园摄影比赛报名',course:'校园活动',group:'学校综合群',due:'',time:'',sender:'学生事务老师',sent:'10月8日 12:30',text:'校园摄影比赛开始报名，主题是“我眼中的校园”。\n自愿参加，报名截止日期为10月20日。'}
 ];
-const defaultSettings = {theme:'system',sound:true,motion:'system',autostart:true,close:'tray',guideDone:false};
+const defaultSettings = {theme:'system',motion:'system',autostart:true,close:'tray',guideDone:false};
 const customCourseKey = '__custom_course__';
 const $ = id => document.getElementById(id);
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -29,6 +29,7 @@ try {
     customCourses = Array.isArray(saved.customCourses) ? saved.customCourses.filter(Boolean) : [];
   }
 } catch {}
+delete settings.sound;
 let page = items.some(i => i.state === 'pending') ? 'pending' : 'tasks';
 let selectedId = null, convertingId = null, toastTimer, guideStep = 0;
 let filters = {search:'',course:'',state:'active'};
@@ -158,7 +159,7 @@ function suggestionHTML(item) {
 }
 function renderDetailContent() {
   const item = items.find(i => i.id === selectedId);
-  if (page === 'settings') { $('detail-pane').innerHTML = '<p class="eyebrow">演示范围</p><h2 class="detail-title">先体验日常操作</h2><p class="detail-sub">这些开关保存的是此浏览器的演示偏好。系统声音、自动启动、托盘和 QQ 连接将在真实 Windows 应用中接入。</p><div class="deadline-box"><small>体验路线</small><b>确认图片日期 → 完成并撤销</b><small>也可以归档恢复、添加考试、调整提醒，或在详情底部模拟老师的新消息。</small></div><button class="button" data-action="guide">重新体验引导</button>'; return; }
+  if (page === 'settings') { $('detail-pane').innerHTML = '<p class="eyebrow">演示范围</p><h2 class="detail-title">先体验日常操作</h2><p class="detail-sub">这些开关保存的是此浏览器的演示偏好。自动启动、托盘和 QQ 连接将在真实 Windows 应用中接入。所有提醒统一静音。</p><div class="deadline-box"><small>体验路线</small><b>确认图片日期 → 完成并撤销</b><small>也可以归档恢复、添加考试、调整提醒，或在详情底部模拟老师的新消息。</small></div><button class="button" data-action="guide">重新体验引导</button>'; return; }
   if (!item) { $('detail-pane').innerHTML = '<div class="empty"><h2>选择一个事项</h2><p>这里显示原文、图片和可编辑信息。</p></div>'; return; }
   const pending = item.state === 'pending', active = item.state === 'active', task = item.kind === 'task';
   const suggestion = ['change','reminder'].includes(item.kind);
@@ -219,7 +220,7 @@ function applyPreferences() {
 systemTheme.addEventListener('change',() => { if (settings.theme === 'system') applyPreferences(); });
 function renderSettings() {
   const toggle = (name,label) => `<label class="check"><input type="checkbox" data-setting="${name}" ${settings[name] ? 'checked' : ''}><span>${label}</span></label>`;
-  $('list-pane').innerHTML = `<div class="page-head"><div><h1>设置</h1><p class="subline">偏好保存在此浏览器，系统功能仅演示</p></div></div><section class="settings-section"><h2>外观</h2><label class="setting-row">主题<select data-setting="theme">${Object.entries({system:'跟随系统',light:'浅色',dark:'纯黑深色'}).map(([key,label]) => `<option value="${key}" ${settings.theme === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="setting-row">动画<select data-setting="motion"><option value="system">跟随系统</option><option value="reduce" ${settings.motion === 'reduce' ? 'selected' : ''}>减少动画</option></select></label></section><section class="settings-section"><h2>提醒</h2><div class="setting-row">${toggle('sound','任务声音提醒')}</div><p>作业、考试和提交类任务每个提醒节点请求一次系统声音；普通通知静音。demo 只展示通知内容。</p><div class="setting-row"><span>安静时段</span><span class="tag">暂未启用</span></div><p>有时刻：提前 24 小时和 2 小时。<br>仅日期：前一天中午 12:00。<br>单条任务可在详情中自定义或关闭时间提醒。</p></section><section class="settings-section"><h2>启动与关闭</h2><div class="setting-row">${toggle('autostart','登录 Windows 后自动启动')}</div><label class="setting-row">关闭窗口时<select data-setting="close"><option value="tray">隐藏到托盘</option><option value="exit" ${settings.close === 'exit' ? 'selected' : ''}>直接退出</option></select></label><p>此处不会修改 Windows 启动项或关闭浏览器。</p></section><section class="settings-section"><h2>桌面与演示</h2><p>左右卡片可拖动、缩放，演示布局会保存。<br>QQ、OCR、托盘与系统通知尚未接入。</p><div class="detail-actions"><button class="button small" data-action="desktop">预览桌面卡片</button><button class="button small" data-action="guide">体验引导</button><button class="button small" data-action="reset">重置示例</button></div></section>`;
+  $('list-pane').innerHTML = `<div class="page-head"><div><h1>设置</h1><p class="subline">偏好保存在此浏览器，系统功能仅演示</p></div></div><section class="settings-section"><h2>外观</h2><label class="setting-row">主题<select data-setting="theme">${Object.entries({system:'跟随系统',light:'浅色',dark:'纯黑深色'}).map(([key,label]) => `<option value="${key}" ${settings.theme === key ? 'selected' : ''}>${label}</option>`).join('')}</select></label><label class="setting-row">动画<select data-setting="motion"><option value="system">跟随系统</option><option value="reduce" ${settings.motion === 'reduce' ? 'selected' : ''}>减少动画</option></select></label></section><section class="settings-section"><h2>提醒</h2><p>所有提醒统一静音，保留视觉通知和桌面卡片高亮。demo 只展示通知内容。</p><div class="setting-row"><span>安静时段</span><span class="tag">暂未启用</span></div><p>有时刻：提前 24 小时和 2 小时。<br>仅日期：前一天中午 12:00。<br>单条任务可在详情中自定义或关闭时间提醒。</p></section><section class="settings-section"><h2>启动与关闭</h2><div class="setting-row">${toggle('autostart','登录 Windows 后自动启动')}</div><label class="setting-row">关闭窗口时<select data-setting="close"><option value="tray">隐藏到托盘</option><option value="exit" ${settings.close === 'exit' ? 'selected' : ''}>直接退出</option></select></label><p>此处不会修改 Windows 启动项或关闭浏览器。</p></section><section class="settings-section"><h2>桌面与演示</h2><p>左右卡片可拖动、缩放，演示布局会保存。<br>QQ、OCR、托盘与系统通知尚未接入。</p><div class="detail-actions"><button class="button small" data-action="desktop">预览桌面卡片</button><button class="button small" data-action="guide">体验引导</button><button class="button small" data-action="reset">重置示例</button></div></section>`;
 }
 function showDesktop(show) {
   $('desktop').hidden = !show; $('app').hidden = show;
@@ -310,8 +311,7 @@ document.addEventListener('click',event => {
   if (action === 'new') { $('new-dialog').innerHTML = '<h2>新增任务</h2><p>补录口头布置或漏识别的事项，来源标注为“手动添加”。</p>'+editForm({kind:'task',title:'',course:''},'new')+'<div class="modal-actions"><button class="button" data-action="close-modal">取消</button></div>'; $('new-dialog').showModal(); return; }
   if (action === 'image') { $('image-dialog').innerHTML = '<h2>原图示例</h2>'+imagePreview()+'<div class="modal-actions"><button class="button" data-action="close-modal">关闭</button></div>'; $('image-dialog').showModal(); return; }
   if (action === 'preview-reminder') {
-    const sound = settings.sound && ['homework','exam','submission'].includes(item.taskType || 'homework');
-    $('reminder-dialog').innerHTML = `<p class="eyebrow">提醒通知预览 · 不发送系统通知</p><h2>${escapeHTML(item.title)}</h2><p>${timeName(item)}：${dateLabel(item)}<br>${escapeHTML(item.course)} · 演示账号<br><span id="preview-sound">${sound ? '正式应用请求系统声音' : '静音提醒'}</span> · demo 不播放声音</p><div class="modal-actions"><button class="button" data-action="close-modal">关闭</button><button class="button primary" data-action="notification-open" data-id="${item.id}">打开事项</button></div>`;
+    $('reminder-dialog').innerHTML = `<p class="eyebrow">提醒通知预览 · 不发送系统通知</p><h2>${escapeHTML(item.title)}</h2><p>${timeName(item)}：${dateLabel(item)}<br>${escapeHTML(item.course)} · 演示账号<br><span id="preview-sound">静音提醒</span> · demo 不播放声音</p><div class="modal-actions"><button class="button" data-action="close-modal">关闭</button><button class="button primary" data-action="notification-open" data-id="${item.id}">打开事项</button></div>`;
     $('reminder-dialog').showModal(); return;
   }
   if (action === 'notification-open') { $('reminder-dialog').close(); showDesktop(false); navigate('tasks',item.id); return; }

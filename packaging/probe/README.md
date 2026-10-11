@@ -21,6 +21,6 @@
 
 发送报告保存在安装目录的 `results/`；专用 URI 点击报告独立保存在 `%LOCALAPPDATA%\MessagePurify\IntegrationProbe\results\protocol-*.json`，通过 Probe ID 与原提醒关联。发送时在当前用户注册 `messagepurify-probe` URI，点击仅显示合成事项，不发送通知或读取 QQ。事项窗口可手动关闭，最多保持 600 秒。
 
-报告中的提交、系统呈现和点击分别判断；自动命令不能证明用户看见或听见。高完整性发送进程会明确报告受阻，请从普通桌面双击入口，不选择“以管理员身份运行”。受控冷启动回调可用 `python tests/notification_cold_activation_test.py --executable <发布目录>\MessagePurify.Windows.IntegrationProbe.exe` 回归；受控 Shell 分发可用 `python tests/notification_protocol_activation_test.py --executable <已注册的探针绝对路径>` 回归，两者均不替代用户实际点击验收。2026-10-11 用户实际点击通过并确认出现事项窗口，声音和静音提醒呈现仍待验收。
+报告中的提交、系统呈现和点击分别判断；自动命令不能证明用户看见或听见。高完整性发送进程会明确报告受阻，请从普通桌面双击入口，不选择“以管理员身份运行”。受控冷启动回调可用 `python tests/notification_cold_activation_test.py --executable <发布目录>\MessagePurify.Windows.IntegrationProbe.exe` 回归；受控 Shell 分发可用 `python tests/notification_protocol_activation_test.py --executable <已注册的探针绝对路径>` 回归，两者均不替代用户实际点击验收。2026-10-11 用户实际点击通过并确认出现事项窗口，声音提醒已取消，静音提醒呈现仍待验收。普通与静音入口保留兼容名称，实际提醒均静音。
 
 桌面探针用于核对实际附着、非置顶与操作行为。Explorer 重启、睡眠和多屏 DPI 项需要各自实际验证；本脚本不主动执行这些操作。

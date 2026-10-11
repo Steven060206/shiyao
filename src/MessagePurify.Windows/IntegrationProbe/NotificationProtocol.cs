@@ -19,14 +19,14 @@ public static class NotificationProtocol
             NotificationRoute.TryParse(uri.Query.TrimStart('?'), out route);
     }
 
-    public static string BuildPayload(NotificationRoute route, bool silent)
+    public static string BuildPayload(NotificationRoute route)
     {
         var toast = new XElement("toast", new XAttribute("activationType", "protocol"),
             new XAttribute("launch", ToUri(route)),
             new XElement("visual", new XElement("binding", new XAttribute("template", "ToastGeneric"),
                 new XElement("text", "消息提纯：集成测试提醒"),
                 new XElement("text", "点击打开测试事项。仅在本机显示。"))));
-        if (silent) toast.Add(new XElement("audio", new XAttribute("silent", "true")));
+        toast.Add(new XElement("audio", new XAttribute("silent", "true")));
         return toast.ToString(SaveOptions.DisableFormatting);
     }
 

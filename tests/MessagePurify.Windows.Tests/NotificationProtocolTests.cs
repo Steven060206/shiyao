@@ -6,18 +6,14 @@ namespace MessagePurify.Windows.Tests;
 public class NotificationProtocolTests
 {
     [Fact]
-    public void ProtocolPayloadOpensTheSameAccountAndItemAndPreservesSoundMode()
+    public void ProtocolPayloadOpensTheSameAccountAndItemAndAlwaysRequestsSilence()
     {
         var route = new NotificationRoute("demo-account", "demo-item", "probe-1");
-        foreach (var silent in new[] { false, true })
-        {
-            var toast = XElement.Parse(NotificationProtocol.BuildPayload(route, silent));
-            Assert.Equal("protocol", (string?)toast.Attribute("activationType"));
-            Assert.True(NotificationProtocol.TryParse((string)toast.Attribute("launch")!, out var parsed));
-            Assert.Equal(route, parsed);
-            Assert.Equal(silent, toast.Element("audio") is not null);
-            if (silent) Assert.Equal("true", (string?)toast.Element("audio")!.Attribute("silent"));
-        }
+        var toast = XElement.Parse(NotificationProtocol.BuildPayload(route));
+        Assert.Equal("protocol", (string?)toast.Attribute("activationType"));
+        Assert.True(NotificationProtocol.TryParse((string)toast.Attribute("launch")!, out var parsed));
+        Assert.Equal(route, parsed);
+        Assert.Equal("true", (string?)toast.Element("audio")?.Attribute("silent"));
     }
 
     [Theory]

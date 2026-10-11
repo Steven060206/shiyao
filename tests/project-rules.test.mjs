@@ -177,7 +177,7 @@ test('M3 正在实施，实测条件不被协议模拟替代', () => {
   assert.match(report, /包含冷启动修复的正式发布产物重发/, '保留此前运行产物范围');
   assert.match(report, /用户实际点击通过/, '同步用户已经确认的点击结果');
   assert.match(report, /点击记录与发送 Probe ID 一致/, '真实点击须与对应提醒核对');
-  assert.match(report, /声音、静音提醒呈现.*仍未验收/, '点击通过不能替代其他验收');
+  assert.match(report, /静音提醒呈现.*仍未验收/, '点击通过不能替代其他验收');
   assert.match(report, /controlled-shell-/, '受控 Shell 分发应与真实点击区分');
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
     const current = read(file).split('## 2.')[0];
@@ -185,6 +185,16 @@ test('M3 正在实施，实测条件不被协议模拟替代', () => {
     assert.match(current, /用户实际点击通过/, file);
     const overview = current.split("###")[0];
     assert.doesNotMatch(overview, /用户实际通知点击.*仍未验收|实际点击仍未观察到激活回调|实际点击.*仍待反馈/, `${file} 当前总览不保留过时点击结论`);
+  }
+});
+
+test('第一版统一静音，取消声音开关及声音播放验收', () => {
+  const requirements = read('docs/requirements.md');
+  assert.match(requirements, /第一版取消声音提醒，所有 Windows 通知均静音/);
+  assert.match(requirements, /不提供“任务声音提醒”开关，也不进行声音播放验收/);
+  assert.doesNotMatch(requirements, /播放系统声音|请求一次系统声音/);
+  for (const file of ['docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/verification/integration-probes.md']) {
+    assert.match(read(file), /第一版取消声音提醒，所有 Windows 通知均静音|用户取消声音提醒，第一版所有 Windows 通知均静音/, file);
   }
 });
 

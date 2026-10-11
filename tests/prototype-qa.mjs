@@ -292,7 +292,7 @@ try {
   await submit('#detail-pane form[data-mode=save]',{due:'2026-10-09',time:''});
   assert(await evaluate('!timePast(items.find(i=>i.manual)) && reminderLabel(items.find(i=>i.manual)) === "10/8 12:00 提醒"'),'Date-only event remains valid throughout its day without a fabricated time');
   await click('[data-action="preview-reminder"]');
-  assert(await evaluate('document.querySelector("#reminder-dialog").open && document.querySelector("#preview-sound").textContent.includes("系统声音")'),'Exam notification preview displays system-sound intent without playing audio');
+  assert(await evaluate('document.querySelector("#reminder-dialog").open && document.querySelector("#preview-sound").textContent === "静音提醒"'),'Exam notification preview stays silent');
   await click('[data-action="notification-open"]');
   assert(await evaluate('!document.querySelector("#reminder-dialog").open && items.find(i=>i.id===selectedId).title === "期中考试"'),'Clicking preview notification opens the exact task detail');
   await submit('form[data-mode=save]',{taskType:'activity'});
@@ -369,12 +369,13 @@ try {
   assert(await evaluate('document.documentElement.dataset.theme === "dark" && getComputedStyle(document.body).backgroundColor === "rgb(0, 0, 0)"'),'Follow-system theme responds to system change with pure black');
   await change('[data-setting="motion"]','reduce');
   assert(await evaluate('getComputedStyle(document.querySelector(".app")).transitionDuration === "0s"'),'App reduce-animation setting disables transitions');
-  await evaluate('const sound=document.querySelector("[data-setting=sound]");sound.checked=false;sound.dispatchEvent(new Event("change",{bubbles:true}))');
+  assert(await evaluate('!document.querySelector("[data-setting=sound]") && document.querySelector("#list-pane").textContent.includes("所有提醒统一静音")'),'Settings remove the sound toggle and explain silent reminders');
   await change('[data-setting="close"]','exit');
+  await evaluate('const legacy=JSON.parse(localStorage.getItem(STORAGE_KEY));legacy.settings.sound=true;localStorage.setItem(STORAGE_KEY,JSON.stringify(legacy))');
   await reload(); await nav('settings');
-  assert(await evaluate('!settings.sound && settings.close === "exit" && settings.motion === "reduce" && settings.theme === "system" && !document.querySelector("#guide-dialog").open'),'Settings and completed guide persist across refresh');
+  assert(await evaluate('!Object.hasOwn(settings,"sound") && settings.close === "exit" && settings.motion === "reduce" && settings.theme === "system" && !document.querySelector("#guide-dialog").open'),'Refresh discards legacy sound preference and preserves other settings and the completed guide');
   await nav('tasks'); await select('t1'); await click('[data-action="preview-reminder"]');
-  assert(await evaluate('document.querySelector("#preview-sound").textContent === "静音提醒"'),'Global sound switch silences an assignment preview');
+  assert(await evaluate('document.querySelector("#preview-sound").textContent === "静音提醒"'),'Assignment preview stays silent after loading legacy sound-enabled settings');
   await click('#reminder-dialog [data-action="close-modal"]'); await nav('settings');
   await change('[data-setting="motion"]','system');
   await change('[data-setting="theme"]','light');
@@ -383,7 +384,7 @@ try {
   await delay(100); await reload(); await click('[data-action="desktop"]');
   assert(await evaluate('document.querySelector("#widget").offsetLeft === 120 && document.querySelector("#widget").offsetTop === 160 && document.querySelector("#widget").offsetWidth === 820'),'Desktop position and size persist after reload');
   await click('[data-action="back"]'); await reset();
-  assert(await evaluate('widgetLayout === null && !settings.sound && settings.close === "exit" && items.find(i=>i.id==="p1").due === ""'),'Reset clears demonstration progress and layout but preserves preferences');
+  assert(await evaluate('widgetLayout === null && !Object.hasOwn(settings,"sound") && settings.close === "exit" && items.find(i=>i.id==="p1").due === ""'),'Reset clears demonstration progress and layout but preserves preferences');
   await nav('tasks'); await click('[data-action="desktop"]');
   await click('.mini-foot [data-action="complete"][data-id="t4"]');
   assert(await evaluate('selectedId === "t1" && items.find(i=>i.id==="t1").unread'),'Desktop actions do not mark a hidden main-detail item read');

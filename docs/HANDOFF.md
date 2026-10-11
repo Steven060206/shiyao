@@ -6,10 +6,18 @@
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
-- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；通知权限修正阶段完整回归为 Core 295/295、Infrastructure 46/46、Windows 45/45、OCR 25/25、Node 21/21、demo 107 项。Windows App SDK 通知资源发布和冷启动参数消费已修正；本次通知探针改用专用 URI 入口，用户实际点击通过，已确认出现事项窗口，程序记录与发送 Probe ID 一致。Windows Release 57/57；声音、静音提醒呈现和长期通知稳定性仍未验收。Framework 已加载并自动登录，真实 OneBot 只读接口及实时群事件限定范围通过（观察到 1 条）；用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。普通 QQ 登录不作为 OneBot 连接成功；完整历史补漏、长期稳定性和桌面卡片人工操作仍未验收，正式应用尚未接入探针能力。**
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权完成准备后开始编写代码。整体设计已确认、实施计划已写入，M1 已完成，M2 已完成：时间、提醒、状态及本地规则核心已写入，合成基线已生成。demo 已删除图片日期的独立二次勾选，107 项浏览器检查通过。M3 真实集成探针正在实施；通知权限修正阶段完整回归为 Core 295/295、Infrastructure 46/46、Windows 45/45、OCR 25/25、Node 21/21、demo 107 项。Windows App SDK 通知资源发布和冷启动参数消费已修正；本次通知探针改用专用 URI 入口，用户实际点击通过，已确认出现事项窗口，程序记录与发送 Probe ID 一致。Windows Release 57/57；声音提醒已取消，静音提醒呈现和长期通知稳定性仍未验收。Framework 已加载并自动登录，真实 OneBot 只读接口及实时群事件限定范围通过（观察到 1 条）；用户确认聊天列表和窗口正常显示，窗口打开期间接口复测通过。普通 QQ 登录不作为 OneBot 连接成功；完整历史补漏、长期稳定性和桌面卡片人工操作仍未验收，正式应用尚未接入探针能力。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`；NapCat Shell 与 Framework 的显式路径启动准备位于 `packaging/napcat/`，对应路径回归在 `tests/napcat-launcher.test.mjs` 和 `tests/napcat-framework-launcher.test.mjs`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
-- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。没有注册正式自启动，声音、静音提醒呈现、长期稳定性及桌面人工操作仍未验收。
+- demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。没有注册正式自启动，静音提醒呈现、长期稳定性及桌面人工操作仍未验收；声音提醒已取消。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
+
+### 本次取消声音提醒
+
+- 2026-10-11 用户表示不需要声音提醒，原因是不一直坐在电脑前；第一版改为统一静音，删除声音开关及声音播放验收。此前按任务类别播放声音和总开关的规则由本条替代。视觉通知、通知中心记录、桌面卡片高亮及恢复运行时的一次汇总仍保留；安静时段的“暂未启用”入口沿用已确认规则。
+- demo 已删除声音开关，提醒预览统一静音；加载旧演示存储时丢弃原 `sound` 字段，其他设置及事项保留。Windows 通知载荷固定 `<audio silent="true"/>`，不再提供声音参数或 `notificationSound` 人工验收项；`normal`/`silent` 入口名称兼容保留，实际均静音。
+- 实际执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release`（57/57）、`node tests/prototype-qa.mjs`（108 项）、`node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`（22/22），均退出码 0。浏览器回归覆盖考试/作业/活动静音、移除开关、旧声音偏好不恢复、其他设置与事项保留。
+- 实际发布 `.tools/windows-probe-silent` 并通过 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-silent` 更新当前用户安装，均退出码 0；安装 DLL 的 SHA256 与发布一致。本轮没有发送新提醒、读取 QQ 或重跑未改动的 Core/Infrastructure/OCR；静音通知呈现仍未进行新的人工验收。
+- 需求及设计、计划、源码、测试及剩余验收已人工核对一致，未找到的 `maintain-context-hygiene` 技能继续按项目规则人工核对。正式应用仍尚未接入探针能力，取消声音不代表静音通知呈现或 M3 已验收。
 
 ### 本轮接续 M3 真实集成探针
 
@@ -22,17 +30,17 @@
 - 本轮更新文档回归：初次运行四文件 Node 测试 18/19，通过结果报告缺少明确“实时群事件尚未验收”正文而失败；补齐范围后重跑 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，19/19、退出码 0，`git diff --check` 退出码 0。本轮未改产品代码，也未重跑此前 Core/Infrastructure/Windows/OCR/demo 套件。已人工核对需求、设计、交接、报告和本机实际状态；下一步继续实时群事件与 M3 剩余人工验收。
 - 上述接入检查已保存为 `4128526`。随后继续 Windows 通知验证，发现原权限检测只判断管理员组，不能识别 Basic User 进程仍保持高完整性；新增 `ProcessIntegrity.cs` 改为查询真实令牌完整性，并新增独立 `whoami` 回归，Windows 45/45、Release publish 和当前用户安装退出码 0。Basic User 复跑正确返回 `blockedElevated`；当时独立进程降到中等完整性后仍返回 `0x80070490`、没有通知 ID。后续已分别定位包身份与资源缺失并成功提交，见下文；未改系统策略或 QQ 进程。
 - 通知检查后实际重跑 Core Release 295、Windows Release 45、OCR pip check 与 unittest 25、四文件 Node 19、demo 107，全部退出码 0。Infrastructure 初次构建因本轮仍在运行的 300 秒只读探针锁住 DLL 而退出码 1，代码未改；先执行同项目 `--no-build --no-restore --configuration Release`，46 项通过、退出码 0。监听正常结束后再执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release`，构建与 46 项均通过、退出码 0；没有关闭 QQ。四文件 Node 回归随后扩展为 21/21，新增通知资源提取和打包安装检查。
-- 300 秒只读探针报告为 `.tools/m3-results/qq-framework-live-observation.md`，退出码 0、历史 7 条、实时群消息 0、其他事件 11、无失败。用户现已回答“刚收到新的群消息”；第五次探针复制运行产物到独立忽略目录，再实际运行 `.tools/dotnet/dotnet.exe .tools/m3-results/qq-live-run-20261011-feedback/MessagePurify.QqProbe.dll --listen-seconds 180 --output .tools/m3-results/qq-framework-user-feedback.md`，退出码 0，13:42:06（北京时间）开始、实时群消息 1、历史 7、去重后 8、无失败。实时群事件限定范围通过（观察到 1 条），不代表所有群、图片事件或长期稳定性通过。保持 Framework QQ 运行；当前用户实际点击通过，下一步继续声音、静音提醒呈现、桌面人工操作、实时稳定性和历史补漏验收。
+- 300 秒只读探针报告为 `.tools/m3-results/qq-framework-live-observation.md`，退出码 0、历史 7 条、实时群消息 0、其他事件 11、无失败。用户现已回答“刚收到新的群消息”；第五次探针复制运行产物到独立忽略目录，再实际运行 `.tools/dotnet/dotnet.exe .tools/m3-results/qq-live-run-20261011-feedback/MessagePurify.QqProbe.dll --listen-seconds 180 --output .tools/m3-results/qq-framework-user-feedback.md`，退出码 0，13:42:06（北京时间）开始、实时群消息 1、历史 7、去重后 8、无失败。实时群事件限定范围通过（观察到 1 条），不代表所有群、图片事件或长期稳定性通过。保持 Framework QQ 运行；当前用户实际点击通过，下一步继续静音提醒呈现、桌面人工操作、实时稳定性和历史补漏验收。
 - 运行 `python .tools/m3-results/check-recent-group-traffic.py`，每群仅一页 5 条：52 群尝试、41 成功、11 接口失败、历史合计 178 条，近十分钟 2 条分属 2 群，最新时间 13:42:10；退出码 0仅表示诊断完成，不作为全部群历史通过。原统计在 `.tools/m3-results/qq-recent-group-traffic.json`，当时未定位失败原因；后续限定样本诊断见下文。群名、账号、正文及 Token 不输出、不提交；历史诊断不代替实时探针。
 - 用户询问是否会往学校群发送消息，已核对源代码及既有 loopback 读取 action 断言。QQ 接入只读，不向 QQ 群或私聊发送消息；学校群通知及测试提醒不通过 QQ 发送，提醒采用本机 Windows 通知。需求及设计同步明确此边界，不修改 NapCat 本身提供的接口能力。
 - 本次文档检查初跑 19/20，报告缺少明确的长期稳定性未验收状态；补齐正文并纠正设计、M3 计划及测试说明中的旧实时状态。随后加入通知资源提取和冷启动回归，实际重跑四文件 Node 测试为 21/21、退出码 0；实际运行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-build --no-restore --configuration Release --filter FullyQualifiedName~OneBotTransportTests`，5/5、退出码 0，精确断言探针只调用五个读取 action。本次未改产品源码，未重跑完整 Core/Infrastructure/Windows/OCR/demo 套件；已人工核对需求、交接、设计、计划及本机脱敏报告，不把一条实时事件作为长期或七天补漏验收。
 
 - 本轮修正 Windows App SDK 2.5.1 自包含发布缺少 `Microsoft.WindowsAppRuntime.Insights.Resource.dll` 的问题：`MessagePurify.Windows.IntegrationProbe.csproj` 在 Publish 后从匹配官方运行时 MSIX 提取资源，安装脚本也会拒绝缺少该文件的产物；资源字节来自本机 NuGet 缓存，不写入仓库。打包资源提取、覆盖旧文件、缺资源拒绝及空格/中文路径安装回归均通过。
 - `NotificationProbe` 在 `Register()` 后读取 `AppInstance.GetCurrent().GetActivatedEventArgs()`，补上 SDK 首次启动参数消费。受控 COM 冷启动回归报告 `.tools/m3-results/cold-notification-regression-summary.json`：修复前未定位，修复后 `activationObserved=true`、`activationKind=cold`、账号匹配；独立 `tests/notification_cold_activation_test.py` 使用正式发布产物退出码 0。该结果只证明回调路由，不能替代用户实际点击验收。
-- 14:28:38 已按用户要求通过真实 Explorer `.lnk` 重发普通测试提醒，报告 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json` 为 `submitted`、ID 36646、`error=null`、`activationObserved=false`；无包身份 15700、完整性 RID 8192。用户此前已看到一条提醒但点击没有反应；当时运行副本尚未包含冷启动修复，点击问题现已通过专用 URI 入口修复，声音仍未验收。直接从 Codex 运行辅助脚本继承包身份 122，会再次出现 `0x80070490`；无包身份后缺资源错误为 `0x8007007E`，两者分别定位。
+- 14:28:38 已按用户要求通过真实 Explorer `.lnk` 重发普通测试提醒，报告 `.tools/m3-notification-diagnostic-publish/results/normal-medium-user-resend-20261011.json` 为 `submitted`、ID 36646、`error=null`、`activationObserved=false`；无包身份 15700、完整性 RID 8192。用户此前已看到一条提醒但点击没有反应；当时运行副本尚未包含冷启动修复，点击问题现已通过专用 URI 入口修复，旧声音验收现已取消。直接从 Codex 运行辅助脚本继承包身份 122，会再次出现 `0x80070490`；无包身份后缺资源错误为 `0x8007007E`，两者分别定位。
 - 群历史错误诊断实际运行 `python .tools/m3-results/diagnose-group-history-errors-20261011.py`，退出码 0；状态一次、群列表一次、历史两次。报告 `.tools/m3-results/qq-history-errors-diagnosis-20261011.json` 复现一个失败样本 `retcode 1200/data=null`；成功对照返回 5 条消息。失败样本为 NapCat 对底层空历史返回接口错误，未逐群复测全部 11 个失败；仍需在正式同步中逐群展示失败并完成七天补漏策略，不修改 QQ/NapCat 客户端。
 - 保存前重新执行 Windows Release 测试，45/45、退出码 0；通过真实 Explorer 辅助进程运行正式发布产物的冷启动回归，`.tools/m3-results/cold-test-result.json` 为退出码 0、PASS。直接从 Codex 运行包装脚本的包身份环境错误已与产品回归区分；无需再次退出或登录 QQ。未找到 `maintain-context-hygiene` 技能，已人工核对交接、需求、实际源码及验证边界。
-- 通知修复、测试和文档已保存为 `bdffc7b`。14:28 测试等待结束后，14:40:56 使用包含冷启动修复的正式发布产物再次发送本机提醒；报告 `.tools/windows-probe-publish fixed/results/normal-medium-user-resend-fixed-20261011.json` 为 `submitted`、ID 36648、`error=null`，等待点击 600 秒。用户随后反馈该条提醒多次点击无反应；现已改用专用 URI 入口并取得实际点击通过结果，声音仍未验收，不再重复登录 QQ 或无必要地发送提醒。最新文档边界断言与交付文件检查已更新，实际运行 `node --test tests/project-rules.test.mjs` 为 16/16，`git diff --check` 退出码 0。
+- 通知修复、测试和文档已保存为 `bdffc7b`。14:28 测试等待结束后，14:40:56 使用包含冷启动修复的正式发布产物再次发送本机提醒；报告 `.tools/windows-probe-publish fixed/results/normal-medium-user-resend-fixed-20261011.json` 为 `submitted`、ID 36648、`error=null`，等待点击 600 秒。用户随后反馈该条提醒多次点击无反应；现已改用专用 URI 入口并取得实际点击通过结果，旧声音验收现已取消，不再重复登录 QQ 或无必要地发送提醒。最新文档边界断言与交付文件检查已更新，实际运行 `node --test tests/project-rules.test.mjs` 为 16/16，`git diff --check` 退出码 0。
 
 ### 本次通知点击修复与真实反馈
 
@@ -40,7 +48,7 @@
 - 新增 `src/MessagePurify.Windows/IntegrationProbe/NotificationProtocol.cs`，以当前用户注册的 `messagepurify-probe` URI 打开合成事项；严格校验字段，点击只显示详情，不注册或发送通知、不读取 QQ。发送与点击报告使用同一 Probe ID，声音意图与静音载荷保留。新增 `tests/MessagePurify.Windows.Tests/NotificationProtocolTests.cs`、`tests/notification_protocol_activation_test.py`；受控 Shell 分发与实际通知点击分开记录。
 - 14:52:34 发送的普通测试提醒为 ID 36649，发送报告 `.tools/windows-probe-protocol/results/normal-protocol.json`；用户回答“出现了事项窗口”。14:54:38 的 `%LOCALAPPDATA%/MessagePurify/IntegrationProbe/results/protocol-*.json` 点击记录与发送 Probe ID 一致，`activationObserved=true`、`activationKind=protocol`、账号匹配、`error=null`。用户实际点击通过，不再等待同一项反馈。
 - 实际运行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release`，57/57、退出码 0；发布 `.tools/windows-probe-protocol-final` 退出码 0。`python tests/notification_protocol_activation_test.py --executable .tools/windows-probe-protocol/MessagePurify.Windows.IntegrationProbe.exe` 退出码 0，受控报告使用 `controlled-shell-` Probe ID；带 `-Embedding` 的最终产物受控 COM 回归 `.tools/m3-results/cold-protocol-final-test-result.json` 为退出码 0、PASS。
-- 实际通知运行副本为 `.tools/windows-probe-protocol/`，最终发布产物为 `.tools/windows-probe-protocol-final/`；执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-protocol-final` 更新当前用户安装，退出码 0，安装 DLL 的 SHA256 与发布一致，没有覆盖仍打开的事项窗口。当前用户协议注册仍指向实际通知运行副本，后续从新的安装入口发送会重新注册到对应可执行文件。声音、静音提醒呈现、桌面人工项、学校通知日期 OCR、长期稳定性及七天补漏仍未验收；M3 继续实施。
+- 实际通知运行副本为 `.tools/windows-probe-protocol/`，最终发布产物为 `.tools/windows-probe-protocol-final/`；执行 `packaging/probe/Install-Probe.ps1 -PublishDirectory .tools/windows-probe-protocol-final` 更新当前用户安装，退出码 0，安装 DLL 的 SHA256 与发布一致，没有覆盖仍打开的事项窗口。当前用户协议注册仍指向实际通知运行副本，后续从新的安装入口发送会重新注册到对应可执行文件。声音验收已取消；静音提醒呈现、桌面人工项、学校通知日期 OCR、长期稳定性及七天补漏仍未验收；M3 继续实施。
 - 本次四文件 Node 回归初跑 20/21：文档断言要求同一行明确“受控检查不替代实际点击”，更新后的说明分散在两行；补齐说明后实际重跑 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，21/21、退出码 0。本次没有重跑未改动的 Core、Infrastructure、OCR 和 demo 套件；已人工核对当前需求、设计、交接、源码、报告及剩余验收一致，未找到的 `maintain-context-hygiene` 技能继续以项目规定的人工核对替代。
 
 ### 上轮 M2 本地规则与样本
@@ -182,9 +190,7 @@
 - 点击主窗口关闭按钮时默认隐藏到系统托盘并继续运行；设置中允许改为直接退出软件。
 - 首次打开时默认跟随 Windows 系统主题，用户之后可在设置中自由切换。
 - 两张桌面卡片首次显示时由软件根据屏幕空间自动摆放；用户拖动或调整大小后记住新的位置和尺寸。
-- 作业、考试和需要提交的任务的 Windows 提醒播放系统声音；普通通知及不需要完成的事项保持静音。
-- 作业、考试和提交类任务在每个已安排的提醒节点各播放一次系统声音。
-- 设置中提供“任务声音提醒”总开关；关闭后仍保留视觉通知和桌面卡片提醒。
+- 第一版取消声音提醒，所有 Windows 通知均静音；不提供“任务声音提醒”开关，也不进行声音播放验收。视觉通知、通知中心记录、桌面卡片高亮和恢复运行时的一次汇总提醒继续保留。
 - 设置中保留“安静时段”入口，Windows 第一版标注为“暂未启用”，暂不实现按时段自动静音；具体规则留待未来若规划手机版时再讨论。入口尚未实现，手机版开发尚未确定。
 - 任务详情允许自定义相对提醒或关闭单条任务的时间提醒，其他任务沿用默认；自定义不改变正式时间或精度。时间精度兼容的有效延期保持提前间隔；不兼容时临时采用默认节点并显示待确认的设置提示，已关闭的提醒不自动开启。功能尚未实现。
 - 明确延期按字段保护规则接受后，重算对应提醒并使旧安排失效；若与手动正式字段冲突，保留旧值及有效提醒，用户接受建议后再替换。需求已确认，尚未实现。
@@ -318,7 +324,7 @@
 4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态决定与本地来源／目标候选已测试；真实发布者关系获取、记录保存和通知尚未实现。
 5. **下一步：M3 真实 Windows、QQ、OCR 与通知小规模验证**。M1、M2 已完成；M2 的合成样本基线只用于可重复回归，不代表真实独立 QQ 样本已验收。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
 6. 数据模型、SQLite、正式提醒调度、数据保留和正式打包已有开发者方案，见设计稿；尚未完成。消息桥、OCR 进程通信和探针打包已有 M3 实现与验证。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
-7. NapCat 真实只读连接、一群一页历史及实时群事件限定范围通过（观察到 1 条）；七天补漏、接收稳定性、本地规则真实样本误判/漏判、学校通知日期 OCR、桌面宿主层级、通知声音及静音呈现仍须真实验证；当前通知探针的用户实际点击通过，正式应用通知能力尚未接入。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
+7. NapCat 真实只读连接、一群一页历史及实时群事件限定范围通过（观察到 1 条）；七天补漏、接收稳定性、本地规则真实样本误判/漏判、学校通知日期 OCR、桌面宿主层级、静音通知呈现仍须真实验证；当前通知探针的用户实际点击通过，正式应用通知能力尚未接入。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
 8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。Framework 已在本机 QQ 加载并自动登录，用户确认聊天列表和窗口正常显示；实时群事件限定范围通过（观察到 1 条），长期稳定性尚未验证。
 9. 安静时段已明确延期：Windows 第一版只保留“暂未启用”的设置入口，具体时间及自动静音行为留待未来若规划手机版时再讨论；手机版开发尚未确定。
 10. **2026-10-10 七项复核补充已并入设计（需求已确认，M1 仅完成相关核心决定，端到端流程尚未实现）**：
@@ -422,3 +428,4 @@
 | 2026-10-11 | 收到真实群事件并明确 QQ 只读边界 | 用户反馈新群消息后，第五次 180 秒探针收到 1 条、历史 7 条、退出码 0；历史诊断 52 群中 41 成功、11 失败，原因待查。用户询问是否会发群消息，已核对没有发送接口调用，需求明确只读及本机 Windows 提醒。相关文档和测试同步，Node 20/20、OneBotTransportTests 5/5 通过；长期稳定性、七天补漏及 M3 人工项仍未验收 |
 | 2026-10-11 | 通知资源发布、冷启动回调修复及用户要求重发 | 发布补齐匹配 SDK 官方资源并拒绝缺资源安装；冷启动读取 SDK 首次参数，受控 COM 正式产物回归退出 0，Windows 45/45、四文件 Node 21/21。14:28:38 本机提醒提交 ID 36646，实际点击和声音仍待用户反馈；QQ 只读。历史只复测一个失败样本及一个对照，定位空历史错误，不代表七天补漏通过 |
 | 2026-10-11 | 修复通知点击入口，用户确认出现事项窗口 | 探针改用专用 URI 打开合成事项，并补齐 Windows COM 的 `-Embedding` 参数处理；14:52:34 提醒 ID 36649 的实际点击记录与发送 Probe ID 一致，用户实际点击通过。Windows 57/57、Node 21/21、Release 发布、当前用户安装及受控 Shell/COM 回归通过；声音、静音呈现、桌面人工项、长期稳定性及七天补漏未验收，M3 继续实施 |
+| 2026-10-11 | 用户取消声音提醒，第一版统一静音 | 替代此前按任务类别播放声音及声音总开关的规则；demo 删除开关并清理旧声音偏好，通知载荷固定静音，声音验收项移除。Windows 57/57、Node 22/22、浏览器 108 项及 Release 发布/当前用户安装通过；静音呈现和 M3 其余人工项仍未验收 |

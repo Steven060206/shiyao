@@ -60,7 +60,7 @@
 - [x] 编译最小宿主并运行隐藏桥往返；输出真实 WebView2 版本与结果，截取 probe 自身可见 PNG 核对页面，禁止用静态 HTML 测试代替宿主运行。
 - [ ] 实现可视桌面附着，检查父窗、窗口样式、焦点和任务栏状态；用户可操作 Win+D／拖动／缩放。未操作的 Explorer／睡眠／多屏项保持未测试。
 - [x] 发布到独立当前用户固定目录，验证 AppNotificationManager 提权约束检查。已修正管理员组身份与令牌完整性混淆，并在 Publish 后从官方 Windows App SDK 2.5.1 MSIX 提取 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`；中等完整性进程注册与提交测试提醒成功。
-- [x] 修复 SDK 首次冷启动参数消费及 Windows 追加的 `-Embedding` 参数处理，受控 COM 回调和正式发布脚本均通过。通知探针改用专用 URI 点击入口；用户实际点击通过，反馈出现事项窗口，点击记录与发送 Probe ID 一致。声音、静音提醒呈现和长期通知稳定性仍需人工验收。
+- [x] 修复 SDK 首次冷启动参数消费及 Windows 追加的 `-Embedding` 参数处理，受控 COM 回调和正式发布脚本均通过。通知探针改用专用 URI 点击入口；用户实际点击通过，反馈出现事项窗口，点击记录与发送 Probe ID 一致。声音提醒已取消；静音提醒呈现和长期通知稳定性仍需人工验收。
 - [x] 运行现有核心、协议、OCR、Windows 参数测试、四文件 Node（21/21）、探针实际命令及 diff 检查；同步五项实测清单和剩余步骤。独立复核发现并修正 OneBot Dispose 竞态和 OCR 严格 JSONL 边界。
 
 ## 验证与完成条件

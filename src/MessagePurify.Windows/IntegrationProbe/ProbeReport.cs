@@ -30,7 +30,7 @@ public sealed class ProbeReport
         ["winD"] = "notTested", ["ordinaryWindowOcclusion"] = "notTested",
         ["dragAndResize"] = "notTested", ["multiMonitorDpi"] = "notTested",
         ["explorerRestart"] = "notTested", ["sleepResume"] = "notTested",
-        ["notificationPresentation"] = "notTested", ["notificationSound"] = "notTested"
+        ["notificationPresentation"] = "notTested"
     };
 
     public void Save(string path)
