@@ -39,6 +39,8 @@ node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/na
 
 2026-10-11 取消声音提醒后的实际回归为 Windows 57/57、四文件 Node 22/22（文档 17 项）及浏览器 108 项；所有通知载荷固定静音，浏览器检查覆盖移除声音开关、旧 `sound=true` 偏好不恢复、其他设置保留及考试/作业/活动的静音预览。
 
+`python tests/desktop_attachment_test.py --executable <已发布探针的绝对路径>` 在真实 Explorer 中启动合成桌面测试，核对实际父窗为 `SHELLDLL_DefView`、窗口可见标志、子窗/不激活/非置顶样式、物理边界及没有成功状态窗。原版 `Progman` 父窗和多余状态窗均会使回归失败。可增加 `--mouse`，在桌面未被覆盖时实际拖动扩大后的右下角手柄，验证宽高增加 60/30 像素、左上角不移动；结束后释放按钮并恢复指针，测试进程在 5 秒后正常退出。运行鼠标回归时先用 `Shell.Application.MinimizeAll()` 切到桌面，最后 `UndoMinimizeALL()` 恢复窗口。该测试只使用合成卡片，不操作 QQ，不替代用户人工验收。
+
 需要 Node.js 22 或更新版本和 Chrome。默认使用 `C:/Program Files/Google/Chrome/Application/chrome.exe`；其他安装位置可通过环境变量 `CHROME_PATH` 指定。浏览器检查使用独立临时配置，不访问个人浏览器会话。普通测试不会覆盖预览图；仅在主动更新预览时运行 `node tests/prototype-qa.mjs --screenshots`，生成课程选择、待确认、主界面及桌面卡片的六张预览。
 
 这些检查验证 C# 核心、协议、OCR 工作进程、Windows 探针参数和浏览器原型；真实 QQ、Windows 系统通知呈现/点击和桌面人工驻留仍不由自动测试替代。

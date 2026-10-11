@@ -69,10 +69,10 @@ public static class Program
                 if (options.InteractiveDesktop)
                 {
                     mainWindow = CreateMainWindow("桌面验证即将附着。Win+D、遮挡、鼠标和 DPI 均需分别实测。", Stop);
-                    mainWindow.Show();
                     report.Desktop = desktop.Attach();
                     ((TextBlock)((StackPanel)mainWindow.Content).Children[0]).Text =
                         "桌面状态：" + report.Desktop.Status + "\n窗口父子关系不代表可视验收通过。\n此窗口作为附着失败时的处理入口。";
+                    if (report.Desktop.Status != "attachedStructureOnly") mainWindow.Show();
                     report.Save(reportPath);
                 }
                 if (options.Notification is not null || options.ColdActivation)

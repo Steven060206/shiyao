@@ -52,13 +52,14 @@
 
 ## Task 3：Windows 宿主、桌面与通知探针
 
-**Files:** `src/MessagePurify.Windows/IntegrationProbe/`（WPF csproj、宿主、桌面／通知适配、本地 probe 页面）；`tests/MessagePurify.Windows.Tests/`；`packaging/probe/`；`docs/verification/integration-probes.md`。
+**Files:** `src/MessagePurify.Windows/IntegrationProbe/`（WPF csproj、宿主、桌面／通知适配、本地 probe 页面）；`tests/MessagePurify.Windows.Tests/`；`tests/desktop_attachment_test.py`；`packaging/probe/`；`docs/verification/integration-probes.md`。
 
 **Contract:** `--bridge --report` 隐藏启动本地 WebView2，虚拟 HTTPS 主机 `probe.messagepurify.local`，页面发带 id 的 echo 请求，宿主只接受该来源／允许操作，报告往返结果后退出。桌面可视测试和通知发送由专用参数显式触发；通知提交和 activationObserved 独立。当前通知使用专用 URI 激活并记录独立点击报告，保留受控 COM 冷启动回归。报告不包含真实用户数据。
 
 - [x] 写桥来源、JSON 参数、白名单操作、通知载荷路由和桌面几何回归，先确认缺实现失败；锁稳定包与完整依赖。
 - [x] 编译最小宿主并运行隐藏桥往返；输出真实 WebView2 版本与结果，截取 probe 自身可见 PNG 核对页面，禁止用静态 HTML 测试代替宿主运行。
-- [ ] 实现可视桌面附着，检查父窗、窗口样式、焦点和任务栏状态；用户可操作 Win+D／拖动／缩放。未操作的 Explorer／睡眠／多屏项保持未测试。
+- [x] 实现可视桌面附着并修正父窗为 `SHELLDLL_DefView`；真实产物核对父窗、子窗/不激活/非置顶样式、物理边界及无多余状态窗，实际鼠标缩放回归通过。用户确认 Win+D 可见、拖动/缩放正常、不覆盖其他软件。
+- [ ] Explorer 重启、睡眠恢复、多屏/DPI 切换和布局持久化尚未验收，不主动重启 Explorer 或让电脑休眠。
 - [x] 发布到独立当前用户固定目录，验证 AppNotificationManager 提权约束检查。已修正管理员组身份与令牌完整性混淆，并在 Publish 后从官方 Windows App SDK 2.5.1 MSIX 提取 `Microsoft.WindowsAppRuntime.Insights.Resource.dll`；中等完整性进程注册与提交测试提醒成功。
 - [x] 修复 SDK 首次冷启动参数消费及 Windows 追加的 `-Embedding` 参数处理，受控 COM 回调和正式发布脚本均通过。通知探针改用专用 URI 点击入口；用户实际点击通过，反馈出现事项窗口，点击记录与发送 Probe ID 一致。声音提醒已取消；静音提醒呈现和长期通知稳定性仍需人工验收。
 - [x] 运行现有核心、协议、OCR、Windows 参数测试、四文件 Node（21/21）、探针实际命令及 diff 检查；同步五项实测清单和剩余步骤。独立复核发现并修正 OneBot Dispose 竞态和 OCR 严格 JSONL 边界。

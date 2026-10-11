@@ -63,7 +63,8 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'tests/notification_cold_activation_test.py',
     'src/MessagePurify.Windows/IntegrationProbe/NotificationProtocol.cs',
     'tests/MessagePurify.Windows.Tests/NotificationProtocolTests.cs',
-    'tests/notification_protocol_activation_test.py'
+    'tests/notification_protocol_activation_test.py',
+    'tests/desktop_attachment_test.py'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);

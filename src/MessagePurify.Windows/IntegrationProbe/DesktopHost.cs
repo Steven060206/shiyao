@@ -25,11 +25,11 @@ public sealed class DesktopHost : IDisposable
         Native.EnumWindows((handle, _) =>
         {
             string className = Native.ClassName(handle);
-            if (className is "Progman" or "WorkerW" &&
-                Native.FindWindowEx(handle, 0, "SHELLDLL_DefView", null) != 0)
+            if (className is "Progman" or "WorkerW")
             {
-                desktopParent = handle;
-                return false;
+                // The outer wallpaper host is behind the icon view and hides our cards.
+                desktopParent = Native.FindWindowEx(handle, 0, "SHELLDLL_DefView", null);
+                if (desktopParent != 0) return false;
             }
             return true;
         }, 0);
@@ -102,8 +102,9 @@ public sealed class DesktopHost : IDisposable
             SetBounds(DesktopGeometry.Drag(windowStart, dragStart.Value, CursorInParent(), ParentBounds()));
         };
         grid.MouseLeftButtonUp += (_, _) => { dragStart = null; grid.ReleaseMouseCapture(); };
-        var resize = new Thumb { Width = 18, Height = 18, HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Bottom, Cursor = Cursors.SizeNWSE };
+        var resize = new Thumb { Width = 32, Height = 32, HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom, Cursor = Cursors.SizeNWSE,
+            Background = Brushes.LightGray, ToolTip = "拖动箭头调整两张卡片的大小" };
         Grid.SetColumn(resize, 1);
         resize.DragDelta += (_, args) =>
         {
@@ -112,6 +113,11 @@ public sealed class DesktopHost : IDisposable
                 ParentBounds(), new(400 * dpiScale, 180 * dpiScale)));
         };
         grid.Children.Add(resize);
+        var resizeArrow = new TextBlock { Text = "↘", FontSize = 22, Width = 32, Height = 32,
+            TextAlignment = TextAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false };
+        Grid.SetColumn(resizeArrow, 1);
+        grid.Children.Add(resizeArrow);
         return grid;
     }
 
