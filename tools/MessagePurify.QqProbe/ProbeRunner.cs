@@ -12,49 +12,67 @@ public static class ProbeRunner
     public static async Task<ProbeReport> RunAsync(ProbeArguments options, string? accessToken,
         CancellationToken cancellationToken = default)
     {
-        var report = new ProbeReport { HistoryDays = options.HistoryDays, HistoryPageLimit = options.HistoryPages };
-        using var session = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Task? consuming = null;
-        try
+        var report = new ProbeReport { HistoryDays = options.HistoryDays, HistoryPageLimit = options.HistoryPages, ReconnectsRequested = options.ReconnectRounds };
+        string? expectedAccountId = null;
+        for (var connectionIndex = 1; connectionIndex <= options.ReconnectRounds + 1; connectionIndex++)
         {
-            await using var client = await OneBotClient.ConnectAsync(options.Url, accessToken, cancellationToken: session.Token);
-            report.TransportConnected = true;
-            var status = await client.GetStatusAsync(session.Token);
-            report.QqOnline = status.Online;
-            if (!status.Online) { report.Fail(new("qq-offline")); return report; }
-            var login = await client.GetLoginInfoAsync(session.Token);
-            report.AccountVerified = true;
-            report.Version = await client.GetVersionInfoAsync(session.Token);
-            var groups = await client.GetGroupListAsync(session.Token);
-            report.GroupCount = groups.Count;
-            consuming = ConsumeAsync(client, login.AccountId, report, session);
-            var groupIndex = 0;
-            foreach (var group in groups.Take(options.HistoryGroups))
+            using var session = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            Task<bool>? consuming = null;
+            var failuresBeforeConnection = report.Failures.Count;
+            try
             {
+                if (connectionIndex > 1) await Task.Delay(TimeSpan.FromSeconds(2), session.Token);
+                report.ConnectionsAttempted++;
+                report.TransportConnected = false;
+                report.AccountVerified = false;
+                report.QqOnline = null;
+                await using var client = await OneBotClient.ConnectAsync(options.Url, accessToken, cancellationToken: session.Token);
+                report.TransportConnected = true;
+                var status = await client.GetStatusAsync(session.Token);
+                report.QqOnline = status.Online;
+                if (!status.Online) { report.Fail(new("qq-offline", ConnectionIndex: connectionIndex)); return report; }
+                var login = await client.GetLoginInfoAsync(session.Token);
+                if (expectedAccountId is not null && login.AccountId != expectedAccountId)
+                    throw new OneBotProtocolException("account-mismatch");
+                expectedAccountId ??= login.AccountId;
+                report.AccountVerified = true;
+                report.ConnectionsVerified++;
+                report.Version = await client.GetVersionInfoAsync(session.Token);
+                var groups = await client.GetGroupListAsync(session.Token);
+                report.GroupCount = groups.Count;
+                consuming = ConsumeAsync(client, login.AccountId, connectionIndex, report, session);
+                var groupIndex = 0;
+                foreach (var group in groups.Take(options.HistoryGroups))
+                {
+                    session.Token.ThrowIfCancellationRequested();
+                    report.HistoryGroupsAttempted++;
+                    await ReadHistoryAsync(client, login.AccountId, group.GroupId, ++groupIndex, connectionIndex, options, report, session.Token);
+                }
+                await Task.Delay(TimeSpan.FromSeconds(options.ListenSeconds), session.Token);
                 session.Token.ThrowIfCancellationRequested();
-                report.HistoryGroupsAttempted++;
-                await ReadHistoryAsync(client, login.AccountId, group.GroupId, ++groupIndex, options, report, session.Token);
+                session.Cancel();
+                if (!await consuming) return report;
+                consuming = null;
+                if (connectionIndex > 1) report.ReconnectsCompleted++;
             }
-            await Task.Delay(TimeSpan.FromSeconds(options.ListenSeconds), session.Token);
-            session.Cancel();
-            await consuming;
-            consuming = null;
-        }
-        catch (OperationCanceledException)
-        {
-            if (report.Failures.Count == 0) report.Fail(new(cancellationToken.IsCancellationRequested ? "cancelled" : "connection-timeout"));
-        }
-        catch (Exception exception) when (exception is OneBotApiException or OneBotProtocolException or OneBotRequestTimeoutException or WebSocketException or ArgumentException)
-        { report.Fail(SafeFailure(exception)); }
-        finally
-        {
-            session.Cancel();
-            if (consuming is not null) await consuming;
+            catch (OperationCanceledException)
+            {
+                if (report.Failures.Count == failuresBeforeConnection)
+                    report.Fail(new(cancellationToken.IsCancellationRequested ? "cancelled" : "connection-timeout", ConnectionIndex: connectionIndex));
+                return report;
+            }
+            catch (Exception exception) when (exception is OneBotApiException or OneBotProtocolException or OneBotRequestTimeoutException or WebSocketException or ArgumentException)
+            { report.Fail(SafeFailure(exception) with { ConnectionIndex = connectionIndex }); return report; }
+            finally
+            {
+                session.Cancel();
+                if (consuming is not null) await consuming;
+            }
         }
         return report;
     }
 
-    private static async Task ReadHistoryAsync(OneBotClient client, string accountId, string groupId, int groupIndex,
+    private static async Task ReadHistoryAsync(OneBotClient client, string accountId, string groupId, int groupIndex, int connectionIndex,
         ProbeArguments options, ProbeReport report, CancellationToken cancellationToken)
     {
         var seen = new HashSet<MessageKey>();
@@ -64,7 +82,7 @@ public static class ProbeRunner
         string? cursor = null;
         var pagesRead = 0;
         var uniqueInWindow = 0;
-        void Finish(string reason) => report.FinishHistoryGroup(new(groupIndex, pagesRead, uniqueInWindow, reason));
+        void Finish(string reason) => report.FinishHistoryGroup(new(groupIndex, pagesRead, uniqueInWindow, reason, connectionIndex));
         try
         {
             while (pagesRead < options.HistoryPages)
@@ -87,7 +105,7 @@ public static class ProbeRunner
                     var added = seen.Add(message.Message.Key);
                     if (cutoff is null || message.Message.SentAt >= cutoff)
                     {
-                        report.Record(message, history: true);
+                        report.Record(message, history: true, connectionIndex);
                         if (added) uniqueInWindow++;
                     }
                 }
@@ -105,7 +123,7 @@ public static class ProbeRunner
         { Finish(exception.Code); throw; }
         catch (Exception exception) when (exception is OneBotApiException or OneBotProtocolException or OneBotRequestTimeoutException)
         {
-            var failure = SafeFailure(exception) with { GroupIndex = groupIndex };
+            var failure = SafeFailure(exception) with { GroupIndex = groupIndex, ConnectionIndex = connectionIndex };
             report.Fail(failure);
             Finish(failure.Code);
         }
@@ -135,7 +153,7 @@ public static class ProbeRunner
         return selected.MessageSequence ?? throw new OneBotProtocolException("history-cursor-missing");
     }
 
-    private static async Task ConsumeAsync(OneBotClient client, string accountId, ProbeReport report, CancellationTokenSource session)
+    private static async Task<bool> ConsumeAsync(OneBotClient client, string accountId, int connectionIndex, ProbeReport report, CancellationTokenSource session)
     {
         try
         {
@@ -153,16 +171,18 @@ public static class ProbeRunner
                 if (type.ValueKind == JsonValueKind.String && type.GetString() == "private")
                     report.PrivateEventsIgnored++;
                 else if (type.ValueKind == JsonValueKind.String && type.GetString() == "group")
-                    report.Record(OneBotMessageParser.ParseGroupMessage(packet, accountId), history: false);
+                    report.Record(OneBotMessageParser.ParseGroupMessage(packet, accountId), history: false, connectionIndex);
                 else report.OtherEvents++;
             }
         }
         catch (OperationCanceledException) when (session.IsCancellationRequested) { }
         catch (Exception exception)
         {
-            report.Fail(SafeFailure(exception));
+            report.Fail(SafeFailure(exception) with { ConnectionIndex = connectionIndex });
             session.Cancel();
+            return false;
         }
+        return true;
     }
 
     private static ProbeFailure SafeFailure(Exception exception) => exception switch

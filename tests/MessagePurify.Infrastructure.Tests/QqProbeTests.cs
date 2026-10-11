@@ -12,6 +12,7 @@ public sealed class QqProbeTests
         Assert.Equal(30, options.ListenSeconds);
         Assert.Equal(1, options.HistoryGroups);
         Assert.Equal(20, options.HistoryCount);
+        Assert.Equal(0, options.ReconnectRounds);
     }
 
     [Fact]
@@ -57,6 +58,8 @@ public sealed class QqProbeTests
     [InlineData("--history-days", "8")]
     [InlineData("--history-pages", "0")]
     [InlineData("--history-pages", "51")]
+    [InlineData("--reconnect-rounds", "-1")]
+    [InlineData("--reconnect-rounds", "3")]
     [InlineData("--unknown", "private-secret")]
     [InlineData("--url", "ws://127.0.0.1:3001/?access_token=private-secret")]
     public void Options_RejectInvalidArgumentsWithoutEchoingPrivateValues(string option, string value)
@@ -77,5 +80,11 @@ public sealed class QqProbeTests
     {
         Assert.Throws<ArgumentException>(() => ProbeArguments.Parse(["--history-pages", "2", "--history-count", "1"]));
         Assert.Throws<ArgumentException>(() => ProbeArguments.Parse(["--history-days", "1", "--history-count", "1"]));
+    }
+
+    [Fact]
+    public void Options_AllowTwoControlledReconnects()
+    {
+        Assert.Equal(2, ProbeArguments.Parse(["--reconnect-rounds", "2"]).ReconnectRounds);
     }
 }

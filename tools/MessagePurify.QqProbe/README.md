@@ -12,9 +12,13 @@
 
 支持 `--url`、`--listen-seconds`（0～300）、`--history-groups`（0～20 或 `all`）、`--history-count`（1～100）、`--history-days`（0～7）、`--history-pages`（1～50）及 `--output`。默认仍读取一群一页；指定正数天数而未指定页数时，每群最多 20 页。分页每页至少 2 条，天数窗口以本次启动时间为基准。
 
+`--reconnect-rounds`（0～2，默认 0）用于受控重连验证。每轮读取历史并监听 `--listen-seconds` 秒，然后只断开探针自己的 WebSocket；等待 2 秒后重新连接，同一个 QQ 客户端继续运行。每轮重新核对账号与群列表，从最新页回读同一个历史窗口，不复用旧游标；账号不符立即停止，取消后不再连接。消息键去重在本次进程内跨连接保留，失败记录不会因后续成功消失。
+
 ```powershell
 & ./.tools/dotnet/dotnet.exe run --project tools/MessagePurify.QqProbe --configuration Release -- --history-groups all --history-count 100 --history-days 7 --history-pages 20 --listen-seconds 60 --output .tools/m3-results/qq-paged-history.md
 ```
+
+在上述命令中加入 `--reconnect-rounds 1` 可执行两轮读取。报告按连接序号区分群结果，并统计连接核对、完成的重连、重复消息及重连后首次发现的消息键。首次发现不证明消息恰好在断开期间发送；受控重连不替代非预期断网的自动恢复、QQ/NapCat 重启、跨进程持久化或正式任务补漏验收。
 
 分页按发送时间选择最早消息，同秒多条用数值 `real_seq` 消歧，下一请求使用该消息的原样 `message_seq`；不对游标加减或按短 ID 数值排序。带游标请求使用 `reverse_order=true` 向旧消息读取；首次读取最新页不变。游标仅在本次连接中使用，不跨 NapCat 重启持久化。分页包含边界消息，按账号、群、消息 ID 去重；短页继续读取。实时事件在历史读取期间也继续接收。
 

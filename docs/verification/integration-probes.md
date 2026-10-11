@@ -6,9 +6,10 @@
 
 | 项目 | 实际结果 | 证据与边界 |
 | --- | --- | --- |
-| OneBot 协议与客户端 | 通过受控 loopback：60 项 | `tests/MessagePurify.Infrastructure.Tests` Release 60/60；含真实 ClientWebSocket、乱序 echo、事件交错、账号隔离、分页游标/方向/去重/重试、历史字段、并发释放回归。受控服务不代表真实 QQ 已连接。 |
+| OneBot 协议与客户端 | 通过受控 loopback：67 项 | `tests/MessagePurify.Infrastructure.Tests` Release 67/67；含真实 ClientWebSocket、乱序 echo、事件交错、账号隔离、分页游标/方向/去重/重试、历史字段、并发释放回归。受控服务不代表真实 QQ 已连接。 |
 | QQ 真实只读连接 | 接口和实时群事件限定范围通过 | 前四次探针接口通过、实时群消息 0；用户反馈刚收到新群消息后，13:42:06（北京时间）开始的第五次 180 秒探针实际观察到 1 条。QQ 在线、账号核对、NapCat 4.18.37 / v11、群 52 个、历史群成功 1/1、历史消息 7 条、去重后 8 条、无失败，退出码 0。实时群事件限定范围通过（观察到 1 条），不作为七天补漏或长期稳定性验收。最新脱敏报告 `.tools/m3-results/qq-framework-user-feedback.md`。 |
 | 历史分页真实读取 | 41/52 到达停止边界；11 群接口失败 | 20:50:00（北京时间）开始，7 天窗口、每页 100 条、每群最多 20 页；39 群 `date-boundary`、2 群 `empty-page`、11 群持续 1200（各重试一次）。历史计数 1103、窗口内去重 1098、实时群 0；退出码 1 如实反映未补全。方向修复后 3 群分页不再重复，不保证 QQ 返回历史完整。报告 `.tools/m3-results/qq-paged-history-fixed-20261011.md`。 |
+| 受控重连真实读取 | 两次账号核对及主动重连通过；历史部分失败保留 | 21:40:37（北京时间）开始，账号核对 2/2、重连 1/1；每轮 41/52 到达边界，合计 82/104。历史 2206、去重 1098、重复 1108、重连后首次发现 0、实时群 0；同 11 群每轮持续 1200，合计 22 次重试，退出码 1。只断开探针连接，QQ 保持运行；不替代正式自动恢复/持久化，报告 `.tools/m3-results/qq-controlled-reconnect-20261011.md`。 |
 | Framework 桌面模式 | 已加载，用户确认窗口正常 | 官方 v4.18.37 在 QQ `9.9.36-53644` 中实际启动，已加载 `napiloader.dll` 并自动登录；6099 与 localhost 3001 属于同一 QQ 主进程。用户从托盘打开后确认“聊天列表和窗口正常显示”。启动日志曾有 `updateWindowSizeProperties` 的 TypeError，保留问题记录；长期稳定性尚未验收。 |
 | OCR 协议与合成图 | 通过：25 项 Python | `./.tools/ocr/venv/Scripts/python.exe -m pip check` 和 `./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 均通过。真实 CPU 模型识别合成中文通知、长图日期、空白图和损坏图后继续；有限数值、代理码点 UTF-8 和离线模型回归已覆盖。 |
 | 用户 QQ 截图 OCR | 群列表与学校通知正文识别通过；日期角色需确认 | 本机 worker 离线处理用户提供的真实学校通知截图：1828×674、15 行、退出码 0、stderr 为空，关键日期行最低置信度 0.98118。识别到消息时间、学年、填写日期范围及“10月12日之前交齐”；填写范围仍按 `Ambiguous` 进入人工确认，“交齐”候选日期只作为 `SuggestedTime`。原图和完整 OCR 文本仅在 `.tools/m3-results/`。 |
@@ -19,10 +20,10 @@
 ## 代码和自动化验证
 
 - Core Release：296/296。
-- Infrastructure Release：60/60，本轮新增分页参数和受控读取回归。
+- Infrastructure Release：67/67，本轮新增受控重连、跨连接去重、账号变化、取消及失败保留回归。
 - Windows 参数/桥/通知路由/桌面几何及真实令牌完整性：本次 Release 57/57，退出码 0；IntegrationProbe 自包含 `win-x64` publish 退出码 0。此前权限修正阶段为 45/45。
 - OCR：25/25，使用项目隔离解释器运行；`./.tools/ocr/venv/Scripts/python.exe -m pip check` 无坏依赖。
-- Node 文档、NapCat 启动路径和当前用户探针打包：本轮四文件 23/23、退出码 0，文档 18 项。打包测试覆盖官方通知资源提取、缺资源拒绝安装、重复安装和路径空格。
+- Node 文档、NapCat 启动路径和当前用户探针打包：本轮四文件 24/24、退出码 0，文档 19 项。打包测试覆盖官方通知资源提取、缺资源拒绝安装、重复安装和路径空格。
 - demo 浏览器：本轮重新运行 108 项通过。
 - `tests/notification_cold_activation_test.py`：正式自包含发布产物受控 COM 冷启动回归退出码 0，输出 `PASS: cold COM callback located the synthetic account and item.`；受控回调不是用户点击验收。
 - `git diff --check`：退出码 0（仅显示工作区换行提示）。
@@ -116,3 +117,11 @@ M3 仍为“正在实施”。下一步继续历史补漏、实时接收稳定�
 - 最终独立运行目录 `.tools/m3-results/qq-paged-fixed-run-20261011/`，用同样参数复测并输出 `.tools/m3-results/qq-paged-history-fixed-20261011.md`。20:50:00（北京时间）开始，41/52 到达边界（39 日期边界、2 成功空页），11 群持续 1200、11 次重试；历史计数 1103 含 5 条页面重叠，窗口内去重 1098、实时群 0、排除私聊 1、其他事件 6，退出码 1。原 3 群分别读取 3/2/3 页后到达日期边界，方向问题解决；不存在页上限/游标/无进展失败。
 - 本轮重新运行 Core Release 296/296、Infrastructure Release 60/60、Windows Release 57/57、OCR `pip check` 和 unittest 25/25、demo 108 项，均退出码 0；本机真实历史复测的退出码 1 与自动测试分开记录。11 群未补全、历史完整性、断线补漏、正式持久化/任务生成、长期实时接收及桌面恢复/多屏仍未验收。
 - 最终运行 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs`，23/23、退出码 0；新增分页文档边界检查并同步静音通过/长期未验收的断言。需求、设计、计划、交接及真实结果已人工核对一致。
+
+## 本轮受控重连与历史回读
+
+- 探针增加 `--reconnect-rounds 0..2`，默认单次连接保持；每轮完成读取与监听后只断开自身 WebSocket，2 秒后重新连接，重新核对同一账号，从最新页重建游标。跨连接消息键去重保留，报告分连接记录历史结果与失败；取消或账号不符停止，历史失败不因下一轮成功被抹去。
+- 受控 WebSocket 测试支持连续连接，新增回归确认：第二连接读到新增消息并仅计入一次，边界/实时/历史重复不重计，不能复用旧会话游标，账号变化不读新账号历史，失败记录保留，取消后不连接。初跑的 1 项失败为合成事件缺 `post_type`，修正测试数据后实际 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release` 67/67、退出码 0。
+- 实际命令：`python .tools/m3-results/run-current-framework-probe.py .tools/m3-results/qq-reconnect-run-20261011/MessagePurify.QqProbe.dll --history-groups all --history-count 100 --history-days 7 --history-pages 20 --reconnect-rounds 1 --listen-seconds 15 --output .tools/m3-results/qq-controlled-reconnect-20261011.md`。21:40:37（北京时间）开始，两个连接、重连 1/1、账号核对 2/2；每轮 39 日期边界、2 成功空页、11 持续 1200，合计 82/104 到达边界、22 次重试。历史计数 2206、窗口内去重 1098、重复 1108；重连后首次发现 0、实时群 0、私聊 0、其他事件 4；退出码 1。
+- 真实结果证明本次探针能够重新连接同一账号并跨连接去重，不证明断开期间实际有新消息补回。模拟新消息补回通过与真实未观察到新消息分别记录；未进行非预期断网的自动恢复、QQ/NapCat 重启或跨进程持久化验证，正式任务生成/提醒联调仍未完成。
+- 本轮实际完整回归：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release` 296/296，同参数 Infrastructure 67/67、Windows 57/57；`.tools/ocr/venv/Scripts/python.exe -m pip check` 无坏依赖，`-m unittest discover -s tests -p ocr_worker_test.py` 25/25；`node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs` 24/24；`node tests/prototype-qa.mjs` 108 项；`git diff --check` 无错误，均退出码 0。自动测试与真实历史探针退出码 1 分别记录。

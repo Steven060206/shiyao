@@ -28,7 +28,7 @@
 
 **Files:** `src/MessagePurify.Infrastructure/MessagePurify.Infrastructure.csproj`、`NapCat/OneBotClient.cs`、`NapCat/OneBotMessageParser.cs`、`NapCat/OneBotModels.cs`；`tests/MessagePurify.Infrastructure.Tests/`；`tools/MessagePurify.QqProbe/`。
 
-**Contract:** 客户端连 loopback WebSocket 根路径，以 Authorization Bearer 注入本地环境中的 Token；单接收循环将 echo 响应交给对应请求、群事件交给独立队列。解析器消费 JSON 和已核对账号，返回包含 Core `SchoolMessage` 的群事件或明确忽略／账号不匹配结果。CLI 消费 `--url`、`--listen-seconds`、`--history-groups`（含 `all`）、`--history-count`、`--history-days`、`--history-pages`、`--output`，输出脱敏汇总和非零失败码。
+**Contract:** 客户端连 loopback WebSocket 根路径，以 Authorization Bearer 注入本地环境中的 Token；单接收循环将 echo 响应交给对应请求、群事件交给独立队列。解析器消费 JSON 和已核对账号，返回包含 Core `SchoolMessage` 的群事件或明确忽略／账号不匹配结果。CLI 消费 `--url`、`--listen-seconds`、`--history-groups`（含 `all`）、`--history-count`、`--history-days`、`--history-pages`、`--reconnect-rounds`（主动断开自身连接后重新读取）、`--output`，输出脱敏汇总和非零失败码。
 
 - [x] 编写乱序 echo／事件交错、失败 retcode、未知 echo、请求超时、连接关闭、数值大 ID、群/私聊、账号不匹配、text/image/reply 回归。例：数值 `9007199254740993` 必须得到同一十进制字符串；群事件插在响应之间不能丢失。
 - [x] 执行缺实现失败，再实现只读客户端和解析器；保留原始协议字段但不把未知段当作可执行行动。
@@ -36,7 +36,8 @@
 - [x] 用本机受控 WebSocket 服务运行真实传输回归（服务不接 QQ）；运行依赖未就绪路径，验证安全失败报告和退出码。
 - [x] NapCat Framework 服务就绪后执行真实只读探针；限定范围取得 52 个群、一群一页 7 条历史，并在 180 秒监听中观察到 1 条群文本事件。
 - [x] 扩展分页只读探针：按实际返回最早游标向旧读取、去重边界消息、窗口过滤、限制重试及页数、逐群报告停止原因。Infrastructure Release 60/60；真实方向对照定位并修正带游标的 `reverse_order`，3 群重复页修复。
-- [ ] 完成所有群七天历史补漏、断线恢复及长期实时稳定性验证。本轮最终全群读取 41/52 到达停止边界、窗口内去重 1098 条；11 群持续 `retcode 1200`，每群重试一次后保留失败，CLI 退出码 1。1200 不等同于空页，到达边界也不保证 QQ 返回历史完整。
+- [x] 增加受控重连及跨连接去重探针，重新核对同一账号、从最新页重建游标、取消后停止。模拟新增消息补回通过；真实两轮读取账号 2/2、重连 1/1、历史去重 1098，未观察到重连后首次发现消息。Infrastructure Release 67/67。
+- [ ] 完成所有群七天历史补漏、非预期断网自动恢复、跨进程恢复及长期实时稳定性验证。本轮最终全群读取 41/52 到达停止边界、窗口内去重 1098 条；11 群持续 `retcode 1200`，每群重试一次后保留失败，CLI 退出码 1。1200 不等同于空页，到达边界也不保证 QQ 返回历史完整。
 
 ## Task 2：离线 OCR 工作进程
 

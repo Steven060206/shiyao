@@ -6,12 +6,13 @@ public sealed record ProbeArguments(Uri Url, int ListenSeconds, int HistoryGroup
 {
     public int HistoryDays { get; init; }
     public int HistoryPages { get; init; } = 1;
-    public const string Usage = "用法：MessagePurify.QqProbe [--url 本机WS根地址] [--listen-seconds 0..300] [--history-groups 0..20|all] [--history-count 1..100] [--history-days 0..7] [--history-pages 1..50] [--output 报告.md]；分页每页至少2条；Token仅使用MESSAGEPURIFY_NAPCAT_TOKEN环境变量。";
+    public int ReconnectRounds { get; init; }
+    public const string Usage = "用法：MessagePurify.QqProbe [--url 本机WS根地址] [--listen-seconds 0..300] [--history-groups 0..20|all] [--history-count 1..100] [--history-days 0..7] [--history-pages 1..50] [--reconnect-rounds 0..2] [--output 报告.md]；每轮均读取历史并监听，轮间主动断开自身连接2秒；分页每页至少2条；Token仅使用MESSAGEPURIFY_NAPCAT_TOKEN环境变量。";
 
     public static ProbeArguments Parse(string[] args)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        var allowed = new HashSet<string>(["--url", "--listen-seconds", "--history-groups", "--history-count", "--history-days", "--history-pages", "--output"]);
+        var allowed = new HashSet<string>(["--url", "--listen-seconds", "--history-groups", "--history-count", "--history-days", "--history-pages", "--reconnect-rounds", "--output"]);
         for (var i = 0; i < args.Length; i += 2)
         {
             if (!allowed.Contains(args[i]) || i + 1 >= args.Length || !values.TryAdd(args[i], args[i + 1]))
@@ -26,7 +27,7 @@ public sealed record ProbeArguments(Uri Url, int ListenSeconds, int HistoryGroup
         if ((days > 0 || pages > 1) && count < 2) throw new ArgumentException(Usage);
         return new(url, Number("--listen-seconds", 30, 0, 300),
             values.GetValueOrDefault("--history-groups") == "all" ? int.MaxValue : Number("--history-groups", 1, 0, 20),
-            count, values.GetValueOrDefault("--output")) { HistoryDays = days, HistoryPages = pages };
+            count, values.GetValueOrDefault("--output")) { HistoryDays = days, HistoryPages = pages, ReconnectRounds = Number("--reconnect-rounds", 0, 0, 2) };
 
         int Number(string key, int fallback, int minimum, int maximum)
         {

@@ -19,6 +19,8 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
     public string? EventAccount { get; init; } = "9007199254740993";
     public int GroupCount { get; init; } = 1;
     public bool EmitHistoryEvents { get; init; } = true;
+    public int ConnectionCount { get; private set; }
+    public Func<int, string>? AccountForConnection { get; init; }
     public Func<JsonElement, int, (int Retcode, object? Data)>? HistoryResponder { get; set; }
     public List<JsonElement> HistoryParameters { get; } = [];
 
@@ -36,48 +38,55 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
 
     private async Task ServeAsync()
     {
-        try
+        while (!stopping.IsCancellationRequested)
         {
-            var context = await listener.GetContextAsync().WaitAsync(stopping.Token);
-            ObservedAuthorization = context.Request.Headers["Authorization"];
-            socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
-            var buffer = new byte[8192];
-            while (!stopping.IsCancellationRequested && socket.State == WebSocketState.Open)
-            {
-                var frame = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), stopping.Token);
-                if (frame.MessageType == WebSocketMessageType.Close) break;
-                using var request = JsonDocument.Parse(buffer.AsMemory(0, frame.Count));
-                var action = request.RootElement.GetProperty("action").GetString()!;
-                Actions.Add(action);
-                var historyRetcode = 0;
-                object data = action switch
-                {
-                    "get_status" => new { online = Online, good = true },
-                    "get_login_info" => new { user_id = "9007199254740993", nickname = "private-nickname-sentinel" },
-                    "get_version_info" => new { app_name = "NapCat.Onebot", app_version = "4.0.0", protocol_version = "v11" },
-                    "get_group_list" => Groups(),
-                    "get_group_msg_history" => HistoryData(request.RootElement.GetProperty("params"), out historyRetcode),
-                    _ => throw new InvalidOperationException("Unexpected write operation")
-                };
-                if (action == "get_group_msg_history")
-                {
-                    if (EmitHistoryEvents && historyRetcode == 0)
-                    {
-                        var message = FirstHistoryMessage(data, request.RootElement.GetProperty("params"));
-                        var groupEvent = message.EnumerateObject()
-                            .ToDictionary(property => property.Name, property => property.Value.Clone());
-                        if (EventAccount is null) groupEvent.Remove("self_id");
-                        else groupEvent["self_id"] = JsonSerializer.SerializeToElement(EventAccount);
-                        await SendAsync(groupEvent);
-                        await SendAsync(new { post_type = "message", message_type = "private", self_id = "9007199254740993" });
-                        await SendAsync(new { post_type = "meta_event", meta_event_type = "heartbeat", self_id = "9007199254740993" });
-                    }
-                }
-                await SendAsync(new { status = historyRetcode == 0 ? "ok" : "failed", retcode = historyRetcode, echo = request.RootElement.GetProperty("echo").GetString(), data });
-            }
+            try { await ServeConnectionAsync(); }
+            catch (WebSocketException) { } // 客户端正常 Dispose 后，继续接受下一连接。
+            catch (Exception exception) when (stopping.IsCancellationRequested && exception is OperationCanceledException or HttpListenerException or ObjectDisposedException) { break; }
+            finally { socket?.Dispose(); socket = null; }
         }
-        catch (WebSocketException) { } // 客户端正常 Dispose 会终止探针连接。
-        catch (Exception exception) when (stopping.IsCancellationRequested && exception is OperationCanceledException or HttpListenerException or ObjectDisposedException) { }
+    }
+
+    private async Task ServeConnectionAsync()
+    {
+        var context = await listener.GetContextAsync().WaitAsync(stopping.Token);
+        ObservedAuthorization = context.Request.Headers["Authorization"];
+        socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        ConnectionCount++;
+        var buffer = new byte[8192];
+        while (!stopping.IsCancellationRequested && socket.State == WebSocketState.Open)
+        {
+            var frame = await socket.ReceiveAsync(new ArraySegment<byte>(buffer), stopping.Token);
+            if (frame.MessageType == WebSocketMessageType.Close) break;
+            using var request = JsonDocument.Parse(buffer.AsMemory(0, frame.Count));
+            var action = request.RootElement.GetProperty("action").GetString()!;
+            Actions.Add(action);
+            var historyRetcode = 0;
+            object data = action switch
+            {
+                "get_status" => new { online = Online, good = true },
+                "get_login_info" => new { user_id = AccountForConnection?.Invoke(ConnectionCount) ?? "9007199254740993", nickname = "private-nickname-sentinel" },
+                "get_version_info" => new { app_name = "NapCat.Onebot", app_version = "4.0.0", protocol_version = "v11" },
+                "get_group_list" => Groups(),
+                "get_group_msg_history" => HistoryData(request.RootElement.GetProperty("params"), out historyRetcode),
+                _ => throw new InvalidOperationException("Unexpected write operation")
+            };
+            if (action == "get_group_msg_history")
+            {
+                if (EmitHistoryEvents && historyRetcode == 0)
+                {
+                    var message = FirstHistoryMessage(data, request.RootElement.GetProperty("params"));
+                    var groupEvent = message.EnumerateObject()
+                        .ToDictionary(property => property.Name, property => property.Value.Clone());
+                    if (EventAccount is null) groupEvent.Remove("self_id");
+                    else groupEvent["self_id"] = JsonSerializer.SerializeToElement(EventAccount);
+                    await SendAsync(groupEvent);
+                    await SendAsync(new { post_type = "message", message_type = "private", self_id = "9007199254740993" });
+                    await SendAsync(new { post_type = "meta_event", meta_event_type = "heartbeat", self_id = "9007199254740993" });
+                }
+            }
+            await SendAsync(new { status = historyRetcode == 0 ? "ok" : "failed", retcode = historyRetcode, echo = request.RootElement.GetProperty("echo").GetString(), data });
+        }
     }
 
     private object Groups() => Enumerable.Range(0, Math.Max(0, GroupCount)).Select(index => new

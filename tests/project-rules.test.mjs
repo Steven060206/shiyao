@@ -201,6 +201,18 @@ test('历史分页说明区分读取范围和未补全原因', () => {
   assert.match(read('docs/verification/integration-probes.md'), /历史分页.*真实/);
 });
 
+test('受控重连说明保留账号核对、去重和正式补漏边界', () => {
+  const readme = read('tools/MessagePurify.QqProbe/README.md');
+  for (const term of ['--reconnect-rounds', '不复用旧游标', '账号不符立即停止', '取消后不再连接', '跨连接保留', '非预期断网的自动恢复', '跨进程持久化']) {
+    assert.ok(readme.includes(term), `受控重连说明缺失：${term}`);
+  }
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/verification/integration-probes.md']) {
+    const current = read(file).split('### 本次静音提醒验收')[0];
+    assert.match(current, /受控.*重连/, `${file} 记录本轮重连范围`);
+    assert.match(current, /正式.*(未完成|尚未|未验收)/, `${file} 不替代正式应用进度`);
+  }
+});
+
 test('第一版统一静音，取消声音开关及声音播放验收', () => {
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /第一版取消声音提醒，所有 Windows 通知均静音/);
