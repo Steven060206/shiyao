@@ -437,6 +437,19 @@ test('真实首次同步和常驻通过，固定时刻与游戏实测仍待验�
   }
 });
 
+test('单条真实任务按原消息日期确认，完成撤销重开与全量验收分别记录', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /用户.*就按日期保存|用户.*确认按日期保存/, file);
+    assert.match(content, /2026-10-09/, file);
+    assert.match(content, /无钟点|无具体钟点/, file);
+    assert.match(content, /从卡片完成.*(?:撤销|主界面撤销).*退出重开/, file);
+    assert.match(content, /1 个待办任务、46 项未处理待确认、1 项已忽略/, file);
+    assert.match(content, /48 项待确认是 review 类总数，包含 1 项已忽略/, file);
+    assert.match(content, /不.*(?:完整端到端|全部真实任务场景)/, file);
+  }
+});
+
 test('M3 正在实施，实测条件不被协议模拟替代', () => {
   const plan = read('docs/superpowers/plans/2026-10-10-integration-probes.md');
   for (const label of ['Task 1', 'Task 2', 'Task 3', 'get_group_msg_history', 'JSON Lines', 'activationObserved']) {

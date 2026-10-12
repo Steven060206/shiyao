@@ -1,6 +1,16 @@
 # 项目检查
 
-## 本轮真实首次后台同步与常驻验收（2026-10-12）
+## 本轮单条真实事项到卡片验收（2026-10-12）
+
+用户选定材料完成通知，核对原消息 10 月 8 日发送，“明天”对应 10 月 9 日；用户回复“就按日期保存”，保存 2026-10-09、无钟点。真实确认、卡片 P0/已逾期/仅有日期、从卡片完成、主界面撤销、退出重开及卡片打开正确原文通过，最终保留待办。当前 1 个待办任务、46 项未处理待确认、1 项已忽略；此前 48 项待确认是 review 类总数，包含 1 项已忽略。未批量确认真实课程关系，不把一个真实例子记为完整端到端或识别准确率完成，实际游戏实机验收继续延后。
+
+实际 UI Automation 执行确认按钮、原生桌面完成、已完成页撤销；只读 SQLite 验证任务 active → completed → active、正式时间 2026-10-09/Time=null/TimeProtected=true、证据保留 1 条、待确认转为 accepted。托盘脚本首轮未找到退出菜单，原因未确定；同一 `tests/app_tray_test.ps1 -ProcessId 8540 -ExitApplication -Verbose` 重跑退出 0、ExitVerified=true，应用退出码 0，未改生产代码。默认入口重开进程 5128，数据库无重复、两卡片父窗/style 正常，原生卡片点击打开的正式日期和原文通过。首次 UIA 读取因未读点及异步详情时序失败，按实际标签兼容未读点并等待详情就绪后通过，未修改生产逻辑。
+
+本机只读报告位于 `.tools/desktop-validation/`：`real-task-accepted.json`、`real-task-completed.json`、`real-task-restored.json`、`real-task-reopened.json`、`real-task-desktop-accepted.json`、`real-task-desktop-reopened.json`、`real-task-native-detail.json`。QQ 未退出，未发送 QQ/Windows 通知；主界面停在真实任务详情，可由用户核对。下一步继续同步状态、自启动、OCR 队列及其他真实任务/桌面恢复场景。
+
+新增 `AccountWorkspaceTests.DateOnlyReview_UsesOriginalMessageDayAndSurvivesCompleteUndoAndReopen`，采用通用材料文本与合成账号，覆盖以原发送日解析“明天”、日期精度、显式确认、P0、完成/撤销及重开证据保留；单项 1/1、Infrastructure 完整 Release 419/419 通过。文档回归更新当前数量与真实日期确认边界，Node 全量 72/72。生产代码未改，不重新发布，也未重跑未改动的 Core/Windows/OCR/demo。
+
+## 上一段真实首次后台同步与常驻验收（2026-10-12）
 
 真实首次后台同步与批次后保持连接已通过，三个自然固定时刻尚未验收。
 

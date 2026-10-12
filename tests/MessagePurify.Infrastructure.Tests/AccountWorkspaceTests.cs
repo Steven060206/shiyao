@@ -233,6 +233,43 @@ public sealed class AccountWorkspaceTests : IDisposable
     }
 
     [Fact]
+    public void DateOnlyReview_UsesOriginalMessageDayAndSurvivesCompleteUndoAndReopen()
+    {
+        var workspace = Workspace();
+        Groups(workspace);
+        var sentAt = new DateTimeOffset(2026, 10, 8, 13, 50, 0, TimeSpan.FromHours(8));
+        var message = Message(text: "请大家完成材料明天一并收取") with { SentAt = sentAt };
+        Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.History, "history", Now));
+        var review = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.True(review.CanAccept);
+        Assert.Equal("2026-10-09", review.Due);
+        Assert.Null(review.Time);
+        Assert.Equal(sentAt, Assert.Single(review.Evidence).SentAt);
+
+        workspace.Execute(Command("accept-review", review) with { Date = review.Due }, Now);
+        var task = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal("task", task.Kind);
+        Assert.Equal("active", task.State);
+        Assert.Equal(0, task.Priority);
+        Assert.Equal("2026-10-09", task.Due);
+        Assert.Null(task.Time);
+        Assert.True(Assert.Single(Tasks().ListTasks()).TimeProtected);
+        workspace.Execute(Command("complete", task), Now);
+        var completed = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal("completed", completed.State);
+        workspace.Execute(Command("undo-complete", completed) with
+            { UndoOperationId = completed.UndoOperationId }, Now.AddMinutes(1));
+
+        var reopened = Assert.Single(Workspace().Snapshot(Now.AddMinutes(2)).Items);
+        Assert.Equal(task.Id, reopened.Id);
+        Assert.Equal("active", reopened.State);
+        Assert.Equal("2026-10-09", reopened.Due);
+        Assert.Null(reopened.Time);
+        Assert.Equal(sentAt, Assert.Single(reopened.Evidence).SentAt);
+        Assert.Equal(ReviewState.Accepted, Tasks().FindReview(review.Id)!.State);
+    }
+
+    [Fact]
     public void LinkedAccept_RequiresBothVersionsAndUpdatesOriginalTask()
     {
         var workspace = Workspace();
