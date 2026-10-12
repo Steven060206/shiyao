@@ -1,5 +1,9 @@
 using System.IO;
 using System.Text.Json;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Controls.Primitives;
+using MessagePurify.Windows.IntegrationProbe;
 using MessagePurify.Core;
 using MessagePurify.Infrastructure.Application;
 using MessagePurify.Infrastructure.NapCat;
@@ -26,12 +30,29 @@ internal static class SmokeCheck
         return workspace;
     }
 
-    public static async Task RunAsync(AppWindow window, AccountWorkspace workspace, string dataRoot, string reportPath)
+    public static async Task RunAsync(AppWindow window, AccountWorkspace workspace, AppRuntime runtime,
+        DesktopCardHost desktop, string dataRoot, string reportPath)
     {
         var initial = workspace.Snapshot(DateTimeOffset.UtcNow);
         var task = initial.Items.Single(i => i.Kind == "task");
         var review = initial.Items.Single(i => i.Kind == "review" && i.State == "pending");
         await WaitAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]') !== null");
+        await desktop.RefreshAsync();
+        if (desktop.State != "attached" || desktop.Snapshot?.Tasks.Count != 1 || desktop.Snapshot.Pending.Count != 1)
+            throw new InvalidOperationException("正式桌面未挂载或没有显示合成事项。");
+        await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
+        await WaitAsync(window, "document.querySelector('#theme-setting') !== null");
+        await EvaluateAsync(window, "document.querySelector('#theme-setting').value='dark';document.querySelector('#theme-setting').dispatchEvent(new Event('change',{bubbles:true}))");
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.TaskWindow.Background is SolidColorBrush brush && brush.Color == Colors.Black);
+        var reportFile = Path.GetFullPath(reportPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(reportFile)!);
+        var cardsCapture = Path.Combine(Path.GetDirectoryName(reportFile)!, Path.GetFileNameWithoutExtension(reportFile) + "-cards.png");
+        desktop.Capture(cardsCapture);
+        FindButton(desktop.PendingWindow, "open:" + review.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(window, "document.querySelector('#review-form') !== null");
+        FindButton(desktop.TaskWindow, "open:" + task.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(window, "document.querySelector('[data-action=complete]') !== null");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
         await WaitAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(task.Id) + "]') !== null");
         await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(task.Id) + "]').click()");
@@ -46,11 +67,8 @@ internal static class SmokeCheck
         await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).State == "active");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
         await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(task.Id) + "]').click()");
-        await WaitAsync(window, "document.querySelector('#reminder-form [name=reminderMode]') !== null");
-        await EvaluateAsync(window, "document.querySelector('#reminder-form [name=reminderMode]').value='calendar';document.querySelector('#reminder-form [name=reminderMode]').dispatchEvent(new Event('change',{bubbles:true}))");
-        await WaitAsync(window, "document.querySelector('#reminder-form [name=reminderDays]') !== null");
-        await EvaluateAsync(window, "document.querySelector('#reminder-form [name=reminderDays]').value='1';document.querySelector('#reminder-form [name=reminderDays]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#reminder-form [name=reminderClock]').value='20:00';document.querySelector('#reminder-form [name=reminderClock]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-action=set-reminder]').click()");
-        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Reminders.Single(i => i.TaskId == task.Id).Preference.Clock == "20:00");
+        if (await EvaluateAsync(window, "document.querySelector('#reminder-form') === null") != "true")
+            throw new InvalidOperationException("已取消的系统提醒设置仍在页面中。");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=pending]').click()");
         await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(review.Id) + "]').click()");
         await WaitAsync(window, "document.querySelector('#review-form [name=date]') !== null");
@@ -62,18 +80,50 @@ internal static class SmokeCheck
         var reopened = new AccountWorkspace(dataRoot, workspace.AccountId);
         if (reopened.Snapshot(DateTimeOffset.UtcNow).Items.Count(i => i.Kind == "task") != 2)
             throw new InvalidDataException("重开工作区没有保留事项。");
-        var reopenedReminder = reopened.Snapshot(DateTimeOffset.UtcNow).Reminders.Single(i => i.TaskId == task.Id);
-        if (reopenedReminder.Preference.Mode != "calendar" || reopenedReminder.Preference.Days != 1
-            || reopenedReminder.Preference.Clock != "20:00")
-            throw new InvalidDataException("重开工作区没有保留自定义提醒。");
+        runtime.Refresh();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2 && !desktop.PendingWindow.IsVisible);
+        FindButton(desktop.TaskWindow, "complete:" + task.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).State == "completed");
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 1);
+        await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=completed]').click()");
+        await WaitAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(task.Id) + "]') !== null");
+        await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(task.Id) + "]').click()");
+        await WaitAsync(window, "document.querySelector('[data-action=undo-complete]') !== null");
+        await EvaluateAsync(window, "document.querySelector('[data-action=undo-complete]').click()");
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2);
+        // Exercise the actual resize event and persisted layout, without moving the user's pointer.
+        var saved = desktop.Layout;
+        FindThumb(desktop.TaskWindow).RaiseEvent(new DragDeltaEventArgs(20, 12));
+        FindThumb(desktop.TaskWindow).RaiseEvent(new DragCompletedEventArgs(20, 12, false));
+        var resized = desktop.Layout;
+        if (resized.Tasks.Width <= saved.Tasks.Width || resized.Tasks.Height <= saved.Tasks.Height)
+            throw new InvalidOperationException("正式卡片缩放事件未更新窗口。");
+        var savedLayout = new DesktopLayoutStore(dataRoot).Load(new(0, 0, 100000, 100000),
+            DesktopNative.GetDpiForWindow(new System.Windows.Interop.WindowInteropHelper(desktop.TaskWindow).Handle) / 96d);
+        if (savedLayout != resized) throw new InvalidOperationException("正式卡片布局没有持久化。");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
         await WaitAsync(window, "document.querySelectorAll('.task-row').length === 2");
-        var reportFile = Path.GetFullPath(reportPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(reportFile)!);
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
-        File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true, checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "reminder-settings", "native-bridge", "reopen" }, taskCount = 2, capture }, AppWindow.JsonOptions));
+        File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
+            checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+                "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide" },
+            taskCount = 2, capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
     }
+
+    private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            yield return child;
+            foreach (var nested in Descendants(child)) yield return nested;
+        }
+    }
+
+    private static System.Windows.Controls.Button FindButton(Window window, string tag) => Descendants(window)
+        .OfType<System.Windows.Controls.Button>().Single(button => Equals(button.Tag, tag));
+    private static Thumb FindThumb(Window window) => Descendants(window).OfType<Thumb>().First();
 
     public static async Task RunReadOnlyAsync(AppRuntime runtime, string reportPath, int seconds)
     {

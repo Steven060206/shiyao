@@ -43,6 +43,7 @@ const mockScript = `(() => {
   backend.release = () => { backend.hold=false; for (const command of backend.held.splice(0)) respond(command); };
   function respond(command) {
     const parameters=command.parameters || {};
+    if(command.operation==='set-appearance') { backend.appearance=clone(parameters);backend.emit({id:command.id,success:true});return; }
     if (backend.failNext && command.operation !== 'snapshot' && command.operation !== 'mark-read') {
       const error=backend.failNext;backend.failNext=null;backend.emit({id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
     }
@@ -52,16 +53,7 @@ const mockScript = `(() => {
     } else if(command.operation !== 'snapshot') {
       if(!item || item.version !== parameters.version) { backend.emit({id:command.id,success:false,error:'version_conflict',snapshot:backend.snapshot,status:backend.status});return; }
       if(command.operation==='mark-read') item.unread=false;
-      else if(command.operation==='set-reminder') {
-        const plan=backend.snapshot.reminders.find(plan=>plan.taskId===item.id);
-        if(!plan || plan.planVersion!==parameters.reminderVersion) { backend.emit({id:command.id,success:false,error:'version_conflict',snapshot:backend.snapshot,status:backend.status});return; }
-        const preference={mode:parameters.reminderMode,hours:parameters.reminderHours ?? null,days:parameters.reminderDays ?? null,clock:parameters.reminderClock ?? null};
-        if(JSON.stringify(preference)!==JSON.stringify(plan.preference)) {
-          plan.preference=preference;plan.planVersion++;plan.needsReview=false;plan.active=parameters.reminderMode!=='off' && item.state==='active';
-          const schedules={default:['2026-12-19T12:00:00+08:00'],hours:['2026-12-20T14:30:00+08:00'],calendar:['2026-12-18T20:15:00+08:00'],off:[]};
-          plan.nodes=schedules[parameters.reminderMode].map((scheduledAt,index)=>({id:item.id+'-'+plan.planVersion+'-'+index,scheduledAt,state:'pending'}));
-        }
-      } else {
+      else {
         const transitions={'complete':'completed','undo-complete':'active','archive':'archived','restore':'active','ignore':'ignored','undo-ignore':'pending','reject':'rejected'};
         if(transitions[command.operation])item.state=transitions[command.operation];
         if(command.operation==='complete' || command.operation==='ignore') { item.undoOperationId=parameters.operationId;item.undoExpiresAt=new Date(Date.now()+3600000).toISOString(); }
@@ -110,27 +102,31 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
     const select = id => click(`.task-row[data-id="${id}"]`);
     const push = snapshot => evaluate(`backend.snapshot=${JSON.stringify({ ...snapshot, generatedAt: new Date().toISOString() })};backend.push()`);
     const body = () => evaluate('document.body.textContent');
-    const captureReminder = async name => {
-      await evaluate('document.querySelector("#reminder-settings").scrollIntoView({block:"start"});new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
+    const capture = async name => {
+      await evaluate('document.querySelector("#toast").hidden=true;if(!document.querySelector("#settings-panel").hidden)document.querySelector("#desktop-status")?.scrollIntoView({block:"center"})');
+      await delay(350);
+      await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
       const result = await call('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
-      const directory = path.join(workspace, '.tools/reminder-validation'); fs.mkdirSync(directory, { recursive: true });
+      const directory = path.join(workspace, '.tools/desktop-validation'); fs.mkdirSync(directory, { recursive: true });
       fs.writeFileSync(path.join(directory, name), Buffer.from(result.data, 'base64'));
     };
     const waitFor = async expression => { for (let i = 0; i < 50; i++) { if (await evaluate(expression)) return; await delay(50); } assert.fail('页面条件未满足：' + expression); };
     await call('Runtime.enable'); await call('Page.enable');
-    await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
+    await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'no-preference' }] });
     await call('Emulation.setTimezoneOverride', { timezoneId: 'America/New_York' });
     await call('Emulation.setDeviceMetricsOverride', { width: 1200, height: 800, deviceScaleFactor: 1, mobile: false });
     await call('Page.addScriptToEvaluateOnNewDocument', { source: mockScript });
     await call('Page.navigate', { url: pageUrl });
     await waitFor('document.readyState === "complete"');
 
-    await t.test('初次只请求真实快照，等待时无样例或虚假在线状态', async () => {
+    await t.test('初次请求真实快照与卡片外观，等待时无样例或虚假在线状态', async () => {
       assert.ok(await evaluate('!!document.querySelector("#app")'), '正式页面尚未实现');
       assert.match(await body(), /正在读取|等待连接/);
       assert.doesNotMatch(await body(), /QQ 在线|实验报告|Demo/);
       assert.equal(await evaluate('document.querySelectorAll(".task-row").length'), 0);
       assert.deepEqual(await evaluate('backend.messages[0]'), { id: await evaluate('backend.messages[0].id'), operation: 'snapshot', parameters: {} });
+      assert.deepEqual(await evaluate('backend.messages.map(message=>message.operation)'), ['snapshot', 'set-appearance']);
+      assert.deepEqual(await evaluate('backend.messages[1].parameters'), { theme: 'dark', reducedMotion: false });
       assert.equal(await evaluate('document.documentElement.dataset.theme'), 'dark');
       assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(0, 0, 0)');
     });
@@ -139,7 +135,10 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelectorAll(".task-row").length'), 0);
       assert.match(await body(), /连接已断开/); assert.doesNotMatch(await body(), /QQ 在线|实验报告/);
       assert.match(await body(), /QQ.*离线/);
+      await evaluate('backend.emit({type:"open-item",accountId:"12345",id:"cancel1"})');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="mark-read").length'), 0);
       await evaluate(`backend.snapshot=${JSON.stringify(fixture)};backend.status=${JSON.stringify(status)};backend.push()`);
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'cancel1', '快照之后兑现桌面打开请求');
     });
     await waitFor('!!document.querySelector(".task-row")');
     await t.test('首次有待确认默认进入待确认，来源正文安全且图片不发请求', async () => {
@@ -225,109 +224,107 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.doesNotMatch(await evaluate('document.querySelector("#detail-pane").textContent'), /已逾期/);
     });
     await push(fixture);
-    await t.test('只有正式任务显示保存的提醒计划与北京时间基准，图片建议不生成计划', async () => {
+    await t.test('正式详情只保留日期与卡片渠道，不显示时钟提醒设置或旧待确认提示', async () => {
+      const legacy = structuredClone(fixture);
+      Object.assign(legacy.reminders[0], { preference: { mode: 'hours', hours: 1, days: null, clock: null }, needsReview: true });
+      await push(legacy); await nav('tasks'); await select('task1');
+      assert.equal(await evaluate('document.querySelectorAll("#reminder-form,#reminder-plan,#reminder-review,[name=reminderMode],[data-action=set-reminder]").length'), 0);
+      assert.doesNotMatch(await evaluate('document.querySelector("#detail-pane").textContent'), /提醒设置|系统提醒尚未开启|原自定义提醒不再适用|24 小时|12:00/);
+      assert.match(await evaluate('document.querySelector(".deadline-box").textContent'), /2026-12-20.*仅有日期/);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=date]").value'), '2026-12-30', '快照刷新保留已有日期草稿');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=time]").value'), '');
+      await capture('ui-desktop-task-dark.png');
       await nav('pending'); await select('review1');
+      assert.equal(await evaluate('!!document.querySelector("#review-form")'), true);
       assert.equal(await evaluate('!!document.querySelector("#reminder-form")'), false);
-      assert.equal(await evaluate('!!document.querySelector("#reminder-plan")'), false);
-      await nav('tasks'); await select('task1');
-      assert.ok(await evaluate('!!document.querySelector("#reminder-form")'), '正式任务缺少提醒设置');
-      assert.deepEqual(await evaluate('[...document.querySelector("[name=reminderMode]").options].map(option=>option.value)'), ['default', 'hours', 'calendar', 'off']);
-      assert.match(await evaluate('document.querySelector("#reminder-plan").textContent'), /2026-12-19.*12:00/);
-      assert.match(await evaluate('document.querySelector("#reminder-basis").textContent'), /截止时间.*2026-12-20.*仅有日期/);
-      assert.match(await evaluate('document.querySelector("#reminder-plan").textContent'), /北京时间|Asia\/Shanghai/);
-      assert.match(await evaluate('document.querySelector("#reminder-settings").textContent'), /系统提醒尚未开启/);
-      await captureReminder('ui-reminder-default.png');
-      await select('start1');
-      assert.match(await evaluate('document.querySelector("#reminder-basis").textContent'), /开始时间.*2020-01-01/);
-      assert.match(await evaluate('document.querySelector("#reminder-plan").textContent'), /已停止|无有效|暂无/);
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").length'), 0);
     });
-    const precise = structuredClone(fixture);
-    Object.assign(precise.items[0], { time: '18:00', version: 7 });
-    Object.assign(precise.reminders[0], { planVersion: 12, nodes: [{ id: 'precise-24', scheduledAt: '2026-12-19T18:00:00+08:00', state: 'pending' }, { id: 'precise-2', scheduledAt: '2026-12-20T16:00:00+08:00', state: 'pending' }] });
-    await push(precise);
-    await t.test('四种提醒选择带原事项和计划版本提交，成功展示宿主的新计划', async () => {
-      await nav('tasks'); await select('task1');
-      await change('#time-form [name=date]', '2026-12-28');
-      await click('[data-action="set-reminder"]');
-      let command = await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").at(-1)');
-      assert.equal(command.parameters.version, 7); assert.equal(command.parameters.reminderVersion, 12);
-      assert.equal(command.parameters.reminderMode, 'default'); assert.equal(command.parameters.accountId, '12345'); assert.equal(command.parameters.id, 'task1');
-      assert.match(command.parameters.operationId, /^[\da-f-]{36}$/i);
-      assert.equal(command.parameters.reminderHours, undefined); assert.equal(command.parameters.reminderDays, undefined); assert.equal(command.parameters.reminderClock, undefined);
-      assert.equal(await evaluate('document.querySelector("#time-form [name=date]").value'), '2026-12-28', '提醒保存不能覆盖未提交的正式时间草稿');
-      assert.equal(await evaluate('backend.snapshot.items[0].due'), '2026-12-20');
-      await change('[name=reminderMode]', 'hours');
+    await t.test('设置说明两张桌面卡片静音渠道，无安静时段或系统通知待接入入口', async () => {
+      await nav('settings');
+      assert.match(await body(), /通过桌面卡片提醒，不播放声音或发送系统通知/);
+      assert.doesNotMatch(await body(), /安静时段|系统提醒尚未开启|任务声音提醒|提醒时间|提前小时|通知中心/);
+      assert.match(await evaluate('document.querySelector("#desktop-status").textContent'), /等待挂载/);
+      await evaluate('backend.emit({type:"state",desktop:{state:"attached",error:null}})');
+      assert.match(await evaluate('document.querySelector("#desktop-status").textContent'), /两张.*已挂载/);
+      await evaluate('backend.emit({type:"state",desktop:{state:"unavailable",error:"desktop-unavailable"}})');
+      assert.match(await evaluate('document.querySelector("#desktop-status").textContent'), /暂不可用.*主界面.*查看/);
+      assert.doesNotMatch(await body(), /desktop-unavailable/);
+      await capture('ui-desktop-settings-unavailable.png');
+      await evaluate('backend.emit({type:"state",desktop:{state:"attached",error:null}})');
+    });
+    await t.test('外观桥使用有效主题与布尔运动偏好，用户选择和系统变化即时同步', async () => {
+      const appearance = () => evaluate('backend.messages.filter(message=>message.operation==="set-appearance").at(-1)');
+      await change('#theme-setting', 'light'); await change('#motion-setting', 'reduce');
+      let command = await appearance();
+      assert.deepEqual(command.parameters, { theme: 'light', reducedMotion: true });
+      assert.match(command.id, /^[\da-f-]{36}$/i);
+      assert.deepEqual(Object.keys(command).sort(), ['id', 'operation', 'parameters']);
+      await change('#theme-setting', 'system'); await change('#motion-setting', 'system');
+      await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'reduce' }] });
+      await waitFor('backend.appearance?.theme==="light" && backend.appearance?.reducedMotion===true');
+      assert.equal(await evaluate('document.documentElement.dataset.theme'), 'light');
+      await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }, { name: 'prefers-reduced-motion', value: 'no-preference' }] });
+      await waitFor('backend.appearance?.theme==="dark" && backend.appearance?.reducedMotion===false');
+      await capture('ui-desktop-settings-dark.png');
+    });
+    await t.test('外观独立应答不当作事项保存，不清草稿、焦点或既有错误', async () => {
+      await evaluate('backend.hold=true'); await change('#theme-setting', 'light');
+      await nav('tasks'); await select('task1'); await change('#time-form [name=date]', '2026-12-28');
+      await evaluate('document.querySelector("#time-form [name=date]").focus();document.querySelector("#toast").hidden=true;backend.release()');
       assert.equal(await evaluate('document.querySelector("#time-form [name=date]").value'), '2026-12-28');
-      await change('[name=reminderHours]', '3.5'); await click('[data-action="set-reminder"]');
-      command = await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").at(-1)');
-      assert.equal(command.parameters.version, 7); assert.equal(command.parameters.reminderVersion, 12); assert.equal(command.parameters.reminderHours, 3.5);
-      assert.match(await evaluate('document.querySelector("#reminder-plan").textContent'), /2026-12-20.*14:30/);
-      await change('[name=reminderMode]', 'calendar'); await change('[name=reminderDays]', '2'); await change('[name=reminderClock]', '20:15'); await click('[data-action="set-reminder"]');
-      command = await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").at(-1)');
-      assert.equal(command.parameters.reminderMode, 'calendar'); assert.equal(command.parameters.reminderDays, 2); assert.equal(command.parameters.reminderClock, '20:15'); assert.equal(command.parameters.reminderVersion, 13);
-      assert.match(await evaluate('document.querySelector("#reminder-plan").textContent'), /2026-12-18.*20:15/);
-      await change('[name=reminderMode]', 'off'); await click('[data-action="set-reminder"]');
-      command = await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").at(-1)');
-      assert.equal(command.parameters.reminderMode, 'off'); assert.equal(command.parameters.reminderVersion, 14);
-      assert.equal(await evaluate('document.querySelectorAll("#reminder-plan time").length'), 0);
-      assert.match(await evaluate('document.querySelector("#reminder-plan").textContent'), /已关闭/);
+      assert.equal(await evaluate('document.activeElement.name'), 'date');
+      assert.equal(await evaluate('document.querySelector("#toast").hidden'), true);
+      assert.equal(await evaluate('backend.snapshot.items[0].due'), '2026-12-20');
+      await evaluate('backend.failNext="version_conflict"'); await click('[data-action="accept-time"]');
+      const error = await evaluate('document.querySelector("#detail-error").textContent');
+      const before = await evaluate('backend.messages.filter(message=>message.operation==="set-appearance").length');
+      await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'no-preference' }] });
+      await waitFor(`backend.messages.filter(message=>message.operation==="set-appearance").length>${before}`);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=date]").value'), '2026-12-28');
+      assert.match(error, /变化|版本/);
+      assert.equal(await evaluate('document.querySelector("#detail-error").textContent'), error);
     });
-    await push(precise);
-    await t.test('提醒保存失败和版本刷新保留草稿，成功后重开使用已保存选择', async () => {
-      await select('task1'); await change('[name=reminderMode]', 'calendar'); await change('[name=reminderDays]', '2'); await change('[name=reminderClock]', '20:15');
-      await evaluate('backend.failNext="version_conflict"'); await click('[data-action="set-reminder"]');
-      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /变化|版本/);
-      assert.equal(await evaluate('document.querySelector("[name=reminderDays]").value'), '2');
-      assert.equal(await evaluate('document.querySelector("[name=reminderClock]").value'), '20:15');
-      await evaluate('document.querySelector("[name=reminderClock]").focus();backend.snapshot.reminders[0].planVersion=20;backend.snapshot.items[0].version=8;backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
-      assert.equal(await evaluate('document.activeElement.name'), 'reminderClock');
-      assert.equal(await evaluate('document.querySelector("[name=reminderClock]").value'), '20:15');
-      await select('start1'); await select('task1');
-      assert.equal(await evaluate('document.querySelector("[name=reminderMode]").value'), 'calendar');
-      await click('[data-action="set-reminder"]');
-      const command = await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").at(-1)');
-      assert.equal(command.parameters.version, 8); assert.equal(command.parameters.reminderVersion, 20);
-      const saved = await evaluate('backend.snapshot');
-      await call('Page.addScriptToEvaluateOnNewDocument', { source: `backend.snapshot=${JSON.stringify(saved)};backend.hold=false;` });
-      await call('Page.reload'); await waitFor('document.readyState==="complete" && !!document.querySelector(".task-row")');
-      await nav('tasks'); await select('task1');
-      assert.equal(await evaluate('document.querySelector("[name=reminderMode]").value'), 'calendar');
-      assert.equal(await evaluate('document.querySelector("[name=reminderDays]").value'), '2');
-      assert.equal(await evaluate('document.querySelector("[name=reminderClock]").value'), '20:15');
+    await t.test('桌面打开同账号事项清除筛选、定位任务与待确认并保存已读，保留原草稿', async () => {
+      const opened = structuredClone(fixture); opened.items[0].version = 40; opened.items[2].version = 40;
+      await push(opened); await nav('pending'); await select('review1'); await change('#review-form [name=date]', '2026-12-29');
+      await nav('tasks'); await change('#course-filter', '数学'); await change('#search', '不存在'); await change('#state-filter', 'archived');
+      await evaluate('backend.emit({type:"open-item",accountId:"12345",id:"task1"})');
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'tasks');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'task1');
+      assert.equal(await evaluate('document.querySelector("#search").value'), '');
+      assert.equal(await evaluate('document.querySelector("#course-filter").value'), '');
+      assert.equal(await evaluate('document.querySelector("#state-filter").value'), 'active');
+      const taskRead = await evaluate('backend.messages.filter(message=>message.operation==="mark-read" && message.parameters.id==="task1" && message.parameters.version===40)');
+      assert.equal(taskRead.length, 1); assert.equal(taskRead[0].parameters.accountId, '12345');
+      await evaluate('backend.emit({type:"open-item",accountId:"12345",id:"review1"})');
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'pending');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'review1');
+      assert.equal(await evaluate('document.querySelector("#review-form [name=date]").value'), '2026-12-29');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="mark-read" && message.parameters.id==="review1" && message.parameters.version===40).length'), 1);
+      await capture('ui-desktop-open-pending.png');
+      await evaluate('backend.snapshot.items[0].state="completed";backend.snapshot.generatedAt=new Date().toISOString();backend.push();backend.emit({type:"open-item",accountId:"12345",id:"task1"})');
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'completed');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'task1');
     });
-    await t.test('精度降低将原小时规则列为提醒设置待确认，显示当前默认计划并可重设', async () => {
-      const changed = structuredClone(fixture);
-      Object.assign(changed.reminders[0], { planVersion: 30, timeVersion: 2, preference: { mode: 'hours', hours: 1, days: null, clock: null }, needsReview: true });
-      await push(changed); await nav('tasks'); await select('task1');
-      assert.match(await evaluate('document.querySelector("#reminder-review").textContent'), /待确认/);
-      assert.match(await evaluate('document.querySelector("#reminder-review").textContent'), /原自定义提醒不再适用.*当前使用默认提醒/);
-      assert.match(await evaluate('document.querySelector("#reminder-plan").textContent'), /2026-12-19.*12:00/);
-      assert.equal(await evaluate('document.querySelector("[name=reminderMode]").value'), 'hours');
-      assert.equal(await evaluate('document.querySelector("[name=reminderHours]").value'), '1');
-      assert.equal(await evaluate('backend.snapshot.items.filter(item=>item.kind==="review").length'), 4);
-      await captureReminder('ui-reminder-review.png');
-      await click('[data-action="review-reminder"]');
-      assert.equal(await evaluate('document.activeElement.name'), 'reminderMode');
-      await change('[name=reminderMode]', 'default'); await click('[data-action="set-reminder"]');
-      assert.equal(await evaluate('!!document.querySelector("#reminder-review")'), false);
-    });
-    await push(precise);
-    await t.test('自定义输入校验拒绝无效间隔和截止后的提醒，不改变正式时间精度', async () => {
-      await select('task1');
-      const before = await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").length');
-      await change('[name=reminderMode]', 'hours'); await change('[name=reminderHours]', '0'); await click('[data-action="set-reminder"]');
-      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /小时|大于/);
-      await change('[name=reminderMode]', 'calendar'); await change('[name=reminderDays]', '-1'); await change('[name=reminderClock]', '12:00'); await click('[data-action="set-reminder"]');
-      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /天|整数/);
-      await change('[name=reminderDays]', '0'); await change('[name=reminderClock]', '19:00'); await click('[data-action="set-reminder"]');
-      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /截止|之后/);
-      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="set-reminder").length'), before);
-      await push(fixture); await select('task1'); await change('[name=reminderMode]', 'calendar'); await change('[name=reminderDays]', '0'); await change('[name=reminderClock]', '20:15'); await click('[data-action="set-reminder"]');
-      assert.equal(await evaluate('backend.snapshot.items[0].time'), '');
-      assert.match(await evaluate('document.querySelector("#reminder-basis").textContent'), /仅有日期/);
+    await t.test('桌面打开错误账号、未知事项或无效标识只提示中文，不查询其他账号或丢草稿', async () => {
+      await nav('pending'); await select('review1');
+      const before = await evaluate('backend.messages.length');
+      await evaluate('backend.emit({type:"open-item",accountId:"other-account",id:"review1"})');
+      assert.match(await evaluate('document.querySelector("#host-error").textContent'), /账号.*不一致|其他.*账号/);
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'review1');
+      assert.equal(await evaluate('backend.messages.length'), before);
+      await evaluate('backend.emit({type:"open-item",accountId:"12345",id:"missing"})');
+      assert.match(await evaluate('document.querySelector("#host-error").textContent'), /不存在|未找到|无法找到/);
+      await evaluate('backend.emit({type:"open-item",accountId:"12345",id:7})');
+      assert.match(await evaluate('document.querySelector("#host-error").textContent'), /无效|无法打开/);
+      assert.equal(await evaluate('document.querySelector("#review-form [name=date]").value'), '2026-12-29');
+      assert.equal(await evaluate('backend.messages.length'), before);
+      await evaluate('backend.emit({type:"open-item",accountId:"12345",id:"review1"})');
+      assert.equal(await evaluate('document.querySelector("#host-error").hidden'), true);
     });
     await push(fixture);
     await t.test('系统时区不同时仍按北京时间判断精确截止', async () => {
+      await nav('tasks');
       const instant = new Date(Date.now() - 3600000);
       const due = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(instant);
       const time = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(instant);

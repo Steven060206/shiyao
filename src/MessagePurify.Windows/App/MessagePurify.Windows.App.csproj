@@ -13,6 +13,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../IntegrationProbe/DesktopGeometry.cs" Link="DesktopGeometry.cs" />
     <ProjectReference Include="../../MessagePurify.Infrastructure/MessagePurify.Infrastructure.csproj" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <None Update="ui/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />

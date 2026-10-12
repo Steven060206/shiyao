@@ -8,15 +8,52 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
-test('仅用桌面卡片的讨论仍为待确认建议，声音取消规则继续有效', () => {
-  const pending = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
-  assert.match(pending, /未决定：仅使用桌面卡片提醒/);
-  assert.match(pending, /声音提醒此前已取消/);
-  assert.match(pending, /是否取消全部 Windows 弹窗尚待确认/);
-  assert.match(pending, /Windows 投递接入须先等本题明确答复/);
-  const requirements = read('docs/requirements.md');
-  assert.match(requirements, /第一版取消声音提醒，所有 Windows 通知均静音/);
-  assert.match(requirements, /卡片高亮和 Windows 通知提醒/, '未确认建议不替换当前有效规则');
+test('用户 A 已确认两卡片渠道，全部 Windows 系统弹窗和声音取消', () => {
+  const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
+  assert.match(next, /已确认：第一版仅使用两张桌面卡片/);
+  assert.match(next, /2026-10-12 用户选择 A/);
+  assert.doesNotMatch(next, /未决定：仅使用桌面卡片提醒|弹窗尚待确认|Windows 投递接入须先等/);
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md',
+    'docs/superpowers/specs/2026-10-10-windows-app-design.md',
+    'docs/superpowers/plans/2026-10-10-windows-app-implementation.md']) {
+    const content = read(file);
+    assert.match(content, /取消全部 Windows 系统通知弹窗和声音/, file);
+    for (const term of ['自定义', '安静时段', '权限恢复', '历史', '迟到', '恢复', '变更']) {
+      assert.ok(content.includes(term), `${file} 缺少已取消渠道范围：${term}`);
+    }
+    assert.match(content, /普通.*(?:App|通知列表)|App.*(?:普通|通知)/, `${file} 保留普通群通知列表`);
+  }
+  const activeRules = read('docs/requirements.md').split('\n').filter(line => line.startsWith('- ')).join('\n');
+  assert.doesNotMatch(activeRules, /卡片高亮和 Windows 通知提醒|额外发一次 Windows 系统通知|补发一次汇总提醒|每次持续断开超过 5 分钟后发一次系统通知/);
+  assert.doesNotMatch(activeRules, /设置中保留“安静时段”入口|允许单独调整该任务的提醒时间|提前 1 天（24 小时）和 2 小时各提醒一次/);
+});
+
+test('当前桌面方向保留历史产物和真实验证边界', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md',
+    'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
+    const content = read(file);
+    assert.match(content, /ReminderPlanner.*SQLite plans\/ledger|ReminderPlanner、SQLite plans\/ledger/, file);
+    assert.match(content, /历史产物|历史保留/, file);
+    assert.match(content, /不删除.*(?:数据|消息)|不删.*数据|数据.*保留/, file);
+    assert.match(content, /正式.*(?:卡片|桌面).*(?:首段|第一段).*(?:已实现|已完成)/, file);
+    assert.match(content, /多屏.*(?:未验收|尚未验收|仍.*验收)/, `${file} 保留后续真实桌面验收范围`);
+    assert.match(content, /M3.*正在实施|M3.*仍在实施/, file);
+    assert.match(content, /不记为.*完成|不记完成/, `${file} 取消不能记为完成`);
+  }
+});
+
+test('设计和总计划将通知验收替换为卡片和当前状态验收', () => {
+  const spec = read('docs/superpowers/specs/2026-10-10-windows-app-design.md');
+  const acceptance = spec.split('## 12. 后续真实验收')[1].split('## 13.')[0];
+  const plan = read('docs/superpowers/plans/2026-10-10-windows-app-implementation.md');
+  for (const label of ['首次导入与补漏卡片刷新', '卡片时间排序与高亮', '取消与卡片操作', '账号切换与卡片操作', '提示渠道与普通通知列表', '崩溃与工作区恢复']) {
+    assert.ok(acceptance.includes(`| ${label} |`), `设计缺少当前卡片验收：${label}`);
+    assert.ok(plan.includes(`| ${label} |`), `计划缺少当前卡片映射：${label}`);
+  }
+  assert.doesNotMatch(acceptance, /\| 默认与自定义提醒 \||\| 取消与在途通知提交 \||\| 通知状态与旧通知清理 \||\| 崩溃与未知投递结果 \|/);
+  assert.match(spec, /AccountWorkspace.*当前账号快照/);
+  assert.match(spec, /Topmost/);
+  assert.match(plan, /M3.*真实接收.*长期稳定性.*仍在实施/);
 });
 
 for (const file of documents) {
@@ -49,11 +86,19 @@ test('正式应用交付记录区分合成闭环、只读宿主与剩余系统�
     assert.match(content, /持久化提醒第一段/, `${file} 同步本段实现进度`);
     assert.match(content, /reminders\.sqlite3.*schema 1/, `${file} 记录新增提醒库`);
     assert.match(content, /原 messages\/tasks\/routing 三库 schema 1 不变/, `${file} 保留原存储格式`);
-    assert.match(content, /系统提醒尚未开启/, `${file} 区分计划保存和系统投递`);
-    assert.match(content, /Windows 实际投递及后台循环尚未接入/, `${file} 保留系统提醒接入边界`);
+    assert.match(content, /系统提醒尚未开启/, `${file} 保留旧版页面的实际状态`);
+    assert.match(content, /Windows 实际投递及后台循环尚未接入/, `${file} 保留旧版系统投递验证边界`);
+    if (file !== 'tests/README.md') {
+      assert.match(content, /旧通知方案|旧方案/, `${file} 旧提醒产物不能成为后续 Windows 接入要求`);
+      assert.match(content, /系统通知.*(?:取消|已取消)|取消全部 Windows 系统通知/, file);
+    }
   }
   for (const artifact of ['src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj',
     'src/MessagePurify.Windows/App/packages.lock.json', 'src/MessagePurify.Windows/App/ui/app.js',
+    'src/MessagePurify.Windows/App/DesktopCardHost.cs', 'src/MessagePurify.Windows/App/DesktopCardProjection.cs',
+    'src/MessagePurify.Windows/App/DesktopLayoutStore.cs', 'tests/MessagePurify.Windows.Tests/DesktopCardTests.cs',
+    'tests/MessagePurify.Windows.Tests/DesktopLayoutTests.cs', 'tests/app_desktop_test.py',
+    'docs/superpowers/plans/2026-10-12-desktop-only-cards.md',
     'src/MessagePurify.Windows/App/README.md', 'packaging/app/Start-MessagePurify.cmd',
     'tests/application-ui.test.mjs', 'tests/application-launcher.test.mjs']) {
     assert.ok(fs.statSync(path.join(root, artifact)).isFile(), `正式应用产物缺失：${artifact}`);
@@ -148,7 +193,9 @@ test('M4 首轮候选路由状态明确本地分流、课程确认和后续实�
     }
     assert.match(content, /可靠关联 Change 自动更新同一事项/, `${file} 当前可靠变更自动应用`);
     assert.match(content, /课程确认.*(?:撤销|变更).*Task\/Notice.*降级.*待确认/, file);
-    assert.match(content, /普通通知列表入库不等于 Windows 系统通知投递/, file);
+    assert.match(content, file === 'docs/requirements.md'
+      ? /普通通知列表表示学校群中的普通通知，与已取消的 Windows 系统通知无关/
+      : /普通通知列表入库不等于 Windows 系统通知投递/, file);
     assert.match(content, /普通通知转任务.*(?:待完成|尚未完成|后续阶段)/, file);
     assert.match(content, /自动可靠关联变更/, file);
     assert.match(content, /M6.*重新分析协调.*(?:待完成|尚未完成|后续阶段)/, file);
@@ -190,7 +237,9 @@ test('M4 可靠关联变更状态保留持久化目标、来源授权、保守�
     assert.match(content, /保留稳定标题/, file);
     assert.match(content, /LEFT JOIN.*任一来源缺失时间.*同秒顺序冲突.*待确认/, file);
     assert.match(content, /尚未完整支持 real_seq 或跨群原转发顺序/, file);
-    assert.match(content, /变更一次 Windows 通知.*(?:未完成|尚未完成|后续阶段)/, file);
+    assert.match(content, file === 'docs/requirements.md'
+      ? /变更系统通知及系统提醒联调已取消/
+      : /变更一次 Windows 通知.*(?:未完成|尚未完成|后续阶段)/, file);
     assert.match(content, /M6.*重新分析协调.*(?:待完成|尚未完成|后续阶段)/, file);
   }
   const current = read('docs/HANDOFF.md').split('### 暂停接续记录')[0];
@@ -354,14 +403,17 @@ test('受控重连说明保留账号核对、去重和正式补漏边界', () =>
   }
 });
 
-test('第一版统一静音，取消声音开关及声音播放验收', () => {
+test('第一版取消系统通知及声音入口，旧静音 probe 记录保留', () => {
   const requirements = read('docs/requirements.md');
-  assert.match(requirements, /第一版取消声音提醒，所有 Windows 通知均静音/);
-  assert.match(requirements, /不提供“任务声音提醒”开关，也不进行声音播放验收/);
+  assert.match(requirements, /第一版取消全部 Windows 系统通知弹窗和声音/);
+  assert.match(requirements, /不提供声音、系统提醒、自定义提醒时间或安静时段入口/);
+  assert.match(requirements, /不进行通知权限恢复、通知点击或声音播放验收/);
   assert.doesNotMatch(requirements, /播放系统声音|请求一次系统声音/);
-  for (const file of ['docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/verification/integration-probes.md']) {
-    assert.match(read(file), /第一版取消声音提醒，所有 Windows 通知均静音|用户取消声音提醒，第一版所有 Windows 通知均静音/, file);
+  for (const file of ['docs/HANDOFF.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md']) {
+    assert.match(read(file), /取消全部 Windows 系统通知弹窗和声音/, file);
   }
+  assert.match(read('docs/verification/integration-probes.md'), /用户取消声音提醒，第一版所有 Windows 通知均静音/);
+  assert.match(read('docs/verification/integration-probes.md'), /静音呈现及用户实际点击通过/);
 });
 
 test('学校群名仅辅助候选，保留用户确认及非正式名称例外', () => {

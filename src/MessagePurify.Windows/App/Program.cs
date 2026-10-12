@@ -27,10 +27,12 @@ public static class Program
         {
             AppRuntime? runtime = null;
             AppWindow? window = null;
+            DesktopCardHost? desktop = null;
             using var stopping = new CancellationTokenSource();
             using var tray = new Forms.NotifyIcon { Text = "消息提纯", Icon = System.Drawing.SystemIcons.Application, Visible = !check };
             async Task Exit()
             {
+                desktop?.Dispose();
                 if (window is not null) { window.Exiting = true; window.Close(); }
                 tray.Visible = false; stopping.Cancel();
                 if (runtime is not null) await runtime.StopAsync();
@@ -46,12 +48,28 @@ public static class Program
                 menu.Items.Add("退出", null, async (_, _) => await application.Dispatcher.InvokeAsync(Exit).Task.Unwrap());
                 tray.ContextMenuStrip = menu;
                 tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(() => { window.Show(); window.Activate(); });
+                if (!check || synthetic is not null)
+                {
+                    desktop = new(runtime, dataRoot, window.OpenItemAsync);
+                    window.AppearanceChanged += desktop.SetAppearance;
+                    desktop.StatusChanged += () =>
+                    {
+                        window.DesktopStatus = new { state = desktop.State, error = desktop.Error };
+                        runtime.Refresh();
+                    };
+                    await desktop.RefreshAsync();
+                }
                 window.Show();
                 if (!arguments.Contains("--smoke-test")) runtime.Start();
                 if (check)
                 {
                     await window.Ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
-                    if (synthetic is not null) await SmokeCheck.RunAsync(window, synthetic, dataRoot, report);
+                    if (synthetic is not null)
+                    {
+                        await SmokeCheck.RunAsync(window, synthetic, runtime, desktop!, dataRoot, report);
+                        if (int.TryParse(Argument(arguments, "--hold-seconds"), out var hold))
+                            await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(hold, 0, 10)));
+                    }
                     else await SmokeCheck.RunReadOnlyAsync(runtime, report, int.TryParse(Argument(arguments, "--seconds"), out var seconds) ? Math.Clamp(seconds, 1, 120) : 20);
                     await Exit();
                 }

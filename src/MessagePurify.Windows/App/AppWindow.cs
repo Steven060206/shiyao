@@ -20,6 +20,8 @@ public sealed class AppWindow : Window
     private bool disposed;
     public bool Exiting { get; set; }
     public TaskCompletionSource<bool> Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public event Action<string, bool>? AppearanceChanged;
+    public object DesktopStatus { get; set; } = new { state = "waiting", error = (string?)null };
 
     public AppWindow(AppRuntime runtime, string dataRoot, bool hidden)
     {
@@ -91,6 +93,13 @@ public sealed class AppWindow : Window
         var error = (string?)null;
         try
         {
+            if (request!.Operation == "set-appearance")
+            {
+                AppearanceChanged?.Invoke(request.Parameters.GetProperty("theme").GetString()!,
+                    request.Parameters.GetProperty("reducedMotion").GetBoolean());
+                Post(new { id = request.Id, success = true });
+                return;
+            }
             if (request!.Operation != "snapshot")
             {
                 var workspace = runtime.Workspace ?? throw new InvalidOperationException("尚未连接到 QQ 账号。");
@@ -99,13 +108,9 @@ public sealed class AppWindow : Window
                     p.GetProperty("id").GetString()!, p.GetProperty("operationId").GetString()!, p.GetProperty("version").GetInt64(),
                     Optional(p, "date"), Optional(p, "time"), Optional(p, "timeKind"), Optional(p, "undoOperationId"),
                     p.TryGetProperty("targetTaskVersion", out var target) && target.ValueKind != JsonValueKind.Null ? target.GetInt64() : null,
-                    Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean(),
-                    Optional(p, "reminderMode"),
-                    p.TryGetProperty("reminderHours", out var hours) && hours.ValueKind != JsonValueKind.Null ? hours.GetDouble() : null,
-                    p.TryGetProperty("reminderDays", out var days) && days.ValueKind != JsonValueKind.Null ? days.GetInt32() : null,
-                    Optional(p, "reminderClock"),
-                    p.TryGetProperty("reminderVersion", out var reminderVersion) && reminderVersion.ValueKind != JsonValueKind.Null ? reminderVersion.GetInt64() : null);
+                    Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean());
                 await Task.Run(() => workspace.Execute(command, DateTimeOffset.UtcNow));
+                runtime.Refresh();
             }
         }
         catch (ArgumentException exception) { error = exception.Message; }
@@ -119,8 +124,17 @@ public sealed class AppWindow : Window
         ApplicationSnapshot? snapshot = null;
         try { snapshot = await Task.Run(() => runtime.Workspace?.Snapshot(DateTimeOffset.UtcNow)); }
         catch (Exception) { error ??= "读取本地数据失败，原数据已保留。"; }
-        if (requestId is null) Post(new { type = "state", snapshot, status = runtime.Status, error });
-        else Post(new { id = requestId, success = error is null, error, snapshot, status = runtime.Status });
+        if (requestId is null) Post(new { type = "state", snapshot, status = runtime.Status, desktop = DesktopStatus, error });
+        else Post(new { id = requestId, success = error is null, error, snapshot, status = runtime.Status, desktop = DesktopStatus });
+    }
+
+    public async Task OpenItemAsync(string accountId, string id)
+    {
+        await Ready.Task;
+        if (runtime.Workspace?.AccountId != accountId) return;
+        Show(); Activate();
+        await PublishAsync();
+        Post(new { type = "open-item", accountId, id });
     }
 
     private void Post(object message)

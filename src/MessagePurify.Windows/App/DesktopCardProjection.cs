@@ -1,0 +1,56 @@
+using System.Globalization;
+using System.Text.Json;
+using MessagePurify.Core;
+using MessagePurify.Infrastructure.Application;
+
+namespace MessagePurify.Windows.App;
+
+public sealed record DesktopCardsSnapshot(string? AccountId, IReadOnlyList<ApplicationItem> Tasks,
+    IReadOnlyList<ApplicationItem> Pending, string ConnectionText, string? Error);
+
+public static class DesktopCardProjection
+{
+    internal static string RenderSignature(DesktopCardsSnapshot snapshot, string theme, string? operationError,
+        string? layoutError, DateTimeOffset now) => JsonSerializer.Serialize(new { theme, operationError,
+            snapshot.AccountId, snapshot.ConnectionText, layoutError,
+            Tasks = snapshot.Tasks.Select(i => new { i.Id, i.Version, i.Priority, i.Unread, i.Title, i.Due, i.Time,
+                i.TimeKind, i.Course, i.Group, Past = IsPast(i, now) }),
+            Pending = snapshot.Pending.Select(i => new { i.Id, i.Version, i.Unread, i.Title }) });
+
+    internal static bool IsPast(ApplicationItem item, DateTimeOffset now)
+    {
+        if (!DateOnly.TryParseExact(item.Due, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
+            return false;
+        TimeOnly? time = TimeOnly.TryParseExact(item.Time, "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var clock) ? clock : null;
+        return new TaskTime(item.TimeKind == "start" ? TimeKind.Start : TimeKind.Deadline, date, time, "Asia/Shanghai").IsPast(now);
+    }
+
+    public static DesktopCardsSnapshot Build(ApplicationSnapshot? snapshot, MessageHostStatus status)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        var items = snapshot?.Items ?? [];
+        return new(snapshot?.AccountId,
+            Sort(items.Where(item => item.Kind == "task" && item.State == "active")),
+            Sort(items.Where(item => item.Kind == "review" && item.State == "pending")),
+            ConnectionText(snapshot, status), status.Error);
+    }
+
+    private static ApplicationItem[] Sort(IEnumerable<ApplicationItem> items) => items
+        .OrderBy(item => item.Priority ?? int.MaxValue)
+        .ThenBy(item => item.Due is null)
+        .ThenBy(item => item.Due, StringComparer.Ordinal)
+        .ThenBy(item => item.Time is null)
+        .ThenBy(item => item.Time, StringComparer.Ordinal)
+        .ThenBy(item => item.Title, StringComparer.Ordinal)
+        .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
+
+    private static string ConnectionText(ApplicationSnapshot? snapshot, MessageHostStatus status)
+    {
+        if (status.Error == "account-mismatch") return "QQ 账号不匹配，已暂停接收";
+        if (status.Transport == "connecting") return "正在连接 QQ";
+        if (status.Transport != "connected") return "QQ 连接断开，正在重连";
+        if (status.Qq != "online") return "QQ 未登录，已暂停接收";
+        if (status.Receiving != "active") return "QQ 消息接收已暂停";
+        return snapshot is null ? "等待 QQ 账号数据" : "QQ 已连接，正在接收消息";
+    }
+}

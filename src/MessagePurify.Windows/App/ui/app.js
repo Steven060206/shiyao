@@ -13,18 +13,25 @@ try {
   if (['system', 'reduce'].includes(saved?.motion)) preferences.motion = saved.motion;
 } catch {}
 const systemTheme = matchMedia('(prefers-color-scheme:dark)');
+const systemMotion = matchMedia('(prefers-reduced-motion:reduce)');
 function applyPreferences() {
   document.documentElement.dataset.theme = preferences.theme === 'system' ? (systemTheme.matches ? 'dark' : 'light') : preferences.theme;
   document.documentElement.dataset.motion = preferences.motion;
 }
 applyPreferences();
 requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.dataset.ready = 'true'; }));
-systemTheme.addEventListener('change', applyPreferences);
+function syncAppearance() {
+  applyPreferences();
+  request('set-appearance', { theme: document.documentElement.dataset.theme, reducedMotion: preferences.motion === 'reduce' || systemMotion.matches });
+}
+systemTheme.addEventListener('change', syncAppearance);
+systemMotion.addEventListener('change', syncAppearance);
 
 let snapshot = null, status = null, page = 'tasks', selectedId = null, initialized = false;
+let desktop = { state: 'waiting', error: null }, pendingOpenItem = null;
 let filters = { search: '', course: '', state: 'active' }, detailSignature = '', settingsSignature = '', lastFilterPage = null;
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
-const requests = new Map(), busy = new Set(), drafts = new Map(), reminderDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
+const requests = new Map(), busy = new Set(), drafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
 const bridge = window.chrome?.webview;
 const uuid = () => crypto.randomUUID();
 const items = () => snapshot?.items || [];
@@ -44,7 +51,6 @@ function errorLabel(error) {
     undo_expired: '撤销期限已过，当前状态已保留。',
     operation_conflict: '这次操作与之前的请求冲突，请刷新后重试。',
     invalid_time: '请填写有效日期和时间。',
-    invalid_reminder: '请核对提醒间隔、日期和钟点后重试。',
     command_timeout: '本地应用暂未响应，草稿已保留，请稍后刷新。',
     bridge_unavailable: '页面尚未连接本地应用。请从消息提纯应用打开。',
     history_timeout: '历史读取超时',
@@ -95,12 +101,34 @@ function markRead(item) {
   readAttempts.add(key);
   request('mark-read', { accountId: snapshot.accountId, id: item.id, operationId: uuid(), version: item.version });
 }
+function openItem(message) {
+  if (typeof message.accountId !== 'string' || !message.accountId.trim() || typeof message.id !== 'string' || !message.id.trim()) {
+    hostError = '无法打开事项：标识无效。'; render(); return;
+  }
+  if (!snapshot) { pendingOpenItem = { accountId: message.accountId, id: message.id }; return; }
+  pendingOpenItem = null;
+  if (snapshot.accountId !== message.accountId) {
+    hostError = '此事项所属 QQ 账号与当前账号不一致，请核对账号后再打开。'; render(); return;
+  }
+  const item = items().find(item => item.id === message.id && ['task', 'review'].includes(item.kind));
+  if (!item) { hostError = '未找到此事项，请刷新后重试。'; render(); return; }
+  page = item.kind === 'review' ? 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
+  filters = { search: '', course: '', state: item.state };
+  selectedId = item.id; detailError = null; hostError = '';
+  render();
+  document.querySelector('.task-row.selected')?.scrollIntoView({ block: 'nearest' });
+}
 function receive(message) {
   if (!message || typeof message !== 'object') return;
+  if (message.type === 'open-item') { openItem(message); return; }
   const pending = requests.get(message.id);
   if (pending) {
     clearTimeout(pending.timer); requests.delete(message.id);
     if (pending.itemId) busy.delete(pending.itemId);
+    if (pending.operation === 'set-appearance') {
+      if (!message.success) { hostError = errorLabel(message.error); renderStatus(); }
+      return;
+    }
     if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
       else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: errorLabel(message.error) };
@@ -108,21 +136,21 @@ function receive(message) {
     } else if (pending.operation !== 'mark-read') {
       hostError = ''; detailError = null;
       if (pending.itemId) {
-        if (pending.operation !== 'set-reminder') drafts.delete(pending.itemId);
-        if (pending.operation === 'set-reminder') reminderDrafts.delete(pending.itemId);
+        drafts.delete(pending.itemId);
         if (pending.operation === 'confirm-group') groupDrafts.delete(pending.itemId);
-        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'set-reminder': '提醒设置已保存', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
+        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
       }
     }
   } else if (message.type !== 'state') return;
   if (message.type === 'state' && message.error) hostError = errorLabel(message.error);
+  if (['attached', 'waiting', 'unavailable'].includes(message.desktop?.state)) desktop = message.desktop;
   if (message.status && (!status || Date.parse(message.status.updatedAt) >= Date.parse(status.updatedAt) || !status.updatedAt)) status = message.status;
   if (message.snapshot) {
     const incoming = message.snapshot;
     const older = snapshot && Date.parse(incoming.generatedAt) < Date.parse(snapshot.generatedAt);
     if (!older) {
       if (snapshot && snapshot.accountId !== incoming.accountId) {
-        drafts.clear(); reminderDrafts.clear(); groupDrafts.clear(); readAttempts.clear(); selectedId = null; initialized = false;
+        drafts.clear(); groupDrafts.clear(); readAttempts.clear(); selectedId = null; initialized = false;
       }
       snapshot = incoming;
       if (!initialized) {
@@ -131,6 +159,7 @@ function receive(message) {
       }
     }
   }
+  if (pendingOpenItem && snapshot) { openItem(pendingOpenItem); return; }
   render();
 }
 bridge?.addEventListener('message', event => receive(event.data));
@@ -220,25 +249,6 @@ function formHTML(item) {
     ${item.suggestedDue ? `<div class="change-box">建议日期：${html(item.suggestedDue)}${item.suggestedTime ? ' ' + html(item.suggestedTime) : ''}<p>建议尚未成为正式时间，核对后可填入表单。</p><button type="button" class="button small" data-action="use-suggestion">填入建议日期</button></div>` : ''}
     ${item.kind === 'task' ? '<button type="submit" class="button" data-action="accept-time">保存正式时间</button>' : ''}</form>`;
 }
-const reminderFor = item => (snapshot?.reminders || []).find(plan => plan.taskId === item?.id);
-function reminderDraftFor(item) {
-  const preference = reminderFor(item)?.preference;
-  return reminderDrafts.get(item.id) || { mode: preference?.mode || 'default', hours: String(preference?.hours ?? 2), days: String(preference?.days ?? 1), clock: preference?.clock || '12:00' };
-}
-function reminderHTML(item) {
-  const plan = reminderFor(item), draft = reminderDraftFor(item);
-  const times = (plan?.nodes || []).map(node => `<li><time datetime="${html(node.scheduledAt)}">${html(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(node.scheduledAt)))}</time></li>`).join('');
-  const planMessage = !plan ? '暂无已保存的提醒计划，请刷新后查看。' : plan.preference.mode === 'off' ? '已关闭该任务的截止／开始提醒。' : !plan.active ? `提醒计划已停止：${item.state !== 'active' ? states[item.state] || '当前事项不在待办中' : past(item) ? item.timeKind === 'start' ? '开始时间已过' : '截止时间已过' : '暂无有效节点'}。` : times ? '' : '暂无有效提醒节点。';
-  return `<section class="reminder-settings" id="reminder-settings"><h3 class="section-label">提醒设置</h3>
-    <p class="hint" id="reminder-basis">提醒基准：${timeLabel(item)} · ${html(dateLabel(item))}</p>
-    ${plan?.needsReview ? '<div class="change-box reminder-review" id="reminder-review"><b>提醒设置待确认</b><p>原自定义提醒不再适用，当前使用默认提醒。正式时间仅有日期，请重新设置或关闭提醒。</p><button type="button" class="button small" data-action="review-reminder">重新设置提醒</button></div>' : ''}
-    ${plan ? `<form class="form" id="reminder-form" data-id="${html(item.id)}" novalidate>
-      <label class="field">提醒方式<select name="reminderMode"><option value="default" ${draft.mode === 'default' ? 'selected' : ''}>默认提醒</option><option value="hours" ${draft.mode === 'hours' ? 'selected' : ''} ${!item.time ? 'disabled' : ''}>提前若干小时</option><option value="calendar" ${draft.mode === 'calendar' ? 'selected' : ''}>前若干天的某时刻</option><option value="off" ${draft.mode === 'off' ? 'selected' : ''}>关闭该任务的时间提醒</option></select></label>
-      ${draft.mode === 'hours' ? `<label class="field">提前小时数<input type="number" name="reminderHours" min="0" step="any" value="${html(draft.hours)}"></label>${!item.time ? '<p class="hint">小时提醒需要已确认的正式时刻；可改用默认或日历提醒，也可关闭。</p>' : ''}` : draft.mode === 'calendar' ? `<div class="form-grid"><label class="field">提前天数（0 为当天）<input type="number" name="reminderDays" min="0" step="1" value="${html(draft.days)}"></label><label class="field">提醒钟点<input type="time" name="reminderClock" value="${html(draft.clock)}"></label></div><p class="hint">提醒钟点不会补写为正式截止或开始时刻。</p>` : draft.mode === 'default' ? `<p class="hint">${item.time ? '默认提前 24 小时、2 小时。' : '只有日期时，默认前一天中午 12:00。'}</p>` : '<p class="hint">关闭后保留选择，延期也不会自动开启。</p>'}
-      <button type="submit" class="button" data-action="set-reminder">保存提醒设置</button></form>` : ''}
-    <div id="reminder-plan"><h3 class="section-label">${plan?.needsReview ? '当前默认提醒计划' : '已保存提醒计划'} · 北京时间</h3>${planMessage ? `<p class="hint">${html(planMessage)}</p>` : ''}${times ? `<ul class="reminder-plan-list">${times}</ul>` : ''}</div>
-    <p class="hint reminder-availability">系统提醒尚未开启；当前仅保存提醒设置和计划。</p></section>`;
-}
 function sourceHTML(item) {
   return '<h3 class="section-label">原始消息</h3>' + (item.evidence?.length ? item.evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('') : '<p class="hint">暂无可显示的原消息正文。</p>');
 }
@@ -268,7 +278,7 @@ function retainFocus(container, replace) {
 }
 function renderDetail() {
   const item = page === 'settings' ? null : selected();
-  const signature = item ? JSON.stringify([{ ...item, version: undefined, targetTaskVersion: undefined, unread: undefined }, item.kind === 'task' ? reminderFor(item) : null]) : `empty/${page}/${Boolean(snapshot)}/${status?.transport}/${status?.qq}`;
+  const signature = item ? JSON.stringify({ ...item, version: undefined, targetTaskVersion: undefined, unread: undefined }) : `empty/${page}/${Boolean(snapshot)}/${status?.transport}/${status?.qq}`;
   const scroll = $('detail-pane').querySelector('.detail-scroll'), footer = $('detail-pane').querySelector('.confirmation-bar');
   if (signature !== detailSignature) {
     const sameItem = scroll.querySelector('form')?.dataset.id === item?.id;
@@ -280,7 +290,6 @@ function renderDetail() {
         <div class="detail-actions">${actionsHTML(item)}</div>
         ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">调整正式时间</h3>${formHTML(item)}` : ''}
         ${item.kind === 'review' && item.state === 'pending' && !item.canAccept ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
-        ${item.kind === 'task' ? reminderHTML(item) : ''}
         ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
     });
@@ -307,7 +316,7 @@ function updateDetailControls() {
 }
 function renderSettings() {
   const pinnedGroups = (snapshot?.groups || []).filter(group => group.pinned);
-  const signature = JSON.stringify([pinnedGroups, status && { ...status, updatedAt: undefined }, preferences]);
+  const signature = JSON.stringify([pinnedGroups, status && { ...status, updatedAt: undefined }, preferences, desktop]);
   if (signature === settingsSignature) return;
   retainFocus($('settings-panel'), () => {
     $('settings-panel').innerHTML = `<section class="settings-section"><h2>界面</h2><div class="setting-row"><span>主题</span><select id="theme-setting"><option value="system">跟随 Windows</option><option value="light">浅色</option><option value="dark">深色</option></select></div><div class="setting-row"><span>动画</span><select id="motion-setting"><option value="system">跟随系统</option><option value="reduce">减少动画</option></select></div></section>
@@ -317,7 +326,7 @@ function renderSettings() {
         return `<div class="group-setting" data-group-id="${html(group.groupId)}"><h3>${html(group.name)}</h3><p>建议课程：${html(group.suggestedCourse || '请核对群名称')}${group.excluded ? ' · 已排除' : group.course ? ' · 已确认' : ' · 待确认'}</p><label class="field">课程或分类<input name="course" maxlength="80" value="${html(groupDrafts.get(group.groupId))}"></label><div class="detail-actions"><button class="button primary small" data-action="confirm-group">确认关联</button><button class="button small" data-action="exclude-group">${group.excluded ? '恢复接收并确认' : '排除此群'}</button></div></div>`;
       }).join('') : '<p class="hint">尚无置顶群名单。连接 QQ 后会显示可确认的真实群。</p>'}</section>
       <section class="settings-section"><h2>接收状态</h2><p>${html($('connection-status').textContent)} · ${html($('receiving-status').textContent)}</p><p>${html($('history-status').textContent)}</p>${status?.historyFailures?.length ? '<p>未完成历史读取：</p>' + status.historyFailures.map(failure => `<p>${html(pinnedGroups.find(group => group.groupId === failure.groupId)?.name || failure.groupId)} · ${html(errorLabel(failure.reason))}</p>`).join('') : ''}</section>
-      <section class="settings-section"><h2>安静时段</h2><p>暂未启用。</p></section>`;
+      <section class="settings-section"><h2>桌面卡片提醒</h2><p>通过桌面卡片提醒，不播放声音或发送系统通知。</p><p>任务与待确认使用两张常驻桌面卡片，普通群通知仍在通知列表查看。</p><p id="desktop-status">${desktop.state === 'attached' ? '两张桌面卡片已挂载。' : desktop.state === 'unavailable' ? '桌面卡片暂不可用，仍可在主界面查看任务和待确认。' : '桌面卡片正在等待挂载。'}</p></section>`;
     $('theme-setting').value = preferences.theme; $('motion-setting').value = preferences.motion;
   });
   settingsSignature = signature;
@@ -337,26 +346,6 @@ function acceptReview(item) {
   const time = item.action === 'cancel' && item.targetTaskId ? {} : validateTime(item);
   if (time) command('accept-review', item, { ...time, ...(item.targetTaskId ? { targetTaskVersion: item.targetTaskVersion } : {}) });
 }
-function saveReminder(item) {
-  const plan = reminderFor(item);
-  if (item?.kind !== 'task' || !plan) return;
-  const draft = reminderDraftFor(item), extra = { reminderVersion: plan.planVersion, reminderMode: draft.mode };
-  let message = '';
-  if (draft.mode === 'hours') {
-    const hours = Number(draft.hours);
-    if (!item.time) message = '小时提醒需要已确认的正式时刻，请重新选择提醒方式。';
-    else if (!Number.isFinite(hours) || hours <= 0) message = '提前小时数必须是大于 0 的有效数值。';
-    else extra.reminderHours = hours;
-  } else if (draft.mode === 'calendar') {
-    const days = Number(draft.days);
-    if (!draft.days.trim() || !Number.isSafeInteger(days) || days < 0) message = '提前天数必须是 0 或正整数。';
-    else if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.clock)) message = '请填写有效的提醒钟点。';
-    else if (days === 0 && item.time && draft.clock > item.time) message = `提醒不能安排在正式${timeLabel(item)}之后。`;
-    else { extra.reminderDays = days; extra.reminderClock = draft.clock; }
-  } else if (!['default', 'off'].includes(draft.mode)) message = '请选择有效的提醒方式。';
-  if (message) { detailError = { id: item.id, message }; updateDetailControls(); return; }
-  command('set-reminder', item, extra);
-}
 document.addEventListener('input', event => {
   const element = event.target;
   if (element.id === 'search') { filters.search = element.value; render(); }
@@ -364,10 +353,6 @@ document.addEventListener('input', event => {
   if (form && ['date', 'time', 'timeKind'].includes(element.name)) {
     const item = items().find(item => item.id === form.dataset.id);
     if (item) draftFor(item)[element.name] = element.value;
-  }
-  if (form?.id === 'reminder-form' && ['reminderMode', 'reminderHours', 'reminderDays', 'reminderClock'].includes(element.name)) {
-    const item = items().find(item => item.id === form.dataset.id);
-    if (item) reminderDrafts.set(item.id, { ...reminderDraftFor(item), [element.name.slice(8).toLowerCase()]: element.value });
   }
   const group = element.closest('[data-group-id]');
   if (group && element.name === 'course') groupDrafts.set(group.dataset.groupId, element.value);
@@ -378,22 +363,17 @@ document.addEventListener('change', event => {
   else if (element.id === 'state-filter') { filters.state = element.value; render(); }
   else if (element.id === 'theme-setting' || element.id === 'motion-setting') {
     preferences[element.id === 'theme-setting' ? 'theme' : 'motion'] = element.value;
-    applyPreferences(); try { localStorage.setItem(preferencesKey, JSON.stringify(preferences)); } catch { toast('界面偏好暂时无法保存'); }
+    syncAppearance(); try { localStorage.setItem(preferencesKey, JSON.stringify(preferences)); } catch { toast('界面偏好暂时无法保存'); }
     settingsSignature = '';
   }
   const form = element.closest('form[data-id]');
   if (form && element.name === 'timeKind') { const item = items().find(item => item.id === form.dataset.id); if (item) draftFor(item).timeKind = element.value; }
-  if (form?.id === 'reminder-form' && element.name === 'reminderMode') {
-    const item = selected(); if (item) reminderDrafts.set(item.id, { ...reminderDraftFor(item), mode: element.value });
-    detailSignature = ''; renderDetail();
-  }
 });
 document.addEventListener('submit', event => {
   event.preventDefault();
   const item = selected();
   if (event.target.id === 'time-form' && item) { const time = validateTime(item); if (time) command('accept-time', item, time); }
   else if (event.target.id === 'review-form') acceptReview(item);
-  else if (event.target.id === 'reminder-form') saveReminder(item);
 });
 document.addEventListener('click', event => {
   const button = event.target.closest('button[data-action]');
@@ -414,7 +394,6 @@ document.addEventListener('click', event => {
     request('confirm-group', { accountId: snapshot.accountId, id: groupId, operationId: uuid(), version: 0, course, excluded }, groupId); return;
   }
   const item = selected(); if (!item) return;
-  if (action === 'review-reminder') { $('reminder-form')?.elements.reminderMode.focus(); return; }
   if (action === 'use-suggestion') {
     const draft = draftFor(item); draft.date = item.suggestedDue || ''; draft.time = item.suggestedTime || '';
     const form = $('review-form') || $('time-form');
@@ -432,3 +411,4 @@ document.addEventListener('click', event => {
 
 render();
 request('snapshot', {});
+syncAppearance();

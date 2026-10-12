@@ -31,6 +31,8 @@ public sealed class AppRuntime
 
     public void Start() => running ??= Task.Run(RunAsync);
 
+    public void Refresh() => Changed?.Invoke();
+
     private async Task RunAsync()
     {
         var endpoint = new Uri("ws://127.0.0.1:3001/");

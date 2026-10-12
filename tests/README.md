@@ -1,6 +1,32 @@
 # 项目检查
 
-本轮持久化提醒第一段（2026-10-12）：新增账号 `reminders.sqlite3` schema 1，原 messages/tasks/routing 三库 schema 1 不变。正式提醒设置、计划、NeedsReview、节点与投递台账已接入 AccountWorkspace/桥/UI；可控 sink 验证默认/小时/日历/关闭、延期、恢复一次汇总、去重、有限重试及在途提交协调。页面明确显示“系统提醒尚未开启”；Windows 实际投递及后台循环尚未接入，本段没有发送 QQ 或 Windows 通知。
+## 本轮正式桌面卡片首段（2026-10-12）
+
+正式两张桌面卡片首段已实现并验证：当前账号 active 任务/pending 待确认、稳定排序、查看/完成、主题同步、DIP 布局存盘重开、空待确认隐藏。系统通知、声音、定时提醒表单/预览和安静时段入口已取消，App 普通通知列表及旧 plans/ledger 保留。Windows Release 141/141、Infrastructure Release 375/375、Node 七文件 63/63（文档 27、Chrome 24、入口 3、其余 9）退出 0；App 与 Windows.Tests locked restore、最终自包含 publish、入口检查及真实 Native 合成/独立桌面窗口检查均退出 0。
+
+单次差异审查发现时钟跨界标签未刷新：任务版本和 P0 不变时 render signature 未含 past。新增截止/开始/只有日期跨午夜三项专项先红 0/3；同一 `now` 的 `IsPast` 同时用于 signature/Render 后完整 Windows 141/141。DPI 重挂载不自动 Save，仅 Load/Clamp；既有五项损坏/未知格式布局用例增加重复变更边界/scale 读取断言，确认原文件保留。Node 初轮 61/63 因测试只模拟主题而未固定本机减少动画（motion=true），仅将测试 CDP 固定 `no-preference` 后全部通过。
+
+本轮实际验证命令：
+
+```powershell
+& ./.tools/dotnet/dotnet.exe restore src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --locked-mode
+& ./.tools/dotnet/dotnet.exe restore tests/MessagePurify.Windows.Tests --locked-mode
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release
+node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs tests/pinned-groups-bridge.test.mjs tests/application-ui.test.mjs tests/application-launcher.test.mjs
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-desktop
+& ./.tools/ocr/venv/Scripts/python.exe tests/app_desktop_test.py --executable .tools/published/app-desktop/MessagePurify.exe
+```
+
+新产物 `--smoke-test --report .tools/desktop-validation/native-smoke-final.json` 真实运行并核对进程 ExitCode=0、success=true：snapshot、complete、undo-complete、explicit-date、accept-review、native-bridge、reopen、desktop-data、desktop-theme、desktop-open-item、desktop-complete、desktop-layout、pending-hide 共 13 项通过。`native-smoke-final.png` 和 `native-smoke-final-cards.png` 已查看。Python 检查枚举本次进程两个卡片子窗，parentClass=`SHELLDLL_DefView`、child/noActivate=true、topmost=false，任务可见、待确认空隐藏；对旧 app-reminders 的同项检查曾实际失败，旧版无正式卡片。独立 PowerShell 执行 `packaging/app/Start-MessagePurify.ps1 -CheckOnly` 后读取 ExitCode=0、Ready/AuthenticationReady=true，报告 `.tools/desktop-validation/launcher-check.json`。
+
+Core/OCR/demo 本轮未改，沿用上段已实际通过的 Core 301/301、OCR pip check/unittest 25/25、demo 108，不记为本轮重跑。桌面合成使用临时账号，本轮未重测真实 QQ 数量，沿用上段 9 个置顶群/40 项待确认两次结果，未代用户确认课程/日期。拖动复用已验证几何、缩放使用实际 Thumb 事件；本轮未做物理鼠标拖动，多屏、Explorer 重启和睡眠恢复尚未验收。重挂载代码、模拟边界/DPI布局回归不代表长期稳定性或真实任务端到端完成，完整变化标记仍待实施。源码/测试在仓库；本机报告与截图位于忽略目录 `.tools/desktop-validation/`。最终 Node 七文件 63/63、diff/staged check 退出 0，本轮已用对应 Git commit 保存；最终提交标识以 Git 日志为准。
+
+## 历史验证记录
+
+下列各段保留当时执行命令和结果；Windows 通知渠道现已取消，旧“尚未接入”或后续提醒工作不作为当前计划。正式卡片当前范围以上节为准。
+
+历史持久化提醒第一段（2026-10-12）：新增账号 `reminders.sqlite3` schema 1，原 messages/tasks/routing 三库 schema 1 不变。正式提醒设置、计划、NeedsReview、节点与投递台账已接入 AccountWorkspace/桥/UI；可控 sink 验证默认/小时/日历/关闭、延期、恢复一次汇总、去重、有限重试及在途提交协调。页面明确显示“系统提醒尚未开启”；当时 Windows 实际投递及后台循环尚未接入，本段没有发送 QQ 或 Windows 通知。
 
 审查发现失败 recovery 汇总一名成员完成/延期后，有效成员漏重试；四项真实 SQLite 回归先红 42/46、退出 1，修复后服务 46/46、退出 0，仍沿原 ID 和跨重启三次预算重试有效未成功成员，完成撤销不重放成功成员。最终完整 Infrastructure Release 375/375（服务 46、工作区提醒 24）；本段 Windows 96/96、Core 301/301、OCR pip check 通过与 unittest 25/25、demo 108、Node 七文件 59/59（文档 24、正式 Chrome 23、入口 3）通过。P1 只修改服务及其测试，最终重跑 Infrastructure 和窄复现：complete/postpone 两路健康 sink 都只提交有效 B 一次，节点为 submitted；不重复无关全套。
 
@@ -18,7 +44,7 @@ node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/na
 
 最终文档同步后实际运行 `node --test tests/project-rules.test.mjs`，24/24、退出 0，核对提醒进度、原格式保留及系统尚未接入；`git diff --check` 退出 0。
 
-上一段正式应用首段（2026-10-12）：AccountWorkspace 已接入三库、账号课程关系及已读，NapCatMessageHost 接收置顶群并尽力读取历史；正式 WPF/WebView2 已自包含发布。合成真实 WebView2 闭环通过，完成/撤销、显式日期确认、接受待确认及重开存储均实际执行。真实 QQ 正式宿主两进程检查退出 0，52 个已加入群、9 个置顶群，40 项待确认，重启仍为 40 项，课程尚未确认，0 个正式任务/通知。当次历史 complete/失败为空不替代持续实时或独立准确率验收。当前 Windows 实际提醒调度、OCR 队列、正式桌面和完整编辑等未完成。应用说明见 [正式应用](../src/MessagePurify.Windows/App/README.md)。
+历史正式应用首段（2026-10-12）：AccountWorkspace 已接入三库、账号课程关系及已读，NapCatMessageHost 接收置顶群并尽力读取历史；正式 WPF/WebView2 已自包含发布。合成真实 WebView2 闭环通过，完成/撤销、显式日期确认、接受待确认及重开存储均实际执行。真实 QQ 正式宿主两进程检查退出 0，52 个已加入群、9 个置顶群，40 项待确认，重启仍为 40 项，课程尚未确认，0 个正式任务/通知。当次历史 complete/失败为空不替代持续实时或独立准确率验收。当时 Windows 实际提醒调度、OCR 队列、正式桌面和完整编辑等未完成；当前提醒调度已取消，卡片首段结果见上节。应用说明见 [正式应用](../src/MessagePurify.Windows/App/README.md)。
 
 上一段 Infrastructure Release 305/305（工作区 30、宿主 24）、Core 301/301、Windows 77/77，OCR 25/25、demo 108、新应用 Chrome 18/18、应用启动脚本 2/2，完整 Node 七文件 53/53，均退出码 0。正式启动入口已打开真实账号窗口，QQ 保持运行。上一段验证命令：
 

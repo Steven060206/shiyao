@@ -4,6 +4,33 @@ namespace MessagePurify.Windows.Tests;
 
 public sealed class AppBridgeProtocolTests
 {
+    [Theory]
+    [InlineData("light", false)]
+    [InlineData("dark", true)]
+    public void Parses_desktop_appearance_without_account(string theme, bool reducedMotion)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new { id = "appearance", operation = "set-appearance", parameters = new { theme, reducedMotion } });
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out var request));
+        Assert.Equal("set-appearance", request!.Operation);
+        Assert.Equal(theme, request.Parameters.GetProperty("theme").GetString());
+    }
+
+    [Theory]
+    [InlineData("{\"theme\":\"system\",\"reducedMotion\":false}")]
+    [InlineData("{\"theme\":\"dark\"}")]
+    [InlineData("{\"theme\":\"dark\",\"reducedMotion\":\"true\"}")]
+    [InlineData("{\"theme\":\"dark\",\"reducedMotion\":false,\"accountId\":\"1\"}")]
+    [InlineData("{\"theme\":\"dark\",\"theme\":\"light\",\"reducedMotion\":false}")]
+    public void Rejects_invalid_appearance(string parameters) => Assert.False(AppBridgeProtocol.TryParse(
+        AppBridgeProtocol.PageUrl, "{\"id\":\"appearance\",\"operation\":\"set-appearance\",\"parameters\":" + parameters + "}", out _));
+
+    [Fact]
+    public void Rejects_untrusted_appearance_and_appearance_fields_on_task_commands()
+    {
+        const string json = """{"id":"appearance","operation":"set-appearance","parameters":{"theme":"dark","reducedMotion":false}}""";
+        Assert.False(AppBridgeProtocol.TryParse("https://example.com/index.html", json, out _));
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, Command.Replace("\"version\":2", "\"version\":2,\"theme\":\"dark\""), out _));
+    }
     private const string Command = """{"id":"request-1","operation":"complete","parameters":{"accountId":"12345","id":"task-9007199254740993","operationId":"op-1","version":2}}""";
 
     [Fact]
@@ -54,8 +81,8 @@ public sealed class AppBridgeProtocolTests
     [InlineData("\"reminderMode\":\"off\",\"reminderVersion\":2")]
     [InlineData("\"reminderMode\":\"hours\",\"reminderHours\":1.5,\"reminderVersion\":1")]
     [InlineData("\"reminderMode\":\"calendar\",\"reminderDays\":0,\"reminderClock\":\"20:30\",\"reminderVersion\":1")]
-    public void Accepts_versioned_reminder_preferences(string fields) =>
-        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, ReminderRequest(fields), out _));
+    public void Rejects_retired_system_reminder_preferences(string fields) =>
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, ReminderRequest(fields), out _));
 
     [Theory]
     [InlineData("\"reminderMode\":\"default\"")]
