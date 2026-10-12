@@ -73,7 +73,8 @@ public static class Program
                     else await SmokeCheck.RunReadOnlyAsync(runtime, report, int.TryParse(Argument(arguments, "--seconds"), out var seconds) ? Math.Clamp(seconds, 1, 120) : 20);
                     await Exit();
                 }
-                else _ = ListenAsync(window, stopping.Token);
+                // Keep the tray and shutdown token alive until the application exits.
+                else await ListenAsync(window, stopping.Token);
             }
             catch (Exception exception)
             {

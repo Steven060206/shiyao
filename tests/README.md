@@ -1,6 +1,24 @@
 # 项目检查
 
-## 本轮正式桌面卡片首段（2026-10-12）
+## 本轮托盘修复（2026-10-12）
+
+`Program.cs` 正常启动等待 `ListenAsync`，保持托盘和取消令牌到应用退出。新增 `app_tray_test.ps1`，Windows PowerShell 5.1 可直接运行；只查询 Explorer 托盘容器及可见“消息提纯”图标，必要时展开隐藏区，结束后恢复展开状态和鼠标位置。旧 app 进程 43172 的图标测试实际失败，修复版通过；`-ExitApplication` 实际右击菜单并调用“退出”，保留进程句柄核对 ExitCode=0。测试自身已修正不可见溢出窗、展开动画及退出码读取的误报。
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId <运行的消息提纯进程ID>
+# 此项实际退出应用，完成后用默认入口重开
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId <运行的消息提纯进程ID> -ExitApplication
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release
+node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs tests/pinned-groups-bridge.test.mjs tests/application-ui.test.mjs tests/application-launcher.test.mjs
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-tray-fix
+& ./.tools/ocr/venv/Scripts/python.exe tests/app_desktop_test.py --executable .tools/published/app-tray-fix/MessagePurify.exe
+```
+
+实际修复版 Windows 141/141、Node 七文件 63/63、publish、Native 合成 13 项、Python 父窗/style 及默认入口 `-CheckOnly` 均退出 0；入口 Ready/AuthenticationReady=true、路径匹配 app-tray-fix。托盘菜单退出检查进程 24696 返回成功且应用 ExitCode=0，`tray-exit.json`；重新打开后，对进程 26000 正常 WM_CLOSE 验证关闭隐藏、进程和托盘保留，再启动唤回同一窗口且只有单实例，`tray-lifecycle.json` 五项全部 true。修复版已保持打开，QQ 未退出。原生报告 `tray-fix-native-smoke.json`、入口报告 `tray-fix-launcher-check.json` 位于 `.tools/desktop-validation/`。
+
+本轮真实只读复查另执行已发布 app-desktop 的 `--read-only-check --seconds 20 --report .tools/desktop-validation/read-only-current.json`，进程退出 0、success=true、synthetic=false，52 个群、9 个置顶群、48 项待确认、0 个任务/通知，当次历史 complete、失败为空；未确认课程或日期。Infrastructure/Core/OCR/demo 未改，沿用上一段 375/301/25/108 的已执行结果。完整真实任务、多屏/睡眠/Explorer 恢复及长期稳定性尚未验收；OCR 队列仅调查，未实现。
+
+## 上一段正式桌面卡片首段（2026-10-12）
 
 正式两张桌面卡片首段已实现并验证：当前账号 active 任务/pending 待确认、稳定排序、查看/完成、主题同步、DIP 布局存盘重开、空待确认隐藏。系统通知、声音、定时提醒表单/预览和安静时段入口已取消，App 普通通知列表及旧 plans/ledger 保留。Windows Release 141/141、Infrastructure Release 375/375、Node 七文件 63/63（文档 27、Chrome 24、入口 3、其余 9）退出 0；App 与 Windows.Tests locked restore、最终自包含 publish、入口检查及真实 Native 合成/独立桌面窗口检查均退出 0。
 

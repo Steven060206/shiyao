@@ -2,9 +2,11 @@
 
 最后更新：2026-10-12（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-**最新有效决定（2026-10-12）：用户选择 A，第一版只使用“提醒事项”和“待确认”两张桌面卡片，取消全部 Windows 系统通知弹窗和声音。** 时间节点、新发现、变更、恢复/历史/迟到批次汇总、断线超过 5 分钟通知、通知点击路由及权限恢复全部取消；自定义时间提醒和安静时段入口移出当前产品范围。普通群通知仍保留在 App“通知”列表，原消息、事项、证据和旧提醒计划/台账不删除。正式两张桌面卡片首段已实现并验证：自动刷新真实 AccountWorkspace 快照、点击查看/完成、左右初始布局、拖动缩放、DIP 布局存盘，仅附着 Explorer 桌面、不设 Topmost。默认入口已指向 `.tools/published/app-desktop/`；多屏、Explorer 重启和睡眠恢复尚未验收，M3 真实接收/长期稳定性仍在实施。
+**最新有效决定（2026-10-12）：用户选择 A，第一版只使用“提醒事项”和“待确认”两张桌面卡片，取消全部 Windows 系统通知弹窗和声音。** 时间节点、新发现、变更、恢复/历史/迟到批次汇总、断线超过 5 分钟通知、通知点击路由及权限恢复全部取消；自定义时间提醒和安静时段入口移出当前产品范围。普通群通知仍保留在 App“通知”列表，原消息、事项、证据和旧提醒计划/台账不删除。正式两张桌面卡片首段已实现并验证：自动刷新真实 AccountWorkspace 快照、点击查看/完成、左右初始布局、拖动缩放、DIP 布局存盘，仅附着 Explorer 桌面、不设 Topmost。默认入口已指向 `.tools/published/app-tray-fix/`，托盘生命周期已修复，新版已打开；多屏、Explorer 重启和睡眠恢复尚未验收，M3 真实接收/长期稳定性仍在实施。
 
-本轮接续：已完成[正式桌面卡片首段计划](superpowers/plans/2026-10-12-desktop-only-cards.md)的实现与发布验证。Windows Release 141/141、Infrastructure Release 375/375、Node 七文件 63/63，实际 WPF/WebView2/桌面合成 13 项与独立父窗/style 检查通过；App 及 Windows.Tests locked restore、最终自包含发布和默认入口检查均退出 0。Core/OCR/demo 未改，沿用上段 301/25/108 的已验证基线。本轮未重测真实 QQ 数量或确认真实课程/日期。
+本轮接续：用户找不到托盘图标，已定位为启动回调返回时提前 Dispose NotifyIcon。正式入口改为等待应用监听结束，修复版已发布并打开；真实托盘显示、关闭隐藏、再次启动唤回单实例及菜单退出（ExitCode=0）通过。Windows Release 141/141、Node 七文件 63/63、Native 合成 13 项、独立桌面检查及默认入口检查均退出 0。真实只读复查为 52 个群、9 个置顶群、48 项待确认、0 个正式任务/通知，当次历史 complete；未确认真实课程或日期。Infrastructure/Core/OCR/demo 未改，沿用上一段 375/301/25/108 的实际验证结果。
+
+上一段：已完成[正式桌面卡片首段计划](superpowers/plans/2026-10-12-desktop-only-cards.md)的实现与发布验证。Windows Release 141/141、Infrastructure Release 375/375、Node 七文件 63/63，实际 WPF/WebView2/桌面合成 13 项与独立父窗/style 检查通过；App 及 Windows.Tests locked restore、自包含发布和默认入口检查均退出 0。当时默认 app-desktop，旧 app 窗口仍在运行；本轮已替换为托盘修复版。
 
 上段正式应用：2026-10-12 用户要求继续，已实施[正式应用首段计划](superpowers/plans/2026-10-12-application-host.md)：持久化界面、已有事项操作和只读消息宿主。当时基线为 `6ee0735`；Infrastructure Release 305/305、Core 301/301、Windows 77/77、OCR 25/25、demo 108 项及合成真实 WebView2 闭环通过。用户已退出 QQ 并授权继续，Framework 已重开，正式宿主真实读取 9 个置顶群并保存 40 项待确认，重启仍为 40 项。
 
@@ -17,13 +19,24 @@
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`；恢复工作时先读 `docs/HANDOFF.md`，再读 `docs/requirements.md`，然后核对实际文件。
 - 普通 QQ 登录不作为 OneBot 连接成功；本轮正式宿主使用只读接口并持久化真实群消息，合成页面操作和真实接收分别记录。
-- 最新规则及结果：只读取 QQ 置顶群。上一段真实正式宿主读取 52 个已加入群名单、9 个置顶群历史，当次读取 complete，保存 40 项待确认；重启仍为 40 项。本段未重新实测上述数量，未自动确认真实课程或日期，没有 QQ 发送或 Windows 通知。Infrastructure 最新完整回归 375/375；动态置顶人工验收、持续实时和长期稳定性未完成，M3 不改为完成。
+- 最新规则及结果：只读取 QQ 置顶群。本轮真实只读复查读取 52 个已加入群名单、9 个置顶群历史，当次读取 complete、失败为空，保存 48 项待确认，0 个正式任务/通知；此前两次为 40 项。未自动确认真实课程或日期，没有 QQ 发送或 Windows 通知。Infrastructure 最新完整回归 375/375；动态置顶人工验收、持续实时和长期稳定性未完成，M3 不改为完成。
 - 当前阶段：**整体设计已确认，用户反馈 demo 基本满足要求，实施计划已写入并授权持续开发。M1 已完成，M2 已完成，M3 正在实施并保留真实接收/长期稳定性验收。M4 四段本地基础及正式 WPF/WebView2 主界面、AccountWorkspace 和只读宿主已接入；真实 QQ 历史接收/重启去重、合成 WebView2 已通过。旧方案持久化提醒第一段已验证并保留，Windows 全部系统通知与声音已取消；正式两张桌面卡片首段已实现并验证，当前快照、查看/完成、主题、布局存盘和实际桌面层级通过。多屏、Explorer 重启和睡眠恢复尚未验收；OCR 队列、自启动、M6 修复、完整变化标记/编辑/合并拆分、持续真实使用和完整端到端验收仍未完成，M8 不标为完成。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`；NapCat Shell 与 Framework 的显式路径启动准备位于 `packaging/napcat/`，对应路径回归在 `tests/napcat-launcher.test.mjs` 和 `tests/napcat-framework-launcher.test.mjs`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - 历史 demo/probe 概述（本轮正式结果见下节）：demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；当时分页读取 41/52 到达边界、窗口内去重 1098 条，11 群未补全，详见下节。用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。没有注册正式自启动；桌面探针基本操作与当时静音提醒呈现/点击通过，长期稳定性及桌面恢复/多屏仍未验收；声音提醒已取消。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
-### 本轮正式桌面卡片首段（已实现、发布及限定范围验证）
+### 本轮托盘生命周期修复（2026-10-12）
+
+- 基线 `a2faf28`，分支 `codex/m3-integration-probes`。用户反馈托盘中找不到“消息提纯”；实际旧进程确实没有图标，不是用户未找到隐藏图标。`Program.cs` 的启动异步回调使用 `using var tray`，但正常启动以 `_ = ListenAsync(...)` 立即返回并释放图标及取消令牌；改为 `await ListenAsync(...)`，资源存活到应用退出。
+- 新增 `tests/app_tray_test.ps1`（UTF-8 BOM，兼容 Windows PowerShell 5.1），限定 Explorer 托盘容器并检查可见图标，必要时展开隐藏区；`-ExitApplication` 实际右击菜单、调用“退出”并核对 ExitCode=0。旧 app 进程 43172 的启动后图标检查实际失败、退出 1；修复版图标检查通过。测试保留进程句柄以读取退出码，并等待隐藏区展开动画、忽略不可见窗口，避免测试自身误报。
+- 实际发布 `.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-tray-fix` 退出 0。默认 `packaging/app/Start-MessagePurify.ps1` 已改为 app-tray-fix，入口回归仍保留三个旧目录；旧进程仅在核对 PID/完整路径后结束，QQ 未退出。
+- 实际 `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId 24696 -ExitApplication` 退出 0，图标可见、菜单退出成功、应用 ExitCode=0；报告 `.tools/desktop-validation/tray-exit.json`。默认入口已重新打开修复版，当前 PID 26000（后续以实际进程为准）。向正常主窗口发送 WM_CLOSE 后进程和托盘保留；再启动默认入口唤回同一窗口且只剩一个 MessagePurify 进程，五项全部 true，报告 `tray-lifecycle.json` 和 `tray-hidden.json`。
+- 实际 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release` 141/141、Node 七文件命令 63/63，均退出 0。新产物 `--smoke-test --report .tools/desktop-validation/tray-fix-native-smoke.json` 进程退出 0、success=true，原生 13 项通过；`.tools/ocr/venv/Scripts/python.exe tests/app_desktop_test.py --executable .tools/published/app-tray-fix/MessagePurify.exe` 退出 0，确认两卡片父窗/style。独立 PowerShell 默认入口 `-CheckOnly` 进程退出 0，Ready/AuthenticationReady=true、发布路径匹配，报告 `tray-fix-launcher-check.json`。Infrastructure/Core/OCR/demo 生产代码未改，沿用上段实际结果，不记为重跑。
+- 真实只读复查执行已发布 app-desktop 的 `--read-only-check --seconds 20 --report .tools/desktop-validation/read-only-current.json`，进程退出 0、success=true、synthetic=false；transport=connected、qq=online、receiving=active、history=complete、failures=[]，52 个群、9 个置顶群、48 项待确认、0 个任务/通知。凭据只传子进程环境，没有写入报告、文档或仓库；未自动确认真实课程或日期。
+- OCR 下一段仅做只读调查，未实现：图片 AssetId 可由本机 NapCat `get_image` 获取本地路径，现有 worker 支持 UTF-8 JSONL，但附件持久库、队列和 C# worker 宿主仍缺。已有路由回执不会因 ProcessingVersion 提高而重新路由；不得删除回执重跑首轮，以免覆盖完成、忽略、拒绝及人工修正。图片独立消息形成待确认需接续 M6 受保护再分析；附件证据及既有详情可先推进。
+- 下一步真实课程/日期由用户在界面核对，验收消息到任务、卡片查看/完成；OCR 队列、M6、自启动及多屏/睡眠/Explorer 恢复仍未完成。本机仍找不到 `maintain-context-hygiene/SKILL.md`，按项目规则人工核对需求、交接、实现、发布路径及实际报告；不删除文件或修改无关文档。
+
+### 上一段正式桌面卡片首段（已实现、发布及限定范围验证）
 
 - 开发基线 `dc3eced`，分支 `codex/m3-integration-probes`。需求、第 3/6 节有效结论、设计正文及总计划已改为两卡片；取消全部 Windows 系统通知弹窗和声音及相关设置、点击/权限/定时/汇总验收，普通 App 通知、原文/证据、取消记录和旧计划/台账继续保留。
 - 产物：`src/MessagePurify.Windows/App/DesktopCardHost.cs`、`DesktopCardProjection.cs`、`DesktopLayoutStore.cs`；回归位于 `tests/MessagePurify.Windows.Tests/DesktopCardTests.cs`、`DesktopLayoutTests.cs`、`tests/app_desktop_test.py`，桥、正式页面、原生 SmokeCheck、启动入口及相关测试同步更新。两张独立 WPF 卡片只显示当前账号 active task/pending review，按优先级和有效日期/时刻稳定排序；查看与完成复用核对账号/依赖版本的正式入口。当前主题及减少动画偏好同步，内容刷新保持原布局；提醒为空显示“暂无待办”，待确认为空隐藏。
@@ -455,9 +468,9 @@
 2. **已确认：明确取消任务移出待办和桌面卡片**，保留“已取消”记录和原文，不记完成；不再发取消系统通知。本地取消与旧操作保护已测试，正式卡片 active/pending 状态过滤已通过。
 3. **旧自定义提醒方案已取消**。ReminderPlanner、提醒设置/计划/台账及既有验证保留为历史，不删除数据，不作为后续 Windows 自动投递工作。
 4. **已确认：已完成任务的可靠新行动恢复待办**，保留完成历史及新旧证据；普通补充不恢复，不可靠关联/时间先待确认。本地状态和路由已测试，正式卡片当前状态刷新已接入；完整变化标记及真实操作验收仍待完成。
-5. **正式两张桌面卡片首段已实现并验证**。自动刷新 AccountWorkspace、点击查看/完成、左右初始布局、拖动缩放与 DIP 存盘、仅附着 Explorer 桌面且不设 Topmost；Native 合成 13 项及独立父窗/style 检查通过，默认入口已发布 app-desktop。下一步真实课程确认及消息到任务/卡片操作验收，再推进 OCR 队列、M6 修复和自启动；多屏、Explorer 重启和睡眠恢复尚未验收，持续实时及长期稳定性仍待完成。
+5. **正式两张桌面卡片首段已实现并验证**。自动刷新 AccountWorkspace、点击查看/完成、左右初始布局、拖动缩放与 DIP 存盘、仅附着 Explorer 桌面且不设 Topmost；Native 合成 13 项及独立父窗/style 检查通过，默认入口已发布 app-tray-fix。托盘生命周期已修复，关闭隐藏、单实例唤回及菜单退出已实际通过，新版保持打开。下一步真实课程确认及消息到任务/卡片操作验收，再推进 OCR 队列、M6 修复和自启动；多屏、Explorer 重启和睡眠恢复尚未验收，持续实时及长期稳定性仍待完成。
 6. SQLite 消息/候选/生命周期/路由和旧提醒计划/台账已回归；OCR 队列、自启动、M6 重分析、完整编辑/手动新增/通知转任务、合并拆分、缓存清理、备份迁移和正式安装仍未完成。7 天只限制未关联缓存分析窗口，事项证据长期保留。
-7. 上段真实宿主读取 9 个置顶群、40 项待确认，重启无重复且当次历史 complete；本轮尚未重测这些数量，不代表持续实时或未来完整性。旧通知呈现/点击及桌面 probe 验证保留为历史，不代替正式两卡片验收。
+7. 本轮真实只读复查为 52 个群、9 个置顶群、48 项待确认、0 个任务/通知，当次历史 complete、失败为空；此前两次为 40 项且重启无重复。不代表持续实时或未来完整性，真实课程/日期仍待用户核对。旧通知呈现/点击及桌面 probe 验证保留为历史，不代替正式两卡片验收。
 8. 本机 Windows 11 专业版 x64 10.0.26200；项目专用 .NET SDK 10.0.401，开发使用 `.tools/dotnet/dotnet.exe`。Framework 已加载，用户确认聊天列表和窗口正常显示；实时群事件限定范围通过（观察到 1 条），长期稳定性尚未验证。
 9. **安静时段、系统提醒及自定义时间提醒入口已取消**；手机版尚未确定开发，不保留“暂未启用”的入口。
 10. 2026-10-10 七项复核补充中，归档、账号隔离、课程关联修复、手动字段保护继续有效；系统在途发送、迟到/修复汇总及自定义精度默认安排随渠道取消。课程修复保留人工决定和历史台账，结果刷新卡片，不删旧任务或逐条通知。
@@ -482,6 +495,7 @@
 
 | 记录日期 | 变更 | 依据与状态 |
 | --- | --- | --- |
+| 2026-10-12 | 修复用户找不到托盘图标的问题并切换默认入口 | 启动回调等待 ListenAsync，避免提前释放 NotifyIcon；实际旧版图标检查红、修复版绿。Windows 141/141、Node 63/63、Native 13 项、桌面父窗/style、隐藏/唤回/单实例及菜单退出（ExitCode=0）通过。默认 app-tray-fix，新版已打开、QQ 保持运行；真实只读复查 9 个置顶群/48 项待确认，未确认课程或日期。OCR 仅调查，M3/M8 与恢复/多屏不标完成 |
 | 2026-10-12 | 完成正式桌面卡片首段、取消提醒设置入口并发布默认桌面版 | 当前账号任务/待确认、查看/完成、主题、DIP 布局和空待确认隐藏已接入；Windows 141/141、Infrastructure 375/375、Node 63/63、Native 合成 13 项、Python 父窗/style 和入口检查退出 0。单次审查修复时钟 signature 的 past 漏项，DPI 重载不自动覆盖坏布局；最终 publish 无警告/错误。默认 app-desktop，旧 app 窗口/QQ 保持运行；真实 QQ 数量沿用上段，未确认课程/日期，多屏/睡眠/Explorer/长期稳定性仍未验收，M3/M8 不标总体完成，Git 提交由 root 统一执行 |
 | 2026-10-12 | 用户选择 A，确认第一版仅用两张桌面卡片 | 取消全部 Windows 系统通知弹窗和声音及相关设置/验收，保留普通 App 通知、原消息与旧计划/台账；同步有效正文、设计和总计划，正式两卡片实施中，验证结果待实际运行后记录 |
 | 2026-10-12 | 用户提出仅用两张桌面卡片提醒，询问意见（随后已确认 A） | 声音功能继续取消；是否取消全部 Windows 弹窗待确认，建议只记录于第 6 节第 12 项。当前产品代码及有效需求保持原状态，依赖该选择的 Windows 接入等待明确答复；文档相关检查 25/25、diff 检查通过，本轮以对应 Git commit 保存 |

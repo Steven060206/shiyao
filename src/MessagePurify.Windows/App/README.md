@@ -6,7 +6,7 @@
 
 发布后双击 [启动消息提纯](../../../packaging/app/Start-MessagePurify.cmd)。关闭主窗口会隐藏到托盘；双击托盘图标重新打开，托盘菜单可退出。再次启动会唤起现有窗口。
 
-本轮正式桌面卡片首段已实现并验证，自包含产物已发布到 `.tools/published/app-desktop/`，默认入口已指向新版。旧 `.tools/published/app/` 和 `.tools/published/app-reminders/` 保留；当前旧正式窗口仍运行 app 目录产物，从托盘“退出”后重新双击入口，才会加载新版。QQ 保持运行。
+正式桌面卡片首段已实现并验证，当前自包含产物已发布到 `.tools/published/app-tray-fix/`，默认入口已指向托盘修复版，新版窗口已打开。旧 app、app-reminders 和 app-desktop 目录保留；QQ 保持运行。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”。关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
 
 如果 QQ 消息接口未就绪，窗口显示接收暂停并自动重试，已有本地事项仍可查看。QQ 应从已准备好的 [Framework 入口](../../../packaging/napcat/Start-NapCat-Framework.cmd) 启动，该入口要求先正常退出已有 QQ。首次成功连接从登录接口确定账号，后续账号变化暂停接收，不自动切换。
 
@@ -43,11 +43,12 @@
 
 ```powershell
 & ./.tools/dotnet/dotnet.exe restore src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --locked-mode
-& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-desktop
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-tray-fix
 node --test tests/application-ui.test.mjs tests/application-launcher.test.mjs
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId <运行的消息提纯进程ID>
 ```
 
-本轮 Windows Release 141/141、Infrastructure Release 375/375、Node 七文件 63/63，App/Windows.Tests locked restore 和最终自包含发布均退出 0。发布程序 `--smoke-test --report .tools/desktop-validation/native-smoke-final.json` 的真实 WPF/WebView2/桌面合成 13 项通过、success=true、进程退出 0，包含快照、完成/撤销、显式日期确认、接受待确认、桥、数据重开、卡片数据/主题/详情/完成/布局及空待确认隐藏。独立 `python tests/app_desktop_test.py --executable .tools/published/app-desktop/MessagePurify.exe` 退出 0，确认两窗口的父窗/style；两张最终截图已查看。这些检查使用临时合成账号，真实 QQ 数量沿用上段结果。
+托盘脚本默认只检查图标，添加 `-ExitApplication` 会实际通过托盘菜单退出该进程，验证后可用默认入口重开。当前修复版 Windows Release 141/141、Node 七文件 63/63、原生合成 13 项、独立桌面检查和默认入口检查均退出 0；Infrastructure 未改，沿用上一段 375/375。修复版报告 `.tools/desktop-validation/tray-fix-native-smoke.json` 的 success=true、进程退出 0，覆盖快照、完成/撤销、显式日期确认、接受待确认、桥、数据重开、卡片数据/主题/详情/完成/布局及空待确认隐藏。`python tests/app_desktop_test.py --executable .tools/published/app-tray-fix/MessagePurify.exe` 确认父窗/style。这些检查使用临时合成账号；本轮另用正式数据只读复查真实 QQ，9 个置顶群、48 项待确认、0 个任务/通知，当次历史 complete，未代用户确认课程或日期。
 
 Chrome 页面测试用独立临时配置，不控制正式窗口或 QQ，截图位于 `.tools/desktop-validation/`。`--read-only-check --seconds 20 --report <报告路径>` 使用正式数据目录，只记录状态、数量和安全错误码；真实连接不可用时退出 1。PowerShell 启动 WinExe 后须用 `Start-Process -PassThru -WindowStyle Hidden` 或配合 `-Wait`，等待结束后核对该进程的 `ExitCode` 和报告。
 
