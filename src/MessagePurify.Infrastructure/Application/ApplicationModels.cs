@@ -1,12 +1,17 @@
+using MessagePurify.Infrastructure.Reminders;
+
 namespace MessagePurify.Infrastructure.Application;
 
 public sealed record WorkspaceCommand(string AccountId, string Operation, string Id,
     string OperationId, long Version, string? Date = null, string? Time = null,
     string? TimeKind = null, string? UndoOperationId = null, long? TargetTaskVersion = null,
-    string? Course = null, bool Excluded = false);
+    string? Course = null, bool Excluded = false, string? ReminderMode = null,
+    double? ReminderHours = null, int? ReminderDays = null, string? ReminderClock = null,
+    long? ReminderVersion = null);
 
 public sealed record ApplicationSnapshot(string AccountId, IReadOnlyList<ApplicationItem> Items,
-    IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt);
+    IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt,
+    IReadOnlyList<TaskReminderPlan> Reminders);
 
 public sealed record ApplicationItem(string Id, string Kind, string Title, string? Course,
     string Group, string State, string? Due, string? Time, string TimeKind, int? Priority,

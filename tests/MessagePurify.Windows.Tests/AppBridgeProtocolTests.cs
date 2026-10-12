@@ -48,4 +48,34 @@ public sealed class AppBridgeProtocolTests
 
     [Fact]
     public void Rejects_oversized_payload_before_parsing() => Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, new string('x', 16385), out _));
+
+    [Theory]
+    [InlineData("\"reminderMode\":\"default\",\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"off\",\"reminderVersion\":2")]
+    [InlineData("\"reminderMode\":\"hours\",\"reminderHours\":1.5,\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"calendar\",\"reminderDays\":0,\"reminderClock\":\"20:30\",\"reminderVersion\":1")]
+    public void Accepts_versioned_reminder_preferences(string fields) =>
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, ReminderRequest(fields), out _));
+
+    [Theory]
+    [InlineData("\"reminderMode\":\"default\"")]
+    [InlineData("\"reminderMode\":\"default\",\"reminderVersion\":0")]
+    [InlineData("\"reminderMode\":\"default\",\"reminderVersion\":1.5")]
+    [InlineData("\"reminderMode\":\"daily\",\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"hours\",\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"hours\",\"reminderHours\":0,\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"hours\",\"reminderHours\":-1,\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"hours\",\"reminderHours\":\"2\",\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"hours\",\"reminderHours\":1e999,\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"calendar\",\"reminderDays\":-1,\"reminderClock\":\"12:00\",\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"calendar\",\"reminderDays\":1.5,\"reminderClock\":\"12:00\",\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"calendar\",\"reminderDays\":1,\"reminderClock\":\"25:00\",\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"calendar\",\"reminderDays\":1,\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"off\",\"reminderHours\":2,\"reminderVersion\":1")]
+    [InlineData("\"reminderMode\":\"hours\",\"reminderHours\":2,\"reminderDays\":1,\"reminderVersion\":1")]
+    public void Rejects_incomplete_or_ambiguous_reminder_preferences(string fields) =>
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, ReminderRequest(fields), out _));
+
+    private static string ReminderRequest(string fields) =>
+        "{\"id\":\"r\",\"operation\":\"set-reminder\",\"parameters\":{\"accountId\":\"123\",\"id\":\"t\",\"operationId\":\"o\",\"version\":1," + fields + "}}";
 }

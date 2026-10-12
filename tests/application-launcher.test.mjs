@@ -7,6 +7,28 @@ import {fileURLToPath} from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
+test('默认入口选择新发布目录，保留仍在运行的上一版产物', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'messagepurify-release-'));
+  try {
+    const entry = path.join(directory, 'packaging/app/Start-MessagePurify.ps1');
+    fs.mkdirSync(path.dirname(entry), {recursive:true});
+    fs.copyFileSync(path.join(root, 'packaging/app/Start-MessagePurify.ps1'), entry);
+    for (const release of ['app', 'app-reminders']) {
+      const published = path.join(directory, '.tools/published', release);
+      fs.mkdirSync(path.join(published, 'ui'), {recursive:true});
+      fs.writeFileSync(path.join(published, 'MessagePurify.exe'), release);
+      fs.writeFileSync(path.join(published, 'ui/index.html'), '<html></html>');
+    }
+    const result = spawnSync('powershell.exe', ['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File', entry, '-CheckOnly'], {encoding:'utf8',windowsHide:true});
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(fs.realpathSync.native(JSON.parse(result.stdout).Executable),
+      fs.realpathSync.native(path.join(directory, '.tools/published/app-reminders/MessagePurify.exe')));
+    assert.equal(fs.readFileSync(path.join(directory, '.tools/published/app/MessagePurify.exe'), 'utf8'), 'app');
+  } finally {
+    assert.equal(path.dirname(path.resolve(directory)), path.resolve(os.tmpdir()));
+    fs.rmSync(directory, {recursive:true,force:true});
+  }
+});
 test('正式应用入口支持中文空格路径，缺界面文件时停止', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), '消息提纯 app '));
   try {

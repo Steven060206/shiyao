@@ -12,12 +12,13 @@ public static class AppBridgeProtocol
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
-        "reject", "accept-review", "accept-time", "confirm-group", "mark-read"
+        "reject", "accept-review", "accept-time", "confirm-group", "mark-read", "set-reminder"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {
         "accountId", "id", "operationId", "version", "date", "time", "timeKind",
-        "undoOperationId", "targetTaskVersion", "course", "excluded"
+        "undoOperationId", "targetTaskVersion", "course", "excluded",
+        "reminderMode", "reminderHours", "reminderDays", "reminderClock", "reminderVersion"
     };
 
     public static bool IsTrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -57,11 +58,32 @@ public static class AppBridgeProtocol
                     && (!property.Value.TryGetInt64(out var targetVersion) || targetVersion < 1)) return false;
                 if (property.Name == "excluded" && property.Value.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
             }
+            if (operation == "set-reminder" && !ValidReminder(parameters)) return false;
             request = new(id, operation, parameters.Clone());
             return true;
         }
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
         { return false; }
+    }
+
+    private static bool ValidReminder(JsonElement parameters)
+    {
+        if (!Text(parameters, "reminderMode", 16, out var mode)
+            || !parameters.TryGetProperty("reminderVersion", out var version)
+            || !version.TryGetInt64(out var number) || number < 1) return false;
+        var hasHours = parameters.TryGetProperty("reminderHours", out var hours) && hours.ValueKind != JsonValueKind.Null;
+        var hasDays = parameters.TryGetProperty("reminderDays", out var days) && days.ValueKind != JsonValueKind.Null;
+        var hasClock = parameters.TryGetProperty("reminderClock", out var clock) && clock.ValueKind != JsonValueKind.Null;
+        return mode switch
+        {
+            "default" or "off" => !hasHours && !hasDays && !hasClock,
+            "hours" => hasHours && !hasDays && !hasClock && hours.ValueKind == JsonValueKind.Number
+                && hours.TryGetDouble(out var value) && double.IsFinite(value) && value > 0,
+            "calendar" => !hasHours && hasDays && days.ValueKind == JsonValueKind.Number
+                && days.TryGetInt32(out var count) && count >= 0 && hasClock && clock.ValueKind == JsonValueKind.String
+                && TimeOnly.TryParseExact(clock.GetString(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out _),
+            _ => false
+        };
     }
 
     private static bool UniqueObject(JsonElement element) => element.ValueKind == JsonValueKind.Object

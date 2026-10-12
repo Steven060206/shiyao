@@ -99,7 +99,12 @@ public sealed class AppWindow : Window
                     p.GetProperty("id").GetString()!, p.GetProperty("operationId").GetString()!, p.GetProperty("version").GetInt64(),
                     Optional(p, "date"), Optional(p, "time"), Optional(p, "timeKind"), Optional(p, "undoOperationId"),
                     p.TryGetProperty("targetTaskVersion", out var target) && target.ValueKind != JsonValueKind.Null ? target.GetInt64() : null,
-                    Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean());
+                    Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean(),
+                    Optional(p, "reminderMode"),
+                    p.TryGetProperty("reminderHours", out var hours) && hours.ValueKind != JsonValueKind.Null ? hours.GetDouble() : null,
+                    p.TryGetProperty("reminderDays", out var days) && days.ValueKind != JsonValueKind.Null ? days.GetInt32() : null,
+                    Optional(p, "reminderClock"),
+                    p.TryGetProperty("reminderVersion", out var reminderVersion) && reminderVersion.ValueKind != JsonValueKind.Null ? reminderVersion.GetInt64() : null);
                 await Task.Run(() => workspace.Execute(command, DateTimeOffset.UtcNow));
             }
         }

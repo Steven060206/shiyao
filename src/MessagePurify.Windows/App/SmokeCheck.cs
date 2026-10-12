@@ -44,6 +44,13 @@ internal static class SmokeCheck
         await WaitAsync(window, "document.querySelector('[data-action=undo-complete]') !== null");
         await EvaluateAsync(window, "document.querySelector('[data-action=undo-complete]').click()");
         await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).State == "active");
+        await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
+        await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(task.Id) + "]').click()");
+        await WaitAsync(window, "document.querySelector('#reminder-form [name=reminderMode]') !== null");
+        await EvaluateAsync(window, "document.querySelector('#reminder-form [name=reminderMode]').value='calendar';document.querySelector('#reminder-form [name=reminderMode]').dispatchEvent(new Event('change',{bubbles:true}))");
+        await WaitAsync(window, "document.querySelector('#reminder-form [name=reminderDays]') !== null");
+        await EvaluateAsync(window, "document.querySelector('#reminder-form [name=reminderDays]').value='1';document.querySelector('#reminder-form [name=reminderDays]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#reminder-form [name=reminderClock]').value='20:00';document.querySelector('#reminder-form [name=reminderClock]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('[data-action=set-reminder]').click()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Reminders.Single(i => i.TaskId == task.Id).Preference.Clock == "20:00");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=pending]').click()");
         await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(review.Id) + "]').click()");
         await WaitAsync(window, "document.querySelector('#review-form [name=date]') !== null");
@@ -55,13 +62,17 @@ internal static class SmokeCheck
         var reopened = new AccountWorkspace(dataRoot, workspace.AccountId);
         if (reopened.Snapshot(DateTimeOffset.UtcNow).Items.Count(i => i.Kind == "task") != 2)
             throw new InvalidDataException("重开工作区没有保留事项。");
+        var reopenedReminder = reopened.Snapshot(DateTimeOffset.UtcNow).Reminders.Single(i => i.TaskId == task.Id);
+        if (reopenedReminder.Preference.Mode != "calendar" || reopenedReminder.Preference.Days != 1
+            || reopenedReminder.Preference.Clock != "20:00")
+            throw new InvalidDataException("重开工作区没有保留自定义提醒。");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
         await WaitAsync(window, "document.querySelectorAll('.task-row').length === 2");
         var reportFile = Path.GetFullPath(reportPath);
         Directory.CreateDirectory(Path.GetDirectoryName(reportFile)!);
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
-        File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true, checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen" }, taskCount = 2, capture }, AppWindow.JsonOptions));
+        File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true, checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "reminder-settings", "native-bridge", "reopen" }, taskCount = 2, capture }, AppWindow.JsonOptions));
     }
 
     public static async Task RunReadOnlyAsync(AppRuntime runtime, string reportPath, int seconds)

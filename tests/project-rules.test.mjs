@@ -35,6 +35,11 @@ test('正式应用交付记录区分合成闭环、只读宿主与剩余系统�
     assert.match(content, /合成.*(?:WebView2|闭环)|WebView2.*合成/, file);
     assert.match(content, /(?:提醒调度|OCR 队列).*未完成|(?:提醒调度|OCR 队列).*后续/, file);
     assert.match(content, /真实 QQ.*(?:验证|接口|联调)/, file);
+    assert.match(content, /持久化提醒第一段/, `${file} 同步本段实现进度`);
+    assert.match(content, /reminders\.sqlite3.*schema 1/, `${file} 记录新增提醒库`);
+    assert.match(content, /原 messages\/tasks\/routing 三库 schema 1 不变/, `${file} 保留原存储格式`);
+    assert.match(content, /系统提醒尚未开启/, `${file} 区分计划保存和系统投递`);
+    assert.match(content, /Windows 实际投递及后台循环尚未接入/, `${file} 保留系统提醒接入边界`);
   }
   for (const artifact of ['src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj',
     'src/MessagePurify.Windows/App/packages.lock.json', 'src/MessagePurify.Windows/App/ui/app.js',
@@ -92,7 +97,12 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'src/MessagePurify.Infrastructure/Processing/CandidateRoutingModels.cs',
     'tests/MessagePurify.Infrastructure.Tests/CandidateRoutingTests.cs',
     'docs/superpowers/plans/2026-10-12-linked-changes.md',
-    'tests/MessagePurify.Infrastructure.Tests/LinkedChangeRoutingTests.cs'
+    'tests/MessagePurify.Infrastructure.Tests/LinkedChangeRoutingTests.cs',
+    'docs/superpowers/plans/2026-10-12-persisted-reminders.md',
+    'src/MessagePurify.Infrastructure/Reminders/ReminderModels.cs',
+    'src/MessagePurify.Infrastructure/Reminders/AccountReminderService.cs',
+    'tests/MessagePurify.Infrastructure.Tests/PersistedReminderTests.cs',
+    'tests/MessagePurify.Infrastructure.Tests/WorkspaceReminderTests.cs'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);

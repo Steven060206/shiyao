@@ -1,8 +1,26 @@
 # 项目检查
 
-正式应用首段（2026-10-12）：AccountWorkspace 已接入三库、账号课程关系及已读，NapCatMessageHost 接收置顶群并尽力读取历史；正式 WPF/WebView2 已自包含发布。合成真实 WebView2 闭环通过，完成/撤销、显式日期确认、接受待确认及重开存储均实际执行。真实 QQ 正式宿主两进程检查退出 0，52 个已加入群、9 个置顶群，40 项待确认，重启仍为 40 项，课程尚未确认，0 个正式任务/通知。本次历史 complete/失败为空不替代持续实时或独立准确率验收。提醒调度、OCR 队列、正式桌面和完整编辑等未完成。应用说明见 [正式应用](../src/MessagePurify.Windows/App/README.md)。
+本轮持久化提醒第一段（2026-10-12）：新增账号 `reminders.sqlite3` schema 1，原 messages/tasks/routing 三库 schema 1 不变。正式提醒设置、计划、NeedsReview、节点与投递台账已接入 AccountWorkspace/桥/UI；可控 sink 验证默认/小时/日历/关闭、延期、恢复一次汇总、去重、有限重试及在途提交协调。页面明确显示“系统提醒尚未开启”；Windows 实际投递及后台循环尚未接入，本段没有发送 QQ 或 Windows 通知。
 
-本轮 Infrastructure Release 305/305（工作区 30、宿主 24）、Core 301/301、Windows 77/77，OCR 25/25、demo 108、新应用 Chrome 18/18、应用启动脚本 2/2，完整 Node 七文件 53/53，均退出码 0。正式启动入口已打开真实账号窗口，QQ 保持运行。新验证命令：
+审查发现失败 recovery 汇总一名成员完成/延期后，有效成员漏重试；四项真实 SQLite 回归先红 42/46、退出 1，修复后服务 46/46、退出 0，仍沿原 ID 和跨重启三次预算重试有效未成功成员，完成撤销不重放成功成员。最终完整 Infrastructure Release 375/375（服务 46、工作区提醒 24）；本段 Windows 96/96、Core 301/301、OCR pip check 通过与 unittest 25/25、demo 108、Node 七文件 59/59（文档 24、正式 Chrome 23、入口 3）通过。P1 只修改服务及其测试，最终重跑 Infrastructure 和窄复现：complete/postpone 两路健康 sink 都只提交有效 B 一次，节点为 submitted；不重复无关全套。
+
+最终再次自包含发布至 `.tools/published/app-reminders/`，原产物 `.tools/published/app/` 保留；默认入口已更新。真实隐藏 WebView2 `--smoke-test --report .tools/reminder-validation/native-smoke-final.json` 八项通过、进程退出 0，包含提醒保存和重开，报告 success=true、截图已查看。独立 PowerShell 启动入口 `-CheckOnly` 退出 0、Ready/AuthenticationReady=true。当前旧窗口及 QQ 保持运行；旧版从托盘退出后重新双击入口才加载新版。本段未重新验证真实 QQ 数量或确认真实课程/日期。
+
+```powershell
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release --filter 'FullyQualifiedName~PersistedReminderTests|FullyQualifiedName~WorkspaceReminderTests'
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-reminders
+& ./.tools/dotnet/dotnet.exe run --project .tools/reminder-validation/review-repro/review-repro.csproj --configuration Release
+node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs tests/pinned-groups-bridge.test.mjs tests/application-ui.test.mjs tests/application-launcher.test.mjs
+```
+
+源码和相关真实 SQLite/浏览器用例保存在仓库；`.tools/reminder-validation/` 的专项、审查和合成原生报告为本机忽略产物。上述提醒专项合并命令用于重复验证；最终结果以已实际执行的完整 Infrastructure 与服务专项为准。
+
+最终文档同步后实际运行 `node --test tests/project-rules.test.mjs`，24/24、退出 0，核对提醒进度、原格式保留及系统尚未接入；`git diff --check` 退出 0。
+
+上一段正式应用首段（2026-10-12）：AccountWorkspace 已接入三库、账号课程关系及已读，NapCatMessageHost 接收置顶群并尽力读取历史；正式 WPF/WebView2 已自包含发布。合成真实 WebView2 闭环通过，完成/撤销、显式日期确认、接受待确认及重开存储均实际执行。真实 QQ 正式宿主两进程检查退出 0，52 个已加入群、9 个置顶群，40 项待确认，重启仍为 40 项，课程尚未确认，0 个正式任务/通知。当次历史 complete/失败为空不替代持续实时或独立准确率验收。当前 Windows 实际提醒调度、OCR 队列、正式桌面和完整编辑等未完成。应用说明见 [正式应用](../src/MessagePurify.Windows/App/README.md)。
+
+上一段 Infrastructure Release 305/305（工作区 30、宿主 24）、Core 301/301、Windows 77/77，OCR 25/25、demo 108、新应用 Chrome 18/18、应用启动脚本 2/2，完整 Node 七文件 53/53，均退出码 0。正式启动入口已打开真实账号窗口，QQ 保持运行。上一段验证命令：
 
 ```powershell
 & ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app

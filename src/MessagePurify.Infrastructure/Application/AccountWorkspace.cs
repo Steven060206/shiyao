@@ -3,6 +3,7 @@ using System.Text.Json;
 using MessagePurify.Core;
 using MessagePurify.Infrastructure.NapCat;
 using MessagePurify.Infrastructure.Processing;
+using MessagePurify.Infrastructure.Reminders;
 using MessagePurify.Infrastructure.Storage;
 using MessagePurify.Infrastructure.Tasks;
 
@@ -16,6 +17,8 @@ public sealed class AccountWorkspace
     private readonly AccountTaskStore tasks;
     private readonly AccountCandidateRouter router;
     private readonly LocalMessageProcessor processor;
+    private readonly AccountReminderService reminders;
+    private IReminderSink? reminderSink;
     private readonly string settingsPath;
     private WorkspaceSettings settings;
     private Dictionary<string, string> availableGroups = new(StringComparer.Ordinal);
@@ -31,6 +34,7 @@ public sealed class AccountWorkspace
         AccountId = accountId;
         settingsPath = Path.Combine(Path.GetDirectoryName(tasks.DatabasePath)!, "workspace-settings.json");
         settings = ReadSettings();
+        reminders = new(dataRoot, accountId, tasks);
     }
 
     public void SetAvailableGroups(IReadOnlyList<OneBotGroup> groups, IReadOnlySet<string> pinnedGroupIds)
@@ -97,6 +101,7 @@ public sealed class AccountWorkspace
             processed = router.ProcessAndRoutePending(Context(groupId, now), pinnedGroupIds, 1000);
             count += processed;
         } while (processed == 1000);
+        RefreshReminders(now);
         return count;
     }
 
@@ -142,7 +147,7 @@ public sealed class AccountWorkspace
                     return new ApplicationGroup(id, name, name, relationship?.Course,
                         relationship?.Excluded == true, pinnedGroups.Contains(id));
                 }).OrderBy(group => group.Name, StringComparer.Ordinal).ToArray();
-            return new(AccountId, items, groups, now);
+            return new(AccountId, items, groups, now, reminders.Synchronize(now));
         }
     }
 
@@ -206,6 +211,12 @@ public sealed class AccountWorkspace
                         command.OperationId, command.Version, ReadTime(command, candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind),
                         now, command.TargetTaskVersion); break;
                 case "confirm-group": ConfirmGroup(command); break;
+                case "set-reminder":
+                    reminders.Configure(command.Id, command.Version,
+                        command.ReminderVersion ?? throw new ArgumentException("须提供提醒计划版本。"),
+                        new(command.ReminderMode ?? throw new ArgumentException("须选择提醒方式。"),
+                            command.ReminderHours, command.ReminderDays, command.ReminderClock),
+                        command.OperationId, now); break;
                 case "mark-read":
                     var item = Snapshot(now).Items.FirstOrDefault(item => item.Id == command.Id)
                         ?? throw new KeyNotFoundException("事项不存在。");
@@ -217,7 +228,31 @@ public sealed class AccountWorkspace
                     }); break;
                 default: throw new ArgumentException("不支持的工作区操作。", nameof(command));
             }
+            RefreshReminders(now);
         }
+    }
+
+    /// <summary>投递端与正式状态变更共用工作区锁；提交先发生时，后续操作清理旧条目。</summary>
+    public IReadOnlyList<ReminderDelivery> DispatchReminders(IReminderSink sink, DateTimeOffset now,
+        bool recovering = false)
+    {
+        ArgumentNullException.ThrowIfNull(sink);
+        lock (gate)
+        {
+            reminderSink = sink;
+            return reminders.DispatchDue(now, sink, recovering);
+        }
+    }
+
+    public IReadOnlyList<ReminderDelivery> ReminderDeliveries()
+    {
+        lock (gate) return reminders.Deliveries();
+    }
+
+    private void RefreshReminders(DateTimeOffset now)
+    {
+        reminders.Synchronize(now);
+        if (reminderSink is not null) reminders.ReconcileNotifications(reminderSink, now);
     }
 
     private void ConfirmGroup(WorkspaceCommand command)
