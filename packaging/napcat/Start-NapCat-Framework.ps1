@@ -2,7 +2,8 @@
 param(
     [string]$QqExecutablePath = 'D:/QQ/QQ.exe',
     [string]$PackageDirectory,
-    [switch]$CheckOnly
+    [switch]$CheckOnly,
+    [switch]$OpenExisting
 )
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($PackageDirectory)) {
@@ -32,6 +33,10 @@ if ($CheckOnly) {
     return
 }
 if (Get-Process -Name 'QQ' -ErrorAction SilentlyContinue) {
+    if ($OpenExisting) {
+        Start-Process -FilePath $napQq -WorkingDirectory (Split-Path -Parent $napQq)
+        return
+    }
     throw 'QQ.exe is already running. Exit the current QQ before starting NapCat Framework.'
 }
 [Console]::InputEncoding = [Text.UTF8Encoding]::new($false)

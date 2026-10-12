@@ -1,6 +1,12 @@
 # 项目检查
 
-## 本轮托盘修复（2026-10-12）
+## 本轮 QQ 桌面入口（2026-10-12）
+
+`Install-QQShortcut.ps1` 先检查 Framework 依赖，再备份原桌面 QQ 快捷方式并改为隐藏 PowerShell 入口，保留 QQ 图标；重复安装不覆盖首次备份。Framework 新增 `-OpenExisting`，已运行时仅调用 QQ 打开已有窗口，普通启动仍拒绝重复加载。`qq-shortcut.test.mjs` 使用临时中文/空格路径及合成依赖，未执行假的 QQ 文件；两项覆盖实际 COM 快捷方式属性、参数引用、隐藏窗口、原备份和重复安装，以及已有 QQ 激活/普通入口拒绝重复加载。短路径与 PowerShell 展开的长路径使用 realpath 核对，避免字符串比较误报。
+
+实际 `node --test tests/napcat-framework-launcher.test.mjs tests/qq-shortcut.test.mjs` 3/3、退出 0。最终 Node 八文件命令在此前七文件后追加 `tests/qq-shortcut.test.mjs`，65/65、退出 0。实际执行 `packaging/napcat/Install-QQShortcut.ps1` 退出 0，原 `C:/Users/Administrator/Desktop/QQ.lnk` 已备份到 `%LOCALAPPDATA%/MessagePurify/Shortcuts/QQ.original.lnk`；从修改后的桌面快捷方式启动，进程 ExitCode=0、3001 仍由原 QQ PID 监听，报告 `.tools/desktop-validation/qq-shortcut-check.json`。未退出 QQ 重测冷启动，未注册登录 Windows 后自启动；正式应用及其他生产模块未改，沿用上段结果。
+
+## 上一段托盘修复（2026-10-12）
 
 `Program.cs` 正常启动等待 `ListenAsync`，保持托盘和取消令牌到应用退出。新增 `app_tray_test.ps1`，Windows PowerShell 5.1 可直接运行；只查询 Explorer 托盘容器及可见“消息提纯”图标，必要时展开隐藏区，结束后恢复展开状态和鼠标位置。旧 app 进程 43172 的图标测试实际失败，修复版通过；`-ExitApplication` 实际右击菜单并调用“退出”，保留进程句柄核对 ExitCode=0。测试自身已修正不可见溢出窗、展开动画及退出码读取的误报。
 

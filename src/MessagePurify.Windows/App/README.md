@@ -8,7 +8,7 @@
 
 正式桌面卡片首段已实现并验证，当前自包含产物已发布到 `.tools/published/app-tray-fix/`，默认入口已指向托盘修复版，新版窗口已打开。旧 app、app-reminders 和 app-desktop 目录保留；QQ 保持运行。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”。关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
 
-如果 QQ 消息接口未就绪，窗口显示接收暂停并自动重试，已有本地事项仍可查看。QQ 应从已准备好的 [Framework 入口](../../../packaging/napcat/Start-NapCat-Framework.cmd) 启动，该入口要求先正常退出已有 QQ。首次成功连接从登录接口确定账号，后续账号变化暂停接收，不自动切换。
+如果 QQ 消息接口未就绪，窗口显示接收暂停并自动重试，已有本地事项仍可查看。日常重新打开 QQ 直接双击桌面原有的“QQ”图标：快捷方式已接到 Framework 入口，名称和图标保留，启动控制台隐藏，已有 QQ 时只打开已有窗口。原快捷方式备份于 `%LOCALAPPDATA%/MessagePurify/Shortcuts/QQ.original.lnk`；重新配置可运行 [QQ 快捷方式安装脚本](../../../packaging/napcat/Install-QQShortcut.ps1)。原 [Framework 直接入口](../../../packaging/napcat/Start-NapCat-Framework.cmd) 仍要求先正常退出已有 QQ。首次成功连接从登录接口确定账号，后续账号变化暂停接收，不自动切换。
 
 ## 当前可操作
 

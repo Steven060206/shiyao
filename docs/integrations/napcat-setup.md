@@ -4,6 +4,12 @@
 
 ## 在这台电脑启动
 
+**日常使用直接双击桌面原有的“QQ”图标。** 2026-10-12 已将该快捷方式接到带消息接口的 Framework 入口，保留名称和 QQ 图标，隐藏启动控制台。QQ 已运行时打开已有窗口；完全退出后双击同一图标重开。原入口备份于 `%LOCALAPPDATA%/MessagePurify/Shortcuts/QQ.original.lnk`，QQ 安装文件未修改；消息提纯保持自动重连。
+
+需要重新配置快捷方式时，在项目根目录运行 `packaging/napcat/Install-QQShortcut.ps1`；它先检查启动依赖，首次备份原入口，重复运行不覆盖备份。实际快捷方式已验证启动退出 0，原 QQ 的 3001 接口保持监听；本轮未退出 QQ 重测冷启动，也未配置登录 Windows 后自启动。
+
+以下 Shell 说明保留为历史准备及探针路线；日常入口使用上述桌面 QQ 和 Framework。
+
 1. 本机官方入口实际报“QQ installation was not found in the registry”。QQ 文件存在于 `D:/QQ/QQ.exe`，已提供不依赖注册表的入口：双击 `D:\ai制作的软件\消息提纯\packaging\napcat\Start-NapCat.cmd`。它沿用官方包的五项启动环境及启动器，直接指定实际 QQ 路径，不申请提权。不要运行 `KillQQ.bat`。
 2. 这是 Shell 入口。若要执行 Shell 真实探针，同一账号的普通 QQ 必须先退出；按控制台提示完成对应 QQ 登录。探针不填密码、不代替用户操作，也不把 Shell 当作桌面聊天窗口验收。
 3. 打开控制台显示的本机 WebUI 地址，在网络配置添加“WebSocket 服务端”：启用，Host `127.0.0.1`，Port `3001`，消息格式 `array`，设置 Token，关闭 debug。保存后保持 NapCat 运行。
@@ -13,11 +19,11 @@
 
 ## Framework 桌面模式（已启动，继续验收）
 
-`packaging/napcat/Start-NapCat-Framework.cmd` 是显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll`，不依赖 QQ 注册表。此前通过官方 `nativeLoader.cjs` 实际启动当前 QQ `9.9.36-53644` 并自动登录，没有绕过登录或发送消息。当前 QQ 已运行，不要在已有进程上重复启动。
+`packaging/napcat/Start-NapCat-Framework.cmd` 是显式路径入口，会调用 Framework 包中的 `napimain.exe`、`napiloader.dll`，不依赖 QQ 注册表。此前通过官方 `nativeLoader.cjs` 实际启动当前 QQ `9.9.36-53644` 并自动登录，没有绕过登录或发送消息。原直接入口仍要求 QQ 已退出；桌面快捷方式改为调用同目录 PowerShell 脚本并传入 `-OpenExisting`，已有 QQ 时只打开已有窗口，不重复加载 Framework。
 
 2026-10-11 用户新增“只读取置顶的群聊消息”。入口现已改为启动前运行 `Prepare-PinnedGroups.ps1`，生成 `messagepurify-napcat.mjs` 副本并使用项目 `nativeLoaderPinned.cjs` 注册唯一读取桥；官方 `napcat.mjs` 和 `nativeLoader.cjs` 保留。用户退出后新入口已加载，真实字段为 `topFlag` 数字 0/1，快照/排序均 139 项；52 个已加入群中仅 9 个置顶群进入实际历史读取。缺标记或接口失败时探针停止，不回退到全群；普通 NapCat/Shell 未安装项目桥也会停止读取。
 
-WebUI 6099 与 OneBot `127.0.0.1:3001` 均属于同一 QQ 主进程。只读探针取得 52 个群及一群一页的 7 条历史消息；用户确认从托盘打开后聊天列表和窗口正常显示。前四次监听未观察到实时群事件；用户反馈新群消息后，第五次 180 秒探针收到 1 条真实群文本事件、退出码 0。七天补漏尚未验收；启动日志有 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证。后续启动仍先正常退出当前 QQ，再用 Framework 入口重开；这与在两个进程中双开同账号不同。
+WebUI 6099 与 OneBot `127.0.0.1:3001` 均属于同一 QQ 主进程。只读探针取得 52 个群及一群一页的 7 条历史消息；用户确认从托盘打开后聊天列表和窗口正常显示。前四次监听未观察到实时群事件；用户反馈新群消息后，第五次 180 秒探针收到 1 条真实群文本事件、退出码 0。七天补漏尚未验收；启动日志有 `updateWindowSizeProperties` 的 TypeError，长期稳定性尚未验证。后续日常使用双击桌面 QQ：已退出时通过 Framework 重开，仍运行时打开已有窗口；不自动退出 QQ 或启动另一接收端。
 
 ## 可复现来源
 
