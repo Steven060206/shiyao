@@ -33,10 +33,12 @@ public sealed class AccountCandidateRouter
         => Route(context, pinnedGroupIds, limit, processUnextracted: false);
 
     /// <summary>按原发送时间在同一消息事务中提取、核对当前事项并路由首轮结果。</summary>
-    public int ProcessAndRoutePending(RuleContext context, IReadOnlySet<string> pinnedGroupIds, int limit = 100)
-        => Route(context, pinnedGroupIds, limit, processUnextracted: true);
+    public int ProcessAndRoutePending(RuleContext context, IReadOnlySet<string> pinnedGroupIds, int limit = 100,
+        Func<bool>? canContinue = null)
+        => Route(context, pinnedGroupIds, limit, processUnextracted: true, canContinue);
 
-    private int Route(RuleContext context, IReadOnlySet<string> pinnedGroupIds, int limit, bool processUnextracted)
+    private int Route(RuleContext context, IReadOnlySet<string> pinnedGroupIds, int limit, bool processUnextracted,
+        Func<bool>? canContinue = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(pinnedGroupIds);
@@ -48,7 +50,7 @@ public sealed class AccountCandidateRouter
 
         using var connection = OpenAttached();
         var processed = 0;
-        while (processed < limit && pinnedGroupIds.Contains(context.GroupId))
+        while (processed < limit && pinnedGroupIds.Contains(context.GroupId) && canContinue?.Invoke() != false)
         {
             using var transaction = connection.BeginTransaction();
             CheckStore(connection, transaction, "main", tasks.AccountId);

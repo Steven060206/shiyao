@@ -71,12 +71,18 @@ public sealed class AccountWorkspace
         }
     }
 
-    public int ProcessPending(IReadOnlySet<string> pinnedGroupIds, DateTimeOffset now)
+    public int ProcessPending(IReadOnlySet<string> pinnedGroupIds, DateTimeOffset now, Func<bool>? canContinue = null)
     {
         lock (gate)
         {
             ArgumentNullException.ThrowIfNull(pinnedGroupIds);
-            return pinnedGroupIds.Sum(groupId => RouteGroup(groupId, pinnedGroupIds, now));
+            var count = 0;
+            foreach (var groupId in pinnedGroupIds)
+            {
+                if (canContinue?.Invoke() == false) break;
+                count += RouteGroup(groupId, pinnedGroupIds, now, canContinue);
+            }
+            return count;
         }
     }
 
@@ -92,16 +98,16 @@ public sealed class AccountWorkspace
         return processor.Ingest(message, pinnedGroupIds, context, origin, batchId, now);
     }
 
-    private int RouteGroup(string groupId, IReadOnlySet<string> pinnedGroupIds, DateTimeOffset now)
+    private int RouteGroup(string groupId, IReadOnlySet<string> pinnedGroupIds, DateTimeOffset now, Func<bool>? canContinue = null)
     {
         var count = 0;
-        int processed;
-        do
+        while (canContinue?.Invoke() != false)
         {
-            processed = router.ProcessAndRoutePending(Context(groupId, now), pinnedGroupIds, 1000);
+            var processed = router.ProcessAndRoutePending(Context(groupId, now), pinnedGroupIds, 1000, canContinue);
             count += processed;
-        } while (processed == 1000);
-        RefreshReminders(now);
+            if (processed < 1000) break;
+        }
+        if (canContinue?.Invoke() != false) RefreshReminders(now);
         return count;
     }
 

@@ -16,11 +16,14 @@ public sealed class NapCatMessageHost
 {
     private static readonly TimeSpan RefreshInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan IdleRefreshInterval = TimeSpan.FromSeconds(30);
     private readonly AccountWorkspace workspace;
     private readonly Uri endpoint;
     private readonly string? accessToken;
+    private readonly ResidentSyncController? syncController;
     private MessageHostStatus status = new("disconnected", "unknown", "paused", "pending", null, DateTimeOffset.UtcNow, []);
     private int running;
+    private sealed class SyncPausedException : Exception;
 
     private sealed class ConnectionState : IDisposable
     {
@@ -31,14 +34,15 @@ public sealed class NapCatMessageHost
         public readonly Queue<string> HistoryQueue = new();
         public readonly HashSet<string> Queued = new(StringComparer.Ordinal);
         public readonly Dictionary<string, string> Failures = new(StringComparer.Ordinal);
-        public bool HistoryRunning = true;
+        public bool HistoryRunning;
         public DateTimeOffset RefreshedAt;
-        public readonly string BatchId = "history-" + Guid.NewGuid().ToString("N");
-        public readonly DateTimeOffset Cutoff = DateTimeOffset.UtcNow.AddDays(-7);
+        public string BatchId = "history-" + Guid.NewGuid().ToString("N");
+        public DateTimeOffset Cutoff = DateTimeOffset.UtcNow.AddDays(-7);
         public void Dispose() => Gate.Dispose();
     }
 
-    public NapCatMessageHost(AccountWorkspace workspace, Uri endpoint, string? accessToken = null)
+    public NapCatMessageHost(AccountWorkspace workspace, Uri endpoint, string? accessToken = null,
+        ResidentSyncController? syncController = null)
     {
         ArgumentNullException.ThrowIfNull(workspace);
         ArgumentNullException.ThrowIfNull(endpoint);
@@ -46,6 +50,7 @@ public sealed class NapCatMessageHost
         this.workspace = workspace;
         this.endpoint = endpoint;
         this.accessToken = accessToken;
+        this.syncController = syncController;
     }
 
     public event Action<MessageHostStatus>? StatusChanged;
@@ -93,33 +98,18 @@ public sealed class NapCatMessageHost
         Task? consuming = null;
         try
         {
-            await RefreshAsync(client, state, session.Token);
+            await RefreshAsync(client, state, session.Token, queueHistory: syncController is null);
             consuming = ConsumeAsync(client, state, session);
+            if (syncController is not null)
+            {
+                await RunResidentBatchesAsync(client, state, session.Token);
+                return;
+            }
             while (true)
             {
                 session.Token.ThrowIfCancellationRequested();
-                string? nextGroup;
-                await state.Gate.WaitAsync(session.Token);
-                try
-                {
-                    if (DateTimeOffset.UtcNow - state.RefreshedAt >= RefreshInterval)
-                        await RefreshAsync(client, state, session.Token);
-                    nextGroup = state.HistoryQueue.Count == 0 ? null : state.HistoryQueue.Dequeue();
-                    if (nextGroup is null && state.HistoryRunning)
-                    {
-                        await RefreshPinsAsync(client, state, session.Token);
-                        if (state.HistoryQueue.Count > 0) nextGroup = state.HistoryQueue.Dequeue();
-                        else
-                        {
-                            if (workspace.ProcessPending(state.Pins, DateTimeOffset.UtcNow) > 0) DataChanged?.Invoke();
-                            state.HistoryRunning = false;
-                            PublishConnected(state);
-                        }
-                    }
-                }
-                finally { state.Gate.Release(); }
-                if (nextGroup is not null) await ReadHistoryAsync(client, state, nextGroup, session.Token);
-                else await Task.Delay(RefreshInterval, session.Token);
+                if (!await AdvanceHistoryAsync(client, state, session.Token))
+                    await Task.Delay(RefreshInterval, session.Token);
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && consuming is { IsFaulted: true })
@@ -136,8 +126,84 @@ public sealed class NapCatMessageHost
         }
     }
 
+    private async Task RunResidentBatchesAsync(OneBotClient client, ConnectionState state, CancellationToken cancellationToken)
+    {
+        while (true)
+        {
+            var request = await WaitForSyncRequestAsync(client, state, cancellationToken);
+            var resumedAfterGame = false;
+            while (true)
+            {
+                resumedAfterGame |= syncController!.GameActive;
+                await WaitUntilSyncAllowedAsync(state, cancellationToken);
+                request = syncController!.CoalescePending(request);
+                try
+                {
+                    await BeginHistoryAsync(client, state, request, cancellationToken);
+                    while (await AdvanceHistoryAsync(client, state, cancellationToken)) { }
+                    syncController.Acknowledge(request, resumedAfterGame);
+                    break;
+                }
+                catch (SyncPausedException)
+                {
+                    resumedAfterGame = true;
+                    // Retain the request and raw messages. After the game, start at the newest
+                    // page again so events discarded during the pause are recovered once.
+                }
+            }
+        }
+    }
+
+    private async Task<bool> AdvanceHistoryAsync(OneBotClient client, ConnectionState state, CancellationToken cancellationToken)
+    {
+        EnsureSyncAllowed();
+        string? nextGroup;
+        await state.Gate.WaitAsync(cancellationToken);
+        try
+        {
+            EnsureSyncAllowed();
+            if (syncController is null && DateTimeOffset.UtcNow - state.RefreshedAt >= RefreshInterval)
+                await RefreshAsync(client, state, cancellationToken);
+            nextGroup = state.HistoryQueue.Count == 0 ? null : state.HistoryQueue.Dequeue();
+            if (nextGroup is null && state.HistoryRunning)
+            {
+                await RefreshPinsAsync(client, state, cancellationToken, queueHistory: true);
+                EnsureSyncAllowed();
+                if (state.HistoryQueue.Count > 0) nextGroup = state.HistoryQueue.Dequeue();
+                else
+                {
+                    if (workspace.ProcessPending(state.Pins, DateTimeOffset.UtcNow,
+                            syncController is null ? null : () => syncController.CanSync) > 0) DataChanged?.Invoke();
+                    EnsureSyncAllowed();
+                    state.HistoryRunning = false;
+                    PublishConnected(state);
+                }
+            }
+        }
+        finally { state.Gate.Release(); }
+        if (nextGroup is null) return false;
+        await ReadHistoryAsync(client, state, nextGroup, cancellationToken);
+        return true;
+    }
+
+    private void EnsureSyncAllowed()
+    {
+        if (syncController is not null && !syncController.CanSync) throw new SyncPausedException();
+    }
+
+    private async Task WaitUntilSyncAllowedAsync(ConnectionState state, CancellationToken cancellationToken)
+    {
+        while (syncController is not null && !syncController.CanSync)
+        {
+            Publish("connected", "online", "paused", state.HistoryRunning ? "partial" : Status.History,
+                syncController.PauseReason, Status.HistoryFailures);
+            await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+        }
+    }
+
     // Called under the connection gate (initial verification happens before the reader starts).
-    private async Task RefreshAsync(OneBotClient client, ConnectionState state, CancellationToken cancellationToken)
+    private async Task RefreshAsync(OneBotClient client, ConnectionState state, CancellationToken cancellationToken,
+        bool queueHistory = true)
     {
         var qq = await client.GetStatusAsync(cancellationToken);
         if (!qq.Online) throw new OneBotProtocolException("qq-offline");
@@ -145,19 +211,21 @@ public sealed class NapCatMessageHost
         var login = await client.GetLoginInfoAsync(cancellationToken);
         if (login.AccountId != workspace.AccountId) throw new OneBotProtocolException("account-mismatch");
         state.Groups = await client.GetGroupListAsync(cancellationToken);
-        await RefreshPinsAsync(client, state, cancellationToken);
+        await RefreshPinsAsync(client, state, cancellationToken, queueHistory);
         state.RefreshedAt = DateTimeOffset.UtcNow;
         PublishConnected(state);
     }
 
-    private async Task RefreshPinsAsync(OneBotClient client, ConnectionState state, CancellationToken cancellationToken)
+    private async Task RefreshPinsAsync(OneBotClient client, ConnectionState state, CancellationToken cancellationToken,
+        bool queueHistory = true)
     {
         IReadOnlySet<string> pins;
         try { pins = await client.GetPinnedGroupIdsAsync(workspace.AccountId, cancellationToken); }
         catch (Exception exception) when (exception is OneBotApiException or OneBotRequestTimeoutException)
         { throw new OneBotProtocolException("pinned-state-unavailable"); }
-        var groupsChanged = state.Groups.Any(group => pins.Contains(group.GroupId) && !state.Queued.Contains(group.GroupId));
-        foreach (var group in state.Groups.Where(group => pins.Contains(group.GroupId) && !state.Queued.Contains(group.GroupId)))
+        var groupsChanged = queueHistory
+            && state.Groups.Any(group => pins.Contains(group.GroupId) && !state.Queued.Contains(group.GroupId));
+        foreach (var group in state.Groups.Where(group => queueHistory && pins.Contains(group.GroupId) && !state.Queued.Contains(group.GroupId)))
         {
             if (state.Queued.Add(group.GroupId)) state.HistoryQueue.Enqueue(group.GroupId);
             state.Failures.Remove(group.GroupId);
@@ -176,6 +244,47 @@ public sealed class NapCatMessageHost
         if (groupsChanged) PublishConnected(state);
     }
 
+    private async Task<SyncRequest> WaitForSyncRequestAsync(OneBotClient client, ConnectionState state,
+        CancellationToken cancellationToken)
+    {
+        if (syncController is null) throw new InvalidOperationException("未配置常驻同步控制器。");
+        var request = syncController.WaitAsync(cancellationToken).AsTask();
+        while (true)
+        {
+            var refresh = Task.Delay(RefreshInterval, cancellationToken);
+            var completed = await Task.WhenAny(request, refresh);
+            if (completed == request) return await request;
+            if (!syncController.CanSync)
+            {
+                Publish("connected", "online", "paused", Status.History, syncController.PauseReason, Status.HistoryFailures);
+                continue;
+            }
+            if (DateTimeOffset.UtcNow - state.RefreshedAt < IdleRefreshInterval) continue;
+            await state.Gate.WaitAsync(cancellationToken);
+            try { await RefreshAsync(client, state, cancellationToken, queueHistory: false); }
+            finally { state.Gate.Release(); }
+        }
+    }
+
+    private async Task BeginHistoryAsync(OneBotClient client, ConnectionState state,
+        SyncRequest request, CancellationToken cancellationToken)
+    {
+        await state.Gate.WaitAsync(cancellationToken);
+        try
+        {
+            EnsureSyncAllowed();
+            state.HistoryQueue.Clear();
+            state.Queued.Clear();
+            state.Failures.Clear();
+            state.HistoryRunning = true;
+            state.BatchId = $"history-{request.SlotAt:yyyyMMdd-HHmm}-{Guid.NewGuid():N}";
+            state.Cutoff = DateTimeOffset.UtcNow.AddDays(-7);
+            await RefreshAsync(client, state, cancellationToken, queueHistory: true);
+            EnsureSyncAllowed();
+        }
+        finally { state.Gate.Release(); }
+    }
+
     private async Task ConsumeAsync(OneBotClient client, ConnectionState state, CancellationTokenSource session)
     {
         try
@@ -192,7 +301,9 @@ public sealed class NapCatMessageHost
                 await state.Gate.WaitAsync(session.Token);
                 try
                 {
+                    if (syncController is not null && (!state.HistoryRunning || !syncController.CanSync)) continue;
                     await RefreshPinsAsync(client, state, session.Token);
+                    if (syncController is not null && !syncController.CanSync) continue;
                     if (!state.Pins.Contains(groupId) || !state.Groups.Any(group => group.GroupId == groupId)) continue;
                     var message = OneBotMessageParser.ParseGroupMessage(packet, workspace.AccountId, groupId).Message;
                     var changed = state.HistoryRunning
@@ -217,6 +328,7 @@ public sealed class NapCatMessageHost
         {
             for (var pageIndex = 0; pageIndex < 100; pageIndex++)
             {
+                EnsureSyncAllowed();
                 await state.Gate.WaitAsync(cancellationToken);
                 try
                 {
@@ -226,12 +338,15 @@ public sealed class NapCatMessageHost
                     if (!state.Pins.Contains(groupId)) throw new OneBotProtocolException("unpinned");
                 }
                 finally { state.Gate.Release(); }
+                EnsureSyncAllowed();
                 var page = await client.GetGroupMessageHistoryAsync(groupId, cursor, 100, cancellationToken);
+                EnsureSyncAllowed();
                 await state.Gate.WaitAsync(cancellationToken);
                 try
                 {
                     // Recheck after the request too: in-flight unpinning must exclude the page before body parsing.
                     await RefreshPinsAsync(client, state, cancellationToken);
+                    EnsureSyncAllowed();
                     if (!state.Pins.Contains(groupId)) throw new OneBotProtocolException("unpinned");
                     var messages = page.Where(item => item.ValueKind == JsonValueKind.Object
                             && item.TryGetProperty("message_type", out var type)
@@ -242,6 +357,7 @@ public sealed class NapCatMessageHost
                     var changed = false;
                     foreach (var message in messages)
                     {
+                        EnsureSyncAllowed();
                         seen.Add(message.Message.Key);
                         if (message.Message.SentAt >= state.Cutoff)
                             changed |= workspace.Enqueue(message.Message, state.Pins, MessageOrigin.History, state.BatchId, DateTimeOffset.UtcNow);
@@ -299,7 +415,8 @@ public sealed class NapCatMessageHost
         return selected.MessageSequence ?? throw new OneBotProtocolException("history-cursor-missing");
     }
 
-    private void PublishConnected(ConnectionState state) => Publish("connected", "online", "active",
+    private void PublishConnected(ConnectionState state) => Publish("connected", "online",
+        syncController is not null && !state.HistoryRunning ? "paused" : "active",
         state.HistoryRunning ? "reading" : state.Failures.Count == 0 ? "complete" : "partial", null,
         state.Failures.Select(entry => new HistoryFailure(entry.Key, entry.Value)).OrderBy(item => item.GroupId, StringComparer.Ordinal).ToArray());
 

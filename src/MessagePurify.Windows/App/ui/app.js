@@ -56,6 +56,8 @@ function errorLabel(error) {
     history_timeout: '历史读取超时',
     connection_failed: '连接失败',
     qq_offline: 'QQ 离线',
+    game_active: '游戏运行中，同步已延后；退出游戏后合并补同步一次。',
+    game_catalog_unavailable: '游戏名单尚未准备好，自动同步已暂停。',
     pinned_groups_unavailable: '暂时无法读取置顶群范围',
     pinned_state_unavailable: '暂时无法读取置顶群范围，消息接收已暂停。',
     connection_unavailable: '暂未连接 QQ，请确认电脑上的 QQ 已登录。',

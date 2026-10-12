@@ -1,6 +1,23 @@
 # 项目检查
 
-## 本轮核对后台同步可行性（2026-10-12）
+## 本轮常驻后台同步与自动游戏名单（2026-10-12）
+
+用户选择 A，确认 QQ/NapCat Framework 常驻，按北京时间 08:00、12:00、20:00 后台读取置顶群；游戏期间暂停，退出后把错过多个时刻合并补一次。后台调度和常驻宿主已接入，首次非游戏时历史回溯不吞掉下一固定时刻，批次外重连不开启新读取；请求、响应及落盘/路由事务前核对游戏，中途游戏暂停未提交的处理，退出后合并恢复。自动发现和缓存已接入，默认应用启动及每日扫描一次，游戏期间延后目录扫描。本机扫描报告 `.tools/game-validation/installed-games.json`：19 个游戏安装目录，Minecraft 整合包合为一项，最终只读状态 GameRunning=false；不把已打开的 Steam 当作游戏。
+
+新增 `ScheduledSyncTests.cs`（23 项）、`InstalledGameCatalogTests.cs`（15 项）及常驻宿主/逐消息路由回归。实际 Infrastructure Release 418/418、Windows 141/141、Core 301/301、OCR 25/25、demo 108 项、Node 八文件 69/69（文档 29、正式页面 25）通过；自包含发布、默认入口检查和 Native 合成 13 项退出 0。Native 报告 `.tools/desktop-validation/scheduled-sync-native.json`；入口为 `.tools/published/app-scheduled-sync/`。本轮没有启动或关闭真实 QQ；真实常驻、实际游戏中途暂停/退出补同步、每款游戏的实际识别和长期稳定性尚未验收，不把测试/合成结果写为这些真实项目已通过。
+
+```powershell
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release
+& ./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py
+node --test tests/*.test.mjs
+node tests/prototype-qa.mjs
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-scheduled-sync
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File packaging/app/Start-MessagePurify.ps1 -CheckOnly
+```
+
+## 上一段核对后台同步可行性（2026-10-12，待确认建议现已确认）
 
 新增文档回归：后台读取可行性与接口常驻待确认建议分别记录，未确认前保留按次切换、游戏限制及补同步规则。核对现有 AppRuntime 后台宿主和 Framework 重复启动检查，未改动生产代码或实际切换 QQ；尚未实现定时后台读取，未实测资源占用和游戏影响。
 

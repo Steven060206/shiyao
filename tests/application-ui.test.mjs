@@ -141,6 +141,14 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'cancel1', '快照之后兑现桌面打开请求');
     });
     await waitFor('!!document.querySelector(".task-row")');
+    await t.test('游戏期间明确显示延后同步且保留本地事项', async () => {
+      await evaluate('backend.status={...backend.status,receiving:"paused",error:"game-active"};backend.push()');
+      assert.match(await evaluate('document.querySelector("#host-error").textContent'), /游戏运行中.*退出游戏后.*一次/);
+      assert.ok(await evaluate('document.querySelectorAll(".task-row").length') > 0);
+      await evaluate('backend.status={...backend.status,error:"game-catalog-unavailable"};backend.push()');
+      assert.match(await evaluate('document.querySelector("#host-error").textContent'), /游戏名单.*暂停/);
+      await evaluate(`backend.status=${JSON.stringify(status)};backend.push()`);
+    });
     await t.test('首次有待确认默认进入待确认，来源正文安全且图片不发请求', async () => {
       assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'pending');
       await select('review1');

@@ -26,6 +26,153 @@ public sealed class ApplicationMessageHostTests : IDisposable
     }
 
     [Fact]
+    public async Task ResidentHostKeepsConnectionIdleUntilScheduledRequestThenRunsOneBatch()
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false,
+            HistoryResponder = (_, _) => (0, BoundaryHistory(Message("scheduled")))
+        };
+        var controller = new ResidentSyncController();
+        var workspace = Workspace(confirmed: true);
+        var host = new NapCatMessageHost(workspace, server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var running = host.RunAsync(cancellation.Token);
+        try
+        {
+            await UntilAsync(() => server.ConnectionCount == 1 && host.Status.Receiving == "paused");
+            Assert.Empty(server.HistoryParameters);
+            controller.Request(new(SyncRequestKind.Scheduled,
+                DateTimeOffset.Parse("2026-10-12T08:00:00+08:00"), DateTimeOffset.UtcNow));
+            await UntilAsync(() => host.Status.History == "complete" && server.HistoryParameters.Count == 1);
+            Assert.Equal("task", Assert.Single(workspace.Snapshot(DateTimeOffset.UtcNow).Items).Kind);
+            Assert.Equal("paused", host.Status.Receiving);
+        }
+        finally
+        {
+            cancellation.Cancel();
+            await running.WaitAsync(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    [Fact]
+    public async Task ResidentHostDefersAlreadyQueuedRequestsDuringGameAndMergesThemOnResume()
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false,
+            HistoryResponder = (_, _) => (0, BoundaryHistory(Message("after-game")))
+        };
+        var detector = new MutableGameDetector { Active = true };
+        var controller = new ResidentSyncController(detector);
+        var workspace = Workspace(confirmed: true);
+        var host = new NapCatMessageHost(workspace, server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var running = host.RunAsync(cancellation.Token);
+        try
+        {
+            foreach (var hour in new[] { 8, 12, 20 })
+                controller.Request(new(SyncRequestKind.Scheduled,
+                    new DateTimeOffset(2026, 10, 12, hour, 0, 0, TimeSpan.FromHours(8)), DateTimeOffset.UtcNow));
+            await UntilAsync(() => host.Status.Error == "game-active");
+            Assert.Empty(server.HistoryParameters);
+            Assert.Equal(0, StoredCount());
+            detector.Active = false;
+            await UntilAsync(() => host.Status.History == "complete" && host.Status.Receiving == "paused"
+                && workspace.Snapshot(DateTimeOffset.UtcNow).Items.Count == 1);
+            Assert.Single(server.HistoryParameters);
+            Assert.Equal(1, server.ConnectionCount);
+        }
+        finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+
+    [Fact]
+    public async Task ResidentHostDiscardsInflightPageWhenGameStartsAndRecoversNewestHistoryAfterGame()
+    {
+        var detector = new MutableGameDetector();
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = true,
+            HistoryResponder = (_, read) =>
+            {
+                if (read == 1) detector.Active = true;
+                return (0, BoundaryHistory(Message(read == 1 ? "inflight" : "new-after-game")));
+            }
+        };
+        var controller = new ResidentSyncController(detector);
+        var workspace = Workspace(confirmed: true);
+        var host = new NapCatMessageHost(workspace, server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var running = host.RunAsync(cancellation.Token);
+        try
+        {
+            controller.Request(new(SyncRequestKind.Scheduled, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            await UntilAsync(() => host.Status.Error == "game-active");
+            Assert.Single(server.HistoryParameters);
+            Assert.Equal(0, StoredCount());
+            Assert.Empty(workspace.Snapshot(DateTimeOffset.UtcNow).Items);
+            detector.Active = false;
+            await UntilAsync(() => host.Status.History == "complete" && host.Status.Receiving == "paused");
+            Assert.Equal(2, server.HistoryParameters.Count);
+            Assert.Equal(1, StoredCount());
+            Assert.Single(workspace.Snapshot(DateTimeOffset.UtcNow).Items);
+        }
+        finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+
+    [Fact]
+    public async Task ResidentHostReconnectsUnfinishedBatchWithoutAnotherScheduledRequest()
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false,
+            PinnedResponder = (connection, read) => connection == 1 && read >= 4
+                ? (1200, null) : (0, Pins(First)),
+            HistoryResponder = (_, _) => (0, BoundaryHistory(Message("recovered")))
+        };
+        var controller = new ResidentSyncController();
+        var workspace = Workspace(confirmed: true);
+        var host = new NapCatMessageHost(workspace, server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var running = host.RunAsync(cancellation.Token);
+        try
+        {
+            controller.Request(new(SyncRequestKind.Scheduled, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            await UntilAsync(() => server.ConnectionCount >= 2 && host.Status.History == "complete"
+                && workspace.Snapshot(DateTimeOffset.UtcNow).Items.Count == 1);
+            Assert.Equal(2, server.HistoryParameters.Count);
+            Assert.Equal(1, StoredCount());
+        }
+        finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+
+    [Fact]
+    public void PendingRoutingStopsBetweenMessagesAndCanResumeWithoutLosingRawMessages()
+    {
+        var workspace = Workspace(confirmed: true);
+        var pins = new HashSet<string> { First };
+        var now = DateTimeOffset.UtcNow;
+        foreach (var id in new[] { "one", "two" })
+        {
+            var packet = JsonSerializer.SerializeToElement(Message(id, text: $"10月13日18点提交{id}作业"));
+            workspace.Enqueue(OneBotMessageParser.ParseGroupMessage(packet, Account, First).Message,
+                pins, MessageOrigin.History, "synthetic", now);
+        }
+        Assert.Equal(1, workspace.ProcessPending(pins, now, () => workspace.Snapshot(now).Items.Count == 0));
+        Assert.Single(workspace.Snapshot(now).Items);
+        Assert.Equal(2, StoredCount());
+        Assert.Equal(1, workspace.ProcessPending(pins, now));
+        Assert.Equal(2, workspace.Snapshot(now).Items.Count);
+    }
+
+    private sealed class MutableGameDetector : IGameActivityDetector
+    {
+        private int active;
+        public bool Active { get => Volatile.Read(ref active) == 1; set => Volatile.Write(ref active, value ? 1 : 0); }
+        public bool IsGameRunning() => Active;
+    }
+
+    [Fact]
     public async Task ConfirmedCoursePersistsOneTaskAcrossHistoryAndRealtimeDuplicates()
     {
         var message = Message("task");
