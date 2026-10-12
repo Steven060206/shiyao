@@ -334,6 +334,81 @@ public sealed class AccountWorkspaceTests : IDisposable
     }
 
     [Fact]
+    public void Notice_ConvertsToTaskWithRequiredDateAndDoesNotDuplicate()
+    {
+        var workspace = Workspace();
+        Groups(workspace);
+        Confirm(workspace);
+        var message = Message(text: "10月14日18点自愿报名讲座");
+        Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.History, "history", Now));
+        var notice = Assert.Single(workspace.Snapshot(Now).Items);
+
+        Assert.Throws<ArgumentException>(() => workspace.Execute(Command("convert-notice", notice), Now));
+
+        workspace.Execute(Command("convert-notice", notice) with { Date = "2026-10-14", Time = "18:00" }, Now);
+        var converted = workspace.Snapshot(Now).Items;
+        var task = Assert.Single(converted, item => item.Kind == "task");
+        var savedNotice = Assert.Single(converted, item => item.Kind == "notice");
+        Assert.Equal(notice.Title, task.Title);
+        Assert.Equal(notice.Course, task.Course);
+        Assert.Equal("2026-10-14", task.Due);
+        Assert.Equal("18:00", task.Time);
+        Assert.Equal("converted", savedNotice.State);
+        Assert.Equal(task.Id, savedNotice.TargetTaskId);
+
+        workspace.Execute(Command("convert-notice", savedNotice) with { Date = "2026-10-14", Time = "18:00" }, Now.AddMinutes(1));
+        Assert.Single(workspace.Snapshot(Now.AddMinutes(1)).Items, item => item.Kind == "task");
+    }
+
+    [Fact]
+    public void NoticeConversion_PreservesActionStartKindAndAllEvidence()
+    {
+        var workspace = Workspace();
+        Groups(workspace);
+        Confirm(workspace);
+        var quoted = new MessageKey(Account, Group, "quoted");
+        var message = Message(text: "10月14日18点自愿参加讲座") with
+        {
+            Segments = [new(SegmentKind.Text, "10月14日18点自愿参加讲座"),
+                new(SegmentKind.Quote, "原通知", quoted)]
+        };
+        Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.History, "history", Now));
+        var notice = Assert.Single(workspace.Snapshot(Now).Items, item => item.Kind == "notice");
+
+        workspace.Execute(Command("convert-notice", notice) with { Date = "2026-10-14", Time = "18:00" }, Now);
+
+        var task = Assert.Single(Tasks().ListTasks());
+        Assert.Equal(RuleAction.Attend, task.Action);
+        Assert.Equal(TimeKind.Start, task.Time.Kind);
+        Assert.Contains(message.Key, task.Evidence);
+        Assert.Contains(quoted, task.Evidence);
+    }
+
+    [Fact]
+    public void NoticeConversion_KeepsSeparateTasksForSeparateNoticesInOneMessage()
+    {
+        var workspace = Workspace();
+        Groups(workspace);
+        Confirm(workspace);
+        var message = Message(text: "10月14日18点自愿参加讲座；10月15日18点自愿参加比赛");
+        Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.History, "history", Now));
+        var notices = workspace.Snapshot(Now).Items.Where(item => item.Kind == "notice").ToArray();
+        Assert.Equal(2, notices.Length);
+
+        workspace.Execute(Command("convert-notice", notices[0]) with { Date = "2026-10-14", Time = "18:00" }, Now);
+        var current = workspace.Snapshot(Now).Items.Where(item => item.Kind == "notice").ToArray();
+        workspace.Execute(Command("convert-notice", current[1]) with { Date = "2026-10-15", Time = "18:00" }, Now);
+
+        Assert.Equal(2, Tasks().ListTasks().Count);
+        var snapshot = workspace.Snapshot(Now);
+        Assert.Equal(2, snapshot.Items.Count(item => item.Kind == "task"));
+        var converted = snapshot.Items.Where(item => item.Kind == "notice").ToArray();
+        Assert.Equal(2, converted.Length);
+        Assert.All(converted, item => Assert.Equal("converted", item.State));
+        Assert.NotEqual(converted[0].TargetTaskId, converted[1].TargetTaskId);
+    }
+
+    [Fact]
     public void Execute_RejectsWrongAccountAndUnknownOperation()
     {
         var workspace = Workspace();

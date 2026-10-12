@@ -85,6 +85,15 @@ public sealed class AppBridgeProtocolTests
     }
 
     [Fact]
+    public void Accepts_notice_conversion_with_date_and_optional_time()
+    {
+        const string json = """{"id":"n","operation":"convert-notice","parameters":{"accountId":"123","id":"notice-1","operationId":"o","version":1,"date":"2026-10-14","time":"18:00","timeKind":"deadline"}}""";
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out var request));
+        Assert.Equal("convert-notice", request!.Operation);
+        Assert.Equal("2026-10-14", request.Parameters.GetProperty("date").GetString());
+    }
+
+    [Fact]
     public void Rejects_oversized_payload_before_parsing() => Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, new string('x', 16385), out _));
 
     [Theory]

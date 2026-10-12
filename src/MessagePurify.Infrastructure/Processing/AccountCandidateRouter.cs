@@ -225,6 +225,17 @@ public sealed class AccountCandidateRouter
         return result;
     }
 
+    public StoredNotice? FindNotice(string id)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(id);
+        using var connection = Open(RoutingDatabasePath);
+        CheckStore(connection, null, "main", messages.AccountId);
+        using var command = Command(connection, null, "SELECT notice_json FROM notices WHERE id = $id;", ("$id", id));
+        return command.ExecuteScalar() is string json
+            ? JsonSerializer.Deserialize<StoredNotice>(json) ?? throw new InvalidDataException("通知记录为空。")
+            : null;
+    }
+
     private static StoredMessage? NextMessage(SqliteConnection connection, SqliteTransaction transaction, RuleContext context)
     {
         var excluded = context.ExcludedSenders?.ToArray() ?? [];

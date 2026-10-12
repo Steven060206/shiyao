@@ -3,7 +3,7 @@
 const $ = id => document.getElementById(id);
 const html = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const pages = { tasks: '任务', pending: '待确认', notices: '通知', completed: '已完成', settings: '设置' };
-const states = { active: '待办', completed: '已完成', archived: '已归档', cancelled: '已取消', pending: '待确认', ignored: '已忽略', rejected: '已拒绝', accepted: '已确认' };
+const states = { active: '待办', converted: '已转为任务', completed: '已完成', archived: '已归档', cancelled: '已取消', pending: '待确认', ignored: '已忽略', rejected: '已拒绝', accepted: '已确认' };
 const descriptions = { tasks: '保留待办，直到完成或归档', pending: '核对原文，补齐信息后再确认', notices: '无需完成的群消息', completed: '保留完成记录和消息来源', settings: '连接状态、课程关联与界面偏好' };
 const preferencesKey = 'message-purify-preferences';
 const preferences = { theme: 'system', motion: 'system' };
@@ -151,7 +151,7 @@ function receive(message) {
       if (pending.itemId) {
         drafts.delete(pending.itemId);
         if (pending.operation === 'confirm-group') groupDrafts.delete(pending.itemId);
-        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
+        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
       }
     }
   } else if (message.type !== 'state') return;
@@ -185,7 +185,8 @@ function pageItems() {
       : page === 'pending' ? item.kind === 'review'
         : page === 'completed' ? item.kind === 'task' && item.state === 'completed'
           : page === 'notices' ? item.kind === 'notice' : false;
-    return belongs && (page === 'completed' || filters.state === 'all' || item.state === filters.state)
+    const stateMatch = page === 'completed' || filters.state === 'all' || item.state === filters.state || page === 'notices' && filters.state === 'active' && item.state === 'converted';
+    return belongs && stateMatch
       && (!filters.course || item.course === filters.course)
       && (!search || [item.title, item.course, item.group, states[item.state]].some(value => String(value || '').toLocaleLowerCase().includes(search)));
   }).sort((a, b) => (a.priority ?? 4) - (b.priority ?? 4) || String(a.due || '9999').localeCompare(String(b.due || '9999')) || String(a.time || '').localeCompare(String(b.time || '')) || String(a.title).localeCompare(String(b.title), 'zh-CN'));
@@ -227,7 +228,7 @@ function renderNav() {
 }
 function renderFilters() {
   if (lastFilterPage !== page) {
-    const options = page === 'pending' ? ['pending', 'ignored', 'rejected', 'all'] : page === 'tasks' ? ['active', 'archived', 'cancelled', 'all'] : ['active', 'all'];
+    const options = page === 'pending' ? ['pending', 'ignored', 'rejected', 'all'] : page === 'tasks' ? ['active', 'archived', 'cancelled', 'all'] : page === 'notices' ? ['active', 'converted', 'all'] : ['active', 'all'];
     $('state-filter').innerHTML = options.map(value => `<option value="${value}">${states[value] || '全部状态'}</option>`).join('');
     if (!options.includes(filters.state)) filters.state = options[0];
     lastFilterPage = page;
@@ -276,12 +277,14 @@ function draftFor(item) {
 }
 function formHTML(item) {
   const draft = draftFor(item);
-  return `<form class="form" id="${item.kind === 'review' ? 'review-form' : 'time-form'}" data-id="${html(item.id)}" novalidate>
-    <label class="field">${linkedWithoutDate(item) ? '日期（可留空，保留原任务时间）' : '正式日期'}<input type="date" name="date" value="${html(draft.date)}"></label>
+  const notice = item.kind === 'notice';
+  const formId = item.kind === 'review' ? 'review-form' : notice ? 'notice-form' : 'time-form';
+  return `<form class="form" id="${formId}" data-id="${html(item.id)}" novalidate>
+    <label class="field">${notice ? '正式日期（必填）' : linkedWithoutDate(item) ? '日期（可留空，保留原任务时间）' : '正式日期'}<input type="date" name="date" value="${html(draft.date)}"${notice ? ' required' : ''}></label>
     <div class="form-grid"><label class="field">时间（可不填）<input type="time" name="time" value="${html(draft.time)}"></label><label class="field">时间类型<select name="timeKind"><option value="deadline" ${draft.timeKind !== 'start' ? 'selected' : ''}>截止时间</option><option value="start" ${draft.timeKind === 'start' ? 'selected' : ''}>开始时间</option></select></label></div>
     <p class="hint">只知道日期时请留空时间，不会补写具体钟点。</p>
     ${item.suggestedDue ? `<div class="change-box">建议日期：${html(item.suggestedDue)}${item.suggestedTime ? ' ' + html(item.suggestedTime) : ''}<p>建议尚未成为正式时间，核对后可填入表单。</p><button type="button" class="button small" data-action="use-suggestion">填入建议日期</button></div>` : ''}
-    ${item.kind === 'task' ? '<button type="submit" class="button" data-action="accept-time">保存正式时间</button>' : ''}</form>`;
+    ${item.kind === 'task' ? '<button type="submit" class="button" data-action="accept-time">保存正式时间</button>' : notice ? '<button type="submit" class="button primary" data-action="convert-notice">加入任务</button>' : ''}</form>`;
 }
 function sourceHTML(item) {
   return '<h3 class="section-label">原始消息</h3>' + (item.evidence?.length ? item.evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('') : '<p class="hint">暂无可显示的原消息正文。</p>');
@@ -289,6 +292,7 @@ function sourceHTML(item) {
 function actionsHTML(item) {
   const button = (action, label, primary = false) => `<button class="button ${primary ? 'primary' : ''}" data-action="${action}">${label}</button>`;
   if (item.kind === 'review') return item.state === 'pending' ? button('ignore', '忽略') + button('reject', '拒绝建议') : item.state === 'ignored' && canUndo(item) ? button('undo-ignore', '撤销') : '';
+  if (item.kind === 'notice') return item.state === 'converted' && item.targetTaskId ? button('open-target', '查看任务', true) : '';
   if (item.kind !== 'task') return '';
   if (item.state === 'active') return button('complete', '完成', true) + button('archive', '归档');
   if (item.state === 'completed') return (canUndo(item) ? button('undo-complete', '撤销') : '') + button('archive', '归档');
@@ -322,7 +326,7 @@ function renderDetail() {
         ${item.kind === 'task' ? `<div class="deadline-box ${item.state === 'active' && past(item) && item.timeKind !== 'start' ? 'overdue' : ''}"><small>${timeLabel(item)}</small><b>${html(dateLabel(item))}</b><small>${item.state !== 'active' ? html(states[item.state]) : past(item) ? item.timeKind === 'start' ? '开始时间已过' : '已逾期，仍保留待处理' : '按正式日期和时间精度保存'}</small></div>` : ''}
         ${item.kind === 'review' && item.reviewReasons?.length ? `<div class="change-box">需要核对<p>${html(item.reviewReasons.join(' · '))}</p></div>` : ''}
         <div class="detail-actions">${actionsHTML(item)}</div>
-        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">调整正式时间</h3>${formHTML(item)}` : ''}
+        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">调整正式时间</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
         ${item.kind === 'review' && item.state === 'pending' && !item.canAccept ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
         ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
@@ -410,6 +414,7 @@ document.addEventListener('submit', event => {
   event.preventDefault();
   const item = selected();
   if (event.target.id === 'time-form' && item) { const time = validateTime(item); if (time) command('accept-time', item, time); }
+  else if (event.target.id === 'notice-form' && item) { const time = validateTime(item); if (time) command('convert-notice', item, time); }
   else if (event.target.id === 'review-form') acceptReview(item);
 });
 document.addEventListener('click', event => {
@@ -440,6 +445,13 @@ document.addEventListener('click', event => {
   if (action === 'accept-review') {
     acceptReview(item);
   } else if (action === 'accept-time') { /* The form submit handler validates and sends this command. */ }
+  else if (action === 'convert-notice') { /* The form submit handler validates and sends this command. */ }
+  else if (action === 'open-target') {
+    const target = items().find(candidate => candidate.id === item.targetTaskId && candidate.kind === 'task');
+    if (!target) { hostError = '关联任务暂未出现在快照，请刷新后重试。'; render(); return; }
+    page = target.state === 'completed' ? 'completed' : 'tasks'; filters = { search: '', course: '', state: target.state }; selectedId = target.id; detailError = null; hostError = ''; render();
+    document.querySelector('.task-row.selected')?.scrollIntoView({ block: 'nearest' }); return;
+  }
   else if (['undo-complete', 'undo-ignore'].includes(action)) {
     if (!canUndo(item)) { detailError = { id: item.id, message: errorLabel('undo_expired') }; updateDetailControls(); return; }
     command(action, item, { undoOperationId: item.undoOperationId });

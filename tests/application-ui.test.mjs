@@ -64,7 +64,11 @@ const mockScript = `(() => {
           item.kind='task';item.state='active';item.due=parameters.date || null;item.time=parameters.time || null;item.timeKind=parameters.timeKind || 'deadline';
           backend.snapshot.reminders.push({taskId:item.id,timeVersion:1,planVersion:1,preference:{mode:'default',hours:null,days:null,clock:null},needsReview:false,active:true,nodes:[]});
         }
-        item.version++;
+        if(command.operation==='convert-notice') {
+          const taskId=item.targetTaskId || 'notice-task-'+item.id;
+          item.state='converted';item.targetTaskId=taskId;item.targetTaskVersion=1;
+          if(!backend.snapshot.items.some(candidate=>candidate.id===taskId)) backend.snapshot.items.push(Object.assign({}, item, {id:taskId,kind:'task',state:'active',due:parameters.date,time:parameters.time || null,timeKind:parameters.timeKind || 'deadline',version:1,targetTaskId:null,targetTaskVersion:null,unread:false}));
+        } else item.version++;
       }
     }
     if(backend.snapshot)backend.snapshot.generatedAt=new Date().toISOString();
@@ -436,6 +440,28 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await click('[data-group-id="100"] [data-action="exclude-group"]');
       command = await evaluate('backend.messages.filter(message=>message.operation==="confirm-group").at(-1)');
       assert.equal(command.parameters.excluded, true);
+    });
+    await push(fixture);
+    await t.test('普通通知可补正式日期转为任务并保留通知入口', async () => {
+      await nav('notices'); await select('notice1');
+      assert.equal(await evaluate('!!document.querySelector("#notice-form")'), true);
+      assert.equal(await evaluate('document.querySelector("#notice-form [name=date]").required'), true);
+      const before = await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").length');
+      await click('[data-action="convert-notice"]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").length'), before);
+      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /正式日期/);
+      await change('#notice-form [name=date]', '2026-12-30');
+      await click('[data-action="convert-notice"]');
+      await waitFor('backend.snapshot.items.find(item=>item.id==="notice1").state==="converted"');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").at(-1)');
+      assert.equal(command.parameters.id, 'notice1'); assert.equal(command.parameters.date, '2026-12-30');
+      assert.equal(command.parameters.time, ''); assert.equal(command.parameters.timeKind, 'deadline');
+      assert.equal(await evaluate('document.querySelectorAll(".task-row[data-id=notice1]").length'), 1);
+      assert.match(await body(), /已转为任务/);
+      assert.equal(await evaluate('document.querySelector("[data-action=open-target]").textContent'), '查看任务');
+      await click('[data-action="open-target"]');
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'tasks');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'notice-task-notice1');
     });
     await t.test('通知未读只标记一次，状态刷新不会无限请求或重置筛选', async () => {
       await nav('notices'); await select('notice1');

@@ -12,7 +12,7 @@ public static class AppBridgeProtocol
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
-        "reject", "accept-review", "accept-time", "confirm-group", "mark-read", "set-appearance", "set-autostart"
+        "reject", "accept-review", "accept-time", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {

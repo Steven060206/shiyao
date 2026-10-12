@@ -2,7 +2,7 @@
 
 ## 当前范围决定（2026-10-12）
 
-OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立项目，本阶段不以 OCR 完成为门槛。额外的本机数据安全增强同样后置；测试仍必须保持 QQ/NapCat 只读，软件不得向 QQ 群聊或私聊发送消息。下一阶段先验证完整编辑、变更标记、普通通知转任务、合并拆分、备份恢复和桌面卡片恢复。
+OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立项目，本阶段不以 OCR 完成为门槛。额外的本机数据安全增强同样后置；测试仍必须保持 QQ/NapCat 只读，软件不得向 QQ 群聊或私聊发送消息。普通通知转任务已由本轮工作区、桥协议和正式页面专项覆盖；下一阶段先验证完整编辑、变更标记、合并拆分、备份恢复和桌面卡片恢复。
 
 ## 本轮 Windows 登录自动启动实现（2026-10-12）
 
@@ -32,7 +32,7 @@ OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立
 
 实际 UI Automation 执行确认按钮、原生桌面完成、已完成页撤销；只读 SQLite 验证任务 active → completed → active、正式时间 2026-10-09/Time=null/TimeProtected=true、证据保留 1 条、待确认转为 accepted。托盘脚本首轮未找到退出菜单，原因未确定；同一 `tests/app_tray_test.ps1 -ProcessId 8540 -ExitApplication -Verbose` 重跑退出 0、ExitVerified=true，应用退出码 0，未改生产代码。默认入口重开进程 5128，数据库无重复、两卡片父窗/style 正常，原生卡片点击打开的正式日期和原文通过。首次 UIA 读取因未读点及异步详情时序失败，按实际标签兼容未读点并等待详情就绪后通过，未修改生产逻辑。
 
-本机只读报告位于 .tools/desktop-validation/：real-task-accepted.json、real-task-completed.json、real-task-restored.json、real-task-reopened.json、real-task-desktop-accepted.json、real-task-desktop-reopened.json、real-task-native-detail.json。QQ 未退出，未发送 QQ/Windows 通知；主界面停在真实任务详情，可由用户核对。下一步进入完整编辑、变更标记、普通通知转任务及其他真实任务/桌面恢复场景；OCR 队列后置。
+本机只读报告位于 .tools/desktop-validation/：real-task-accepted.json、real-task-completed.json、real-task-restored.json、real-task-reopened.json、real-task-desktop-accepted.json、real-task-desktop-reopened.json、real-task-native-detail.json。QQ 未退出，未发送 QQ/Windows 通知；主界面停在真实任务详情，可由用户核对。普通通知转任务已由本地工作区、桥协议和正式页面专项覆盖；下一步进入完整编辑、变更标记及其他真实任务/桌面恢复场景；OCR 队列后置。
 
 新增 `AccountWorkspaceTests.DateOnlyReview_UsesOriginalMessageDayAndSurvivesCompleteUndoAndReopen`，采用通用材料文本与合成账号，覆盖以原发送日解析“明天”、日期精度、显式确认、P0、完成/撤销及重开证据保留；单项 1/1、Infrastructure 完整 Release 419/419 通过。文档回归更新当前数量与真实日期确认边界，Node 全量 72/72。生产代码未改，不重新发布，也未重跑未改动的 Core/Windows/OCR/demo。
 

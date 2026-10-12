@@ -25,6 +25,31 @@ public sealed class AccountTaskStore
     public TaskItem CreateTask(string id, RuleCandidate candidate, string operationId, DateTimeOffset now)
         => InTransaction((connection, transaction) => CreateTaskInTransaction(connection, transaction, id, candidate, operationId, now));
 
+    public TaskItem CreateTaskFromNotice(string id, string noticeId, RuleCandidate candidate,
+        TaskTime time, int? priority, string operationId, DateTimeOffset now)
+    {
+        ValidateId(id);
+        ValidateId(noticeId);
+        ValidateCandidate(candidate);
+        ValidateTime(time);
+        var sourceKey = "notice:" + AccountId + ":" + noticeId;
+        return Write<TaskItem>(operationId,
+            new { Kind = "convert-notice", Id = id, NoticeId = noticeId, Candidate = candidate, Time = time, Priority = priority },
+            "task", (connection, transaction) =>
+            {
+                var existing = FindBySource<TaskItem>(connection, transaction, "tasks", sourceKey);
+                if (existing is not null) return new(existing, existing.Id);
+                if (Read<TaskItem>(connection, transaction, "tasks", id) is not null)
+                    throw new InvalidOperationException("通知转换任务 ID 已被其他事项使用。");
+                var task = new TaskItem(id, AccountId, candidate.Title,
+                    string.IsNullOrWhiteSpace(candidate.Course) ? null : candidate.Course.Trim(), candidate.Action,
+                    time, TaskState.Active, true, priority, 1, 1, candidate.Evidence.Distinct().ToArray(), now, null, null, null);
+                Insert(connection, transaction, "tasks", id, task, sourceKey);
+                AddEvidence(connection, transaction, task);
+                return new(task, task.Id);
+            }, now);
+    }
+
     internal TaskItem CreateTaskInTransaction(SqliteConnection connection, SqliteTransaction transaction,
         string id, RuleCandidate candidate, string operationId, DateTimeOffset now)
     {

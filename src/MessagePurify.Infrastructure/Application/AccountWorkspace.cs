@@ -141,10 +141,13 @@ public sealed class AccountWorkspace
                     review.State == ReviewState.Pending && reason is null));
             }
             foreach (var notice in router.ListNotices())
+            {
+                var converted = taskList.FirstOrDefault(task => task.Id == "notice-task-" + notice.Id);
                 items.Add(Item(notice.Id, "notice", notice.Candidate.Title, notice.Candidate.Course,
-                    "active", notice.Candidate.Time, notice.ProcessingVersion, notice.Candidate.Evidence,
-                    notice.Candidate.Action, now, reasons: notice.Candidate.ReviewReasons,
-                    suggested: notice.Candidate.SuggestedTime));
+                    converted is null ? "active" : "converted", notice.Candidate.Time, notice.ProcessingVersion,
+                    notice.Candidate.Evidence, notice.Candidate.Action, now, converted?.Id, converted?.Version,
+                    reasons: notice.Candidate.ReviewReasons, suggested: notice.Candidate.SuggestedTime));
+            }
             var groups = availableGroups.Keys.Union(settings.Relationships.Keys, StringComparer.Ordinal)
                 .Select(id =>
                 {
@@ -208,6 +211,7 @@ public sealed class AccountWorkspace
                 case "accept-time":
                     tasks.AcceptTime(command.Id, command.OperationId, command.Version,
                         ReadTime(command, tasks.FindTask(command.Id)?.Time.Kind) ?? throw new ArgumentException("须确认正式日期。"), now); break;
+                case "convert-notice": ConvertNotice(command, now); break;
                 case "accept-review":
                     var review = tasks.FindReview(command.Id) ?? throw new KeyNotFoundException("待确认事项不存在。");
                     var candidate = review.Candidate;
@@ -272,6 +276,19 @@ public sealed class AccountWorkspace
                 [command.Id] = new(GroupName(command.Id), string.IsNullOrWhiteSpace(command.Course) ? null : command.Course.Trim(), command.Excluded)
             }
         });
+    }
+
+    private void ConvertNotice(WorkspaceCommand command, DateTimeOffset now)
+    {
+        var notice = router.FindNotice(command.Id) ?? throw new KeyNotFoundException("通知不存在。");
+        if (notice.AccountId != AccountId) throw new ArgumentException("通知账号不属于当前工作区。", nameof(command));
+        if (notice.ProcessingVersion != command.Version)
+            throw new InvalidOperationException("通知已有变化，请重新读取后再转换。");
+        var time = ReadTime(command, notice.Candidate.Time?.Kind ?? notice.Candidate.SuggestedTime?.Kind)
+            ?? throw new ArgumentException("加入任务前须填写正式日期。", nameof(command));
+        tasks.CreateTaskFromNotice("notice-task-" + notice.Id, notice.Id, notice.Candidate,
+            time, PriorityCalculator.Calculate(time, now, false),
+            command.OperationId, now);
     }
 
     private static string? AcceptanceProblem(RuleCandidate candidate, bool targetExists)

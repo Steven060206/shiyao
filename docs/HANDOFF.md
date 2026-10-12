@@ -2,6 +2,14 @@
 
 最后更新：2026-10-12（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
+当前总览：M3 正在实施；历史静音呈现及用户实际点击通过，用户实际点击通过与对应报告已保留，长期通知稳定性仍未验收。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+
+### 当前接续（普通通知转任务，2026-10-12）
+
+用户确认普通通知转任务按“沿用通知标题和课程、正式日期必填、钟点可选”实现后，本轮已接入正式工作区、桥协议和 WebView2 页面。通知详情新增日期/可选钟点表单和 `convert-notice` 命令；转换后原通知继续保留并标记“已转为任务”，保存关联任务 ID，支持从通知详情打开任务。转换任务沿用通知候选动作和开始/截止类型，保存候选中的全部消息证据；同一通知按通知 ID 幂等，同一条原消息中的不同通知分别建立任务。未填写正式日期时工作区和页面都拒绝提交；QQ/NapCat 仍只读，不新增任何 QQ 或 Windows 通知写入。
+
+本轮新增/更新：`AccountTaskStore.CreateTaskFromNotice`、`AccountCandidateRouter.FindNotice`、`AccountWorkspace` 通知状态投影及 `convert-notice` 工作区命令、`AppBridgeProtocol` 操作注册、正式页面通知详情和模拟桥。回归覆盖：通知日期必填与重复操作、候选动作/开始时间/引用证据保留、同消息多通知独立任务、桥协议参数、页面日期校验/可选钟点/保留通知/查看任务。实际验证：Infrastructure Release **431/431**、Windows Release **171/171**、正式页面 **30/30**、Node 全量 **84/84**、文档回归 **35/35**；均退出码 0。下一项继续完整编辑与变更标记、合并拆分、备份恢复和桌面卡片恢复；普通通知转任务的真实 QQ 场景留到统一验收，不把合成页面回归写成真实接收验收。
+
 上一段实施（基线 `07b6d9c`）：消息提纯自身的桌面与开始菜单便捷入口已完成。首轮指向隐藏 PowerShell 的入口被火绒隔离：桌面于北京时间 18:06:54、开始菜单于 18:06:56，分类 TrojanDownloader/LNK.Agent.g；只读核对 QuarantineEx.db/FilesV3_60 和 log.db/HrLogV3_60 的对应路径与时间，未修改安全设置或隔离内容。现改为普通快捷方式直接指向 MessagePurify.exe、空参数和正常窗口；应用自身读取唯一启用的本机 3001 配置，环境凭据优先，损坏/歧义仅报告安全错误码。
 
 上一段验证：快捷方式/旧启动脚本 7/7、配置读取专项 11/11、Windows Release 164/164、Node 全量 80/80；自包含发布至 `.tools/published/app-launcher/`，默认入口 `-CheckOnly` Ready/AuthenticationReady=true，Native 合成 13 项报告 `.tools/desktop-validation/app-launcher-native.json` success=true。当前安装报告 `.tools/desktop-validation/app-launcher-shortcuts-installed.json` 记录桌面与开始菜单入口已实际安装并检查；桌面入口启动 PID 13596，两个桌面卡片均 visible/child/noActivate=true、parentClass=SHELLDLL_DefView、topmost=false。开始菜单入口再次启动保持单实例，主窗口隐藏后再次启动唤回；真实只读报告 `.tools/desktop-validation/app-launcher-read-only.json` 为 connected/online、历史 complete、失败为空，UIA 显示等待下次同步、18:29 成功时间及 20:00 计划时间。QQ 快捷方式和同步规则保持。
