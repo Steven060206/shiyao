@@ -228,7 +228,8 @@ public sealed class AccountTaskStore
         if (candidate.Action == RuleAction.Cancel) snapshot = TaskTransitions.Cancel(snapshot);
         else
         {
-            var time = confirmedTime ?? candidate.Time;
+            // 催交候选可能借用提取时的旧期限；只有显式确认时间才允许修改正式值。
+            var time = confirmedTime ?? (candidate.Action == RuleAction.Remind ? null : candidate.Time);
             if (candidate.Action is RuleAction.Postpone or RuleAction.NewRequirement) ValidateTime(time);
             if (time is not null)
             {
@@ -265,6 +266,47 @@ public sealed class AccountTaskStore
         else if (task.State == TaskState.Active && previous.State != TaskState.Active)
             task = task with { CompletedAt = null, ArchivedAt = null, UndoExpiresAt = null, UndoOperationId = null };
         return task;
+    }
+
+    internal (TaskItem? Task, string? ReviewReason) ApplyAutomaticChangeInTransaction(
+        SqliteConnection connection, SqliteTransaction transaction, RuleCandidate candidate,
+        string operationId, DateTimeOffset now)
+    {
+        ValidateCandidate(candidate);
+        if (candidate.Disposition != RuleDisposition.Change || candidate.TargetTaskId is null ||
+            candidate.Action is not (RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Remind))
+            throw new ArgumentException("自动变更须有明确关联目标及有效行动。", nameof(candidate));
+        var assessments = candidate.Assessments;
+        if (!assessments.Action.Reliable || !assessments.Audience.Reliable || !assessments.Course.Reliable ||
+            !assessments.Time.Reliable || !assessments.Source.Reliable || !assessments.Association.Reliable ||
+            candidate.ReviewReasons.Count != 0)
+            return (null, "变更的行动、来源、关联或正式时间仍需确认");
+        var previous = Read<TaskItem>(connection, transaction, "tasks", candidate.TargetTaskId);
+        if (previous is null) return (null, "关联目标事项已不存在，需要确认");
+        if (candidate.Action == RuleAction.NewRequirement && previous.State is TaskState.Archived or TaskState.Cancelled)
+            return (null, "已归档或已取消事项的新要求必须由用户确认");
+        if (candidate.Action is RuleAction.Postpone or RuleAction.NewRequirement)
+        {
+            if (candidate.Time is null) return (null, "缺少可靠正式时间，需要确认");
+            if (previous.TimeProtected && candidate.Time != previous.Time)
+                return (null, "新时间与手动保护的正式时间冲突，需要确认");
+        }
+        var result = WriteInTransaction<TaskItem>(connection, transaction, operationId,
+            new { Kind = "automatic-change", TaskId = previous.Id, ExpectedTaskVersion = previous.Version,
+                Candidate = Normalize(candidate) }, "task", (connection, transaction) =>
+        {
+            // 催交只补充证据；自动新要求保留稳定标题，正文留在操作历史及原消息。
+            var updated = AcceptLinked(previous, candidate, null, now) with
+            {
+                Title = previous.Title,
+                Priority = candidate.Time != previous.Time && candidate.Action is RuleAction.Postpone or RuleAction.NewRequirement
+                    ? candidate.Priority : previous.Priority
+            };
+            Update(connection, transaction, "tasks", previous.Id, updated);
+            AddEvidence(connection, transaction, updated);
+            return new(updated, updated.Id, previous);
+        }, now);
+        return (result, null);
     }
 
     private TaskItem ChangeTask(string id, string operationId, long expectedVersion, DateTimeOffset now,

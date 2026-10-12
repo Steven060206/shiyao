@@ -72,7 +72,9 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'docs/superpowers/plans/2026-10-12-candidate-routing.md',
     'src/MessagePurify.Infrastructure/Processing/AccountCandidateRouter.cs',
     'src/MessagePurify.Infrastructure/Processing/CandidateRoutingModels.cs',
-    'tests/MessagePurify.Infrastructure.Tests/CandidateRoutingTests.cs'
+    'tests/MessagePurify.Infrastructure.Tests/CandidateRoutingTests.cs',
+    'docs/superpowers/plans/2026-10-12-linked-changes.md',
+    'tests/MessagePurify.Infrastructure.Tests/LinkedChangeRoutingTests.cs'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
@@ -104,7 +106,7 @@ test('M4 首轮候选路由状态明确本地分流、课程确认和后续实�
     for (const disposition of ['Task', 'Pending', 'Change', 'Notice', 'Ignored']) {
       assert.ok(content.includes(disposition), `${file} 缺少 ${disposition} 分流说明`);
     }
-    assert.match(content, /Change.*待确认/, `${file} 关联变更当前不能写成自动应用`);
+    assert.match(content, /可靠关联 Change 自动更新同一事项/, `${file} 当前可靠变更自动应用`);
     assert.match(content, /课程确认.*(?:撤销|变更).*Task\/Notice.*降级.*待确认/, file);
     assert.match(content, /普通通知列表入库不等于 Windows 系统通知投递/, file);
     assert.match(content, /普通通知转任务.*(?:待完成|尚未完成|后续阶段)/, file);
@@ -117,9 +119,42 @@ test('M4 首轮候选路由状态明确本地分流、课程确认和后续实�
   }
   assert.match(read('docs/requirements.md'), /更高 ProcessingVersion 不自动重放/);
   const readme = read('tests/README.md');
-  assert.match(readme, /FullyQualifiedName~CandidateRoutingTests\|FullyQualifiedName~TaskLifecycleTests/);
+  assert.match(readme, /FullyQualifiedName~CandidateRoutingTests\|FullyQualifiedName~LinkedChangeRoutingTests\|FullyQualifiedName~TaskLifecycleTests/);
   assert.match(readme, /回执失败整条消息回滚/);
   assert.match(readme, /WAL 拒绝且不写结果/);
+  assert.match(readme, /第三段当时 Pending\/Change 仅保存待确认.*第四段已替代/);
+});
+
+test('M4 可靠关联变更状态保留持久化目标、来源授权、保守顺序和正式宿主边界', () => {
+  const planFile = 'docs/superpowers/plans/2026-10-12-linked-changes.md';
+  for (const match of read(planFile).matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
+    const target = match[1];
+    if (/^[a-z]+:/i.test(target) || target.startsWith('#')) continue;
+    assert.ok(fs.existsSync(path.resolve(root, path.dirname(planFile), target.split('#')[0])),
+      `关联变更计划链接缺失：${target}`);
+  }
+  for (const file of ['docs/requirements.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /自动可靠关联变更与保守消息顺序协调已实现/, file);
+    assert.match(content, /ProcessAndRoutePending.*单条消息事务.*提取.*路由/, file);
+    assert.match(content, /RoutePending.*更早未提取消息先等待/, file);
+    assert.match(content, /KnownTasks 完全由当前持久化事项投影替换调用者旧快照/, file);
+    assert.match(content, /只有当前群 TrustedSenders 授权高影响变更/, file);
+    assert.match(content, /原发送者不自动升级为可信发布者/, file);
+    assert.match(content, /普通原 Pending\/Task\/Notice 不升级/, file);
+    assert.match(content, /Cancel\/Postpone\/NewRequirement\/Remind/, file);
+    assert.match(content, /Remind 只追加证据，不覆盖正式时间或恢复事项/, file);
+    assert.match(content, /Remind 未传 confirmedTime 时不使用候选 Time.*显式确认新时间仍可修改/, file);
+    assert.match(content, /保留完成历史/, file);
+    assert.match(content, /保留稳定标题/, file);
+    assert.match(content, /LEFT JOIN.*任一来源缺失时间.*同秒顺序冲突.*待确认/, file);
+    assert.match(content, /尚未完整支持 real_seq 或跨群原转发顺序/, file);
+    assert.match(content, /变更一次 Windows 通知.*(?:未完成|尚未完成|后续阶段)/, file);
+    assert.match(content, /M6.*重新分析协调.*(?:待完成|尚未完成|后续阶段)/, file);
+  }
+  const current = read('docs/HANDOFF.md').split('### 暂停接续记录')[0];
+  assert.match(current, /第四段|可靠关联变更/);
+  assert.match(current, /真实 QQ.*(?:尚未|未接入|宿主)/);
 });
 
 test('新版演示交付链接可用，保存说明与真实集成阶段一致', () => {

@@ -2,17 +2,17 @@
 
 最后更新：2026-10-12（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-本轮接续：2026-10-12 用户要求继续，已恢复开发；M4 第三段消息候选首轮自动路由已写入并通过本地验证，见 [本轮实施计划](superpowers/plans/2026-10-12-candidate-routing.md)。第二段生命周期基线为 `80274aa`，暂停交接为 `9fc155f`；本段最终 Infrastructure Release 217/217、Node 五文件 31/31 全部通过，本提交保存代码、测试与交接，提交标识以 Git 日志为准。
+本轮接续：2026-10-12 用户再次要求继续，M4 第四段可靠关联变更及保守消息顺序协调已写入并通过本地验证，见 [本轮实施计划](superpowers/plans/2026-10-12-linked-changes.md)。第三段首轮路由基线为 `4b9d87e`（Infrastructure 217/217）；本轮专项 128/128、Infrastructure 251/251、Node 五文件 32/32 全部通过，本提交保存代码、测试与交接，提交标识以 Git 日志为准。
 
-本轮 M4 第三段已写入并验证：AccountCandidateRouter 从收件箱首轮候选自动分流到正式任务、待确认和本地通知；每账号新增独立 routing.sqlite3，保存消息级回执和通知。新增 32 项真实临时 SQLite 路由检查，生命周期增至 62 项；Infrastructure Release 217/217。M4 前两段消息与事项存储继续保留；当前通过 API 顺序调用 Ingest → ProcessPending → RoutePending，尚未接入真实 QQ 的正式服务宿主、正式界面、OCR 队列或提醒调度。
+本轮 M4 第四段已写入并验证：AccountCandidateRouter 新增 ProcessAndRoutePending，在同一消息事务内按原发送时间提取及路由，从当前持久化事项核对可靠取消、延期、新要求和催交。新增 30 项关联变更整合检查，候选路由增至 36 项、生命周期 62 项；原有三个 SQLite 库 schema 1 不变。推荐调用顺序为 Ingest → ProcessAndRoutePending；预提取入口 ProcessPending → RoutePending 继续可用，遇更早未提取消息先等待。尚未接入真实 QQ 的正式服务宿主、正式界面、OCR 队列或提醒调度。
 
 ## 1. 接手先看
 
 - 项目目录：`D:\ai制作的软件\消息提纯`。
 - 先读项目根目录的 `AGENTS.md`，再读本文及 `docs/requirements.md`。
 - 普通 QQ 登录不作为 OneBot 连接成功；接口及真实接收分别验证，本段只运行本地存储回归。
-- 本轮最新规则及结果：只读取 QQ 置顶群。真实读取桥此前在 52 个已加入群中只读 9 个置顶群，两轮 18/18 到达日期边界、去重 341、受控重连 1/1；本段没有操作 QQ 或发送通知。Infrastructure 最新完整回归 217/217；其他实际验证见下方。动态置顶的真实人工验收和长期稳定性仍未完成，M3 不改为完成。
-- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权开始编写代码；整体设计已确认、实施计划已写入，M1 已完成，M2 已完成，M3 真实集成探针正在实施，M4 已完成消息收件箱、正式事项生命周期和首轮候选自动路由三段本地能力。Core 296/296、Infrastructure 217/217、Windows 57/57、OCR 25/25、demo 108 项实际通过；Node 五文件 31/31 通过（文档 22、桥 4）。Framework 已加载并自动登录，真实只读接口及实时群事件限定范围通过（观察到 1 条），用户确认聊天列表和窗口正常显示。用户实际点击通过，静音提醒显示与点击通过，桌面基本人工项通过；完整历史补漏、长期稳定性和桌面恢复/多屏仍未验收，正式应用尚未接入探针能力。**
+- 本轮最新规则及结果：只读取 QQ 置顶群。真实读取桥此前在 52 个已加入群中只读 9 个置顶群，两轮 18/18 到达日期边界、去重 341、受控重连 1/1；本段没有操作 QQ 或发送通知。Infrastructure 最新完整回归 251/251；其他实际验证见下方。动态置顶的真实人工验收和长期稳定性仍未完成，M3 不改为完成。
+- 当前阶段：**用户反馈 demo 基本满足要求，确认 QQ 已在电脑登录并授权开始编写代码；整体设计已确认、实施计划已写入，M1 已完成，M2 已完成，M3 真实集成探针正在实施，M4 已完成消息收件箱、正式事项生命周期、首轮路由及可靠关联变更四段本地能力。专项 128/128、Infrastructure 251/251、Core 296/296、Windows 57/57、OCR 25/25、demo 108 项实际通过；Node 五文件 32/32 通过（文档 23、桥 4）。Framework 已加载并自动登录，真实只读接口及实时群事件限定范围通过（观察到 1 条），用户确认聊天列表和窗口正常显示。用户实际点击通过，静音提醒显示与点击通过，桌面基本人工项通过；完整历史补漏、长期稳定性和桌面恢复/多屏仍未验收，正式应用尚未接入探针能力。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`；NapCat Shell 与 Framework 的显式路径启动准备位于 `packaging/napcat/`，对应路径回归在 `tests/napcat-launcher.test.mjs` 和 `tests/napcat-framework-launcher.test.mjs`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；本轮分页读取 41/52 到达边界、窗口内去重 1098 条，11 群未补全，详见下节。用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。没有注册正式自启动；桌面基本操作与本轮静音提醒呈现/点击通过，长期稳定性及桌面恢复/多屏仍未验收；声音提醒已取消。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
@@ -21,16 +21,30 @@
 
 - 用户曾要求“先把目前的工作保存好，明天继续”；已保存并暂停。2026-10-12 用户明确要求“继续我们的工作”，暂停已结束，恢复下一段候选路由。
 - 实现基线提交：`80274aa`（正式事项与待确认生命周期）；分支：`codex/m3-integration-probes`。保存前已核对工作区干净，验证结果见下方，真实 QQ 和正式界面接入状态不变。
-- 恢复工作时先读 `docs/HANDOFF.md`，再读 `docs/requirements.md`，核对 Git 和实际文件。本次已恢复并完成消息首轮路由；下一步推进可靠关联变更与原消息顺序协调，再接正式界面及宿主，不重复询问已确认方案。
+- 恢复工作时先读 `docs/HANDOFF.md`，再读 `docs/requirements.md`，核对 Git 和实际文件。本次已完成首轮路由和可靠关联变更；下一步接正式应用骨架、界面及宿主，不重复询问已确认方案。
 
-### 本次消息候选首轮自动路由（本地 API 与持久化验证通过）
+### 本次可靠关联变更与保守消息顺序（本地 API 与持久化验证通过）
+
+- 产物：更新 `src/MessagePurify.Infrastructure/Processing/AccountCandidateRouter.cs`、`Tasks/TaskLifecycleService.cs`，新增 `tests/MessagePurify.Infrastructure.Tests/LinkedChangeRoutingTests.cs` 并扩充 `CandidateRoutingTests.cs`。新入口 `ProcessAndRoutePending` 从原消息顺序逐条提取与路由；旧 `RoutePending` 可处理预提取候选，但不越过更早未提取消息。
+- 每条消息在 tasks 主库附加 inbox/routing 的同一事务中读取最新 KnownTasks、保存提取/处理版本、写正式变更/证据/操作/本地通知及回执；失败全部回滚。KnownTasks 完全替换调用者旧快照，只使用当前群 TrustedSenders 授权高影响变更，ConfirmedPublisherId 不由历史发送者猜测；真实关系获取与持久化仍待正式宿主。
+- 可靠 Cancel/Postpone/NewRequirement/Remind 自动更新同一事项，时间手动保护冲突转待确认，取消不受时间保护阻挡。已完成事项的可靠新行动恢复待办并保留完成历史；已归档/已取消的新行动仍待确认。自动新要求保留稳定原标题，完整新要求留在原消息及操作历史。Remind 仅补证据，自动和手动接受均不使用旧候选期限；用户显式传入 confirmedTime 才修改正式时间。
+- 仅尚未路由的 Pending/Change 关联行动在课程仍匹配时重新核对；已有普通 Pending/Task/Notice 不升级，课程撤销/变更使旧可靠候选转待确认。已有消息回执阻止更高提取版本重放；完整 M6 关联修复仍未实现。
+- 三库 schema 1 不变，rollback journal 限制继续有效。使用 task_evidence LEFT JOIN inbox.messages 的最大原时间保守协调；除本消息外任何证据缺少时间、迟到旧变更或同秒顺序不明都保留关联待确认，不凭 messageId/rowid 判断同秒先后。尚未完整支持 real_seq 或跨群原始转发顺序，最大证据时间也可能使旧有效变更需要人工核对。
+- 实际专项命令：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release --filter 'FullyQualifiedName~CandidateRoutingTests|FullyQualifiedName~LinkedChangeRoutingTests|FullyQualifiedName~TaskLifecycleTests'` 为 128/128（候选 36、关联 30、生命周期 62），退出码 0。最小取消行为红测先确认仍 Active，新入口红测确认 CS1061 缺方法；实现后通过。
+- 本轮先红后绿的额外修复：通知先前记录提取前版本，raw 与预提取分别实际复现 0/1 而应为 1/2；改为候选处理结束后按最终提取版本保存通知及回执。审查发现并实际复现旧催交建议在新延期后接受会将 10/20 回退 10/13；共用 AcceptLinked 现只在明确确认时间时改变催交正式时间，完成/撤销字段不受影响。
+- 完整回归：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release` 最终 251/251；同参数 `tests/MessagePurify.Core.Tests` 296/296、`tests/MessagePurify.Windows.Tests` 57/57。`.tools/ocr/venv/Scripts/python.exe -m pip check` 通过，`-m unittest discover -s tests -p ocr_worker_test.py` 25/25；`node tests/prototype-qa.mjs` 108 项，均退出码 0。
+- 文档/打包实际命令：`node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs tests/pinned-groups-bridge.test.mjs` 32/32（文档 23、桥 4），退出码 0。首轮旧 Change 仅待确认的正文及断言已更新为当前自动应用，上一段结果只作为历史保留；新增来源授权、顺序及正式宿主边界回归。
+- 剩余：正式应用骨架/界面、真实 QQ 消息处理宿主、提醒计划与串行投递及变更一次 Windows 通知、OCR 队列、普通通知转任务、手动新增/完整编辑与非时间字段保护、M6 修复、合并拆分和备份恢复。下一步先把本地持久化事项接进正式界面及宿主；本轮没有 QQ 发送或 Windows 测试提醒。
+- 上下文核对：maintain-context-hygiene 两个本机目录此前均缺 SKILL.md；已按项目规则人工对照有效需求、计划、生产文件、测试与真实命令，不删除项目文件或修改无关文档。
+
+### 上段消息候选首轮自动路由（本地 API 与持久化验证通过）
 
 - 已写入 `src/MessagePurify.Infrastructure/Processing/AccountCandidateRouter.cs`、`CandidateRoutingModels.cs` 和 `tests/MessagePurify.Infrastructure.Tests/CandidateRoutingTests.cs`。新增每账号 `routing.sqlite3` schema 1；messages/tasks 结构不变。Task 新建事项，Pending/Change 待确认，Notice 保存完整本地记录，Ignored 仅写处理回执；当前置顶群、账号/群、机器人排除和课程排除再次检查，暂时排除不写回执。普通清楚新任务无需发布者在可信名单，与本地提取器契约一致；高影响变更仍保留来源检查。本段不代表正式 QQ 宿主或系统通知投递已接入。
 - 单条消息跨库事务保存全部候选、操作和回执，失败整条回滚；拒绝 WAL/内存/关闭日志模式。消息级回执与完整字符串消息键/候选序号生成的确定性记录身份防止重启、重复消息和更高提取版本重放；通知保留原候选、证据、消息键、处理版本、来源、批次及原发送时刻。生命周期共用原事务内部逻辑，不复制状态变更。
 - 最终只读审查发现并修复：提取后课程确认撤销或变更，旧 Task/Notice 均降级为待确认，保留原字段与证据，将课程及对象判断标记为不可靠；不升级原 Pending/Change。四项新增测试先实际运行失败，修正后路由及生命周期专项 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release --filter 'FullyQualifiedName~CandidateRoutingTests|FullyQualifiedName~TaskLifecycleTests'` 为 94/94（路由 32、生命周期 62），退出码 0。
 - 实际完整命令：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release` 为 217/217；同参数 `tests/MessagePurify.Core.Tests` 为 296/296，`tests/MessagePurify.Windows.Tests` 为 57/57。`.tools/ocr/venv/Scripts/python.exe -m pip check` 通过，`-m unittest discover -s tests -p ocr_worker_test.py` 为 25/25；`node tests/prototype-qa.mjs` 为 108 项，均退出码 0。
 - 文档/打包实际命令：`node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs tests/pinned-groups-bridge.test.mjs` 为 31/31（文档 22、桥 4），退出码 0。新增路由交付与当前状态回归，区分本地通知入库、可靠变更待确认及 M6/正式宿主剩余范围。
-- 尚未实现：可靠关联变更自动应用及原消息顺序协调、M6 重新分析修复协调、普通通知转任务、手动新增/完整编辑、非时间字段保护、提醒计划与系统投递、OCR 队列、合并拆分、备份恢复和正式应用宿主。下一步先推进可靠关联变更与顺序协调，再接正式界面及宿主；已完成/忽略等人工处理不会因首轮路由重播而丢失。
+- 第三段保存时的剩余项：可靠关联变更与保守消息顺序后来已在第四段完成（见上方）；M6 重新分析修复协调、普通通知转任务、手动新增/完整编辑、非时间字段保护、提醒计划与系统投递、OCR 队列、合并拆分、备份恢复和正式应用宿主仍未实现。已完成/忽略等人工处理不会因首轮路由重播而丢失。
 - 上下文核对：本机两个 maintain-context-hygiene 目录仍无 SKILL.md；按项目规则人工对照有效需求、计划、源码、测试与实际命令结果，没有删除项目文件或改无关文档。
 
 ### 上段正式事项生命周期（本地 API 与持久化验证通过）
@@ -41,7 +55,7 @@
 - 图片 SuggestedTime 留在候选，只有显式传入 confirmedTime 才成为受保护正式时间；直接有正式 Time 的候选使用正式值。仅日期不虚构钟点。关联取消无须另填时间，取消不受时间保护阻挡，不把已取消任务恢复为待办。
 - 实际命令：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release` 为 184/184（新增生命周期 61）；同配置 Core 296/296、Windows 57/57。`.tools/ocr/venv/Scripts/python.exe -m pip check` 通过，`-m unittest discover -s tests -p ocr_worker_test.py` 25/25；`node tests/prototype-qa.mjs` 108 项，均退出码 0。最初红测仅缺生命周期实现；首次生产编译的泛型推断错误已按 CS0411 修正，随后两项参数错误类型与约定对齐；审查后补齐完成后取消/归档的当前时间戳清除，新增三项检查确认操作历史仍保留。
 - 文档/打包验证：实际运行 `node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs tests/pinned-groups-bridge.test.mjs`，30/30、退出码 0。首轮两项失败分别因测试说明未明确宿主未联调及精简总览丢失 QQ 登录与 OneBot 区分，补齐真实边界后通过。
-- 本段保存时的剩余项：候选自动路由后来已在第三段完成（见上方）；自动可靠关联变更、普通通知转任务、手动新增/编辑及非时间字段保护、提醒计划与系统投递、OCR 队列、合并拆分、备份恢复和正式应用宿主仍未实现。
+- 本段保存时的剩余项：候选路由及可靠关联变更后来已在第三、四段完成（见上方）；普通通知转任务、手动新增/编辑及非时间字段保护、提醒计划与系统投递、OCR 队列、合并拆分、备份恢复和正式应用宿主仍未实现。
 - Git 收尾：本段 11 日开始，提交时间为 12 日凌晨（北京时间）；验证后保存到当前分支，提交标识以 Git 日志为准。暂存 diff 检查退出码 0，提交后工作区为空。
 - 上下文核对：两个技能目录的 maintain-context-hygiene 均只有 agents 目录、没有 SKILL.md；按项目规则人工对照需求、计划、源码、测试与实际命令结果，没有删除项目文件或改无关文档。
 
@@ -55,7 +69,7 @@
 - 用户明确回复“已退出”后启动项目入口；定位注册问题和原生字段期间，核对路径后重启本轮启动的 QQ 进程继续验证，无需再次扫码。当前 3001/6099 同属于 QQ PID 38900，项目读取桥 ready，QQ 在线。旧进程的新探针先返回 1404、历史尝试及消息均为 0、退出码 1，验证接口不可用不回退；报告 `.tools/m3-results/qq-pinned-bridge-unavailable-20261011.md`。
 - 真实执行 `python .tools/m3-results/run-current-framework-probe.py .tools/m3-results/qq-pinned-run-20261011/MessagePurify.QqProbe.dll --history-groups all --history-count 100 --history-days 7 --history-pages 20 --reconnect-rounds 1 --listen-seconds 15 --output .tools/m3-results/qq-pinned-history-reconnect-20261011.md`，22:35:24（北京时间）开始，退出码 0。52 个已加入群中的 9 个置顶群各读两轮，18/18 到达 `date-boundary`，历史计数 686、去重 341、重复 345、账号核对 2/2、重连 1/1、重试 0、实时群事件 0、重连后首次发现 0。其余 43 群未请求历史；没有真实实时群样本，不能把模拟实时排除或受控重连当作长期接收/非预期断网/正式补漏验收。到达日期边界仍不保证 QQ 服务器的历史完整。
 - 本轮全部自动回归：Core Release 296/296、Infrastructure Release 78/78、Windows Release 57/57、OCR `pip check` 与 unittest 25/25、Node 五文件 29/29（文档 20 项、桥 4 项）、demo 108 项，均退出码 0。实际命令按 `tests/README.md`，新桥准备/语法检查亦通过。私人配置、运行副本、日志和脱敏诊断/报告均留在 `.tools/m3-results` 或 NapCat 忽略目录，不提交账号、群名或正文。
-- 本机未找到 `maintain-context-hygiene` 技能，按项目规则人工核对当前需求、交接、设计/计划、源码、测试及真实报告；没有删除项目文件来缩短上下文。该阶段之后已完成 M4 三段本地能力；下一步可靠关联变更与正式宿主联调，保留真实动态置顶/长期接收及多屏/恢复等未验收项，不重复静音提醒及桌面基本测试。
+- 本机未找到 `maintain-context-hygiene` 技能，按项目规则人工核对当前需求、交接、设计/计划、源码、测试及真实报告；没有删除项目文件来缩短上下文。该阶段之后已完成 M4 四段本地能力；下一步正式界面与宿主联调，保留真实动态置顶/长期接收及多屏/恢复等未验收项，不重复静音提醒及桌面基本测试。
 
 ### 本次受控重连及跨连接历史去重
 
@@ -290,8 +304,8 @@
 - 第一版取消声音提醒，所有 Windows 通知均静音；不提供“任务声音提醒”开关，也不进行声音播放验收。视觉通知、通知中心记录、桌面卡片高亮和恢复运行时的一次汇总提醒继续保留。
 - 设置中保留“安静时段”入口，Windows 第一版标注为“暂未启用”，暂不实现按时段自动静音；具体规则留待未来若规划手机版时再讨论。入口尚未实现，手机版开发尚未确定。
 - 任务详情允许自定义相对提醒或关闭单条任务的时间提醒，其他任务沿用默认；自定义不改变正式时间或精度。时间精度兼容的有效延期保持提前间隔；不兼容时临时采用默认节点并显示待确认的设置提示，已关闭的提醒不自动开启。功能尚未实现。
-- 明确延期按字段保护规则接受后，重算对应提醒并使旧安排失效；若与手动正式字段冲突，保留旧值及有效提醒，用户接受建议后再替换。需求已确认，尚未实现。
-- 能明确关联到原任务的延期、取消或提交要求变更，更新任务并记录变化，仍在待办中的任务更新卡片变化标记，并额外发一次 Windows 系统通知说明变化；同一变更不重复通知。该功能尚未实现。
+- 明确延期按字段保护规则接受后，重算对应提醒并使旧安排失效；若与手动正式字段冲突，保留旧值及有效提醒，用户接受建议后再替换。本地自动及手动接受延期已实现；正式提醒计划更新仍待接入。
+- 能明确关联到原任务的延期、取消或提交要求变更，更新任务并记录变化，仍在待办中的任务更新卡片变化标记，并额外发一次 Windows 系统通知说明变化；同一变更不重复通知。本地自动变更及操作历史已实现，正式卡片与通知投递尚未完成。
 - 电脑关机、睡眠或软件未运行导致错过截止前提醒时，恢复运行后对尚未截止且仍待处理的任务补发一次汇总提醒；同一任务错过多个节点时合并，不重复补发已经处理过的提醒。已逾期任务只保留卡片高亮。
 
 ## 2. 项目目标
@@ -339,13 +353,13 @@
 - 明确属于同一事项的内容、截止时间和补充说明合并，保留各条消息证据。
 - 催交更新原任务；明确的延期、取消、要求修改按字段保护规则更新任务并记录变化，仍在待办中的任务更新卡片变化标记。新时间与手动正式字段冲突时保留旧值及当前提醒、显示待确认差异；取消不被手动时间保护阻挡。
 - 能明确关联的延期、取消和提交要求变更，额外发一次系统通知说明变化，同一变更不重复通知。
-- 老师明确取消且能关联到原任务时，停止该任务后续提醒，移出待办和桌面卡片，保留“已取消”记录及原始消息；不记为用户已完成。取消状态及关联建议接受的本地存储已实现；自动应用、正式卡片与取消变更通知一次仍待接入。
+- 老师明确取消且能关联到原任务时，停止该任务后续提醒，移出待办和桌面卡片，保留“已取消”记录及原始消息；不记为用户已完成。取消状态、可靠关联自动应用及关联建议接受的本地存储已实现；正式卡片与取消变更通知一次仍待接入。
 - 无法明确对应某个任务的变更消息进入待确认，不猜测后直接覆盖。
 - **7 天是消息回溯/分析窗口，不是任务寿命。**长期任务跨周保留，原始证据须能继续查看。
 - **逾期不自动完成或归档**，继续保持待处理，并通过卡片高亮提示，不重复弹通知。
 - 完成由用户手动勾选；完成后进入已完成记录并停止提醒，保留原始证据。用户也可手动归档。
 - 任务详情有归档及恢复入口，任务页可筛选已归档记录；归档停止时间提醒、移出待办和卡片并清理旧通知，不记为完成，证据保留。旧证据重读不恢复；归档后新行动要求先作为关联建议待确认。本地归档/恢复及建议持久化已实现，正式入口、卡片和通知清理仍待接入。
-- 已完成任务收到能明确关联的新行动要求时，自动恢复为待办，标出新要求并继续按规则提醒，保留此前完成记录及新旧消息证据；普通补充说明不恢复，关联或有效截止信息不确定时仍进入待确认。需求已确认，尚未实现。
+- 已完成任务收到能明确关联的新行动要求时，自动恢复为待办，标出新要求并继续按规则提醒，保留此前完成记录及新旧消息证据；普通补充说明不恢复，关联或有效截止信息不确定时仍进入待确认。可靠新行动自动恢复及历史保留已本地验证，正式变化显示和提醒继续调度尚未完成。
 
 ### 优先级与提醒
 
@@ -418,8 +432,8 @@
 1. **整体设计已确认**：`docs/superpowers/specs/2026-10-10-windows-app-design.md` 包含使用流程、提醒、错误恢复、架构、数据、NapCat、规则、OCR、WebView2、Windows 集成、安装和验收。2026-10-10 用户选择 A；使用行为不重新询问，后端细节由开发者负责。
 2. **已确认：老师明确取消任务后的去向**。用户选择 A：停止后续提醒，移出待办与桌面卡片，保留已取消记录及原文，不记为用户完成，取消变更通知一次。取消状态、旧操作保护及关联取消持久化已测试；真实来源关系获取和系统清理／投递尚未实现。
 3. **已确认：自定义提醒遇到延期**。精度兼容的有效延期保持提前间隔，默认节点按新正式时间重算；精度不兼容时临时使用默认节点并提示设置待确认。提醒计算与时间冲突保护核心、待确认生命周期持久化已实现并测试；提醒设置持久化与正式 UI 尚未实现。
-4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态、关联建议接受、证据及操作历史持久化已测试；自动关联路由、真实发布者关系获取和通知联调尚未实现。
-5. **下一步：M4 可靠关联变更及原消息顺序协调，再推进正式界面和宿主联调，保留 M3 未完成的真实验收**。首轮 Task/Pending/Change/Notice/Ignored 路由已本地验证，Change 当前保存待确认、未自动应用；M1、M2 已完成，合成样本基线不代表真实独立 QQ 样本已验收。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
+4. **已确认：已完成任务收到明确新行动要求**。用户选择 A：自动恢复待办，标出新要求并继续提醒，保留此前完成记录及新旧证据；普通补充不恢复，不可靠关联／时间先待确认。恢复状态、可靠变更自动路由、关联建议接受、证据及操作历史持久化已测试；真实发布者关系获取和通知联调尚未实现。
+5. **下一步：正式应用骨架、界面和消息宿主联调，保留 M3 未完成的真实验收**。首轮路由、可靠 Change 自动应用和保守消息时间协调已本地验证，冲突仍待确认；M1、M2 已完成，合成样本基线不代表真实独立 QQ 样本已验收。无需重新选择技术路线；如进入实际样本或账号切换等依赖用户输入的步骤，再请求必要信息。
 6. 账号 SQLite 消息收件箱、候选、事项生命周期及首轮路由已写入并通过回归；M6 重分析修复、正式提醒调度、自动缓存清理、备份迁移和正式打包仍未完成，见设计稿。消息桥、OCR 进程通信和探针打包已有 M3 实现与验证。临时未关联消息缓存按 7 天分析窗口清理，已成事项的证据长期保留，不能把分析窗口当作任务寿命。
 7. NapCat 真实只读连接及实时群事件限定范围通过（观察到 1 条），本轮真实全群历史分页 41/52 到达边界、11 群未补全，受控重连 1/1 及跨连接去重限定范围通过；学校通知正文 OCR、桌面基本层级/操作及静音呈现/点击已通过。日期角色人工确认、真实消息到任务联调、完整七天补漏、接收稳定性、本地规则真实样本误判/漏判及桌面恢复/多屏仍须验证；正式应用尚未接入探针能力。WorkerW 不属公开保证的桌面组件 API，不能仅凭设计宣布兼容。
 8. 环境：本机此前记录为 Windows 11 专业版 x64，版本 10.0.26200。已准备项目专用 .NET SDK 10.0.401（win-x64）、创建核心及测试项目，Chrome/WebView2 运行时此前已检测；命令及结果见第 1 节。默认全局 dotnet 仍只有运行时，开发命令须使用 `.tools/dotnet/dotnet.exe`。Framework 已在本机 QQ 加载并自动登录，用户确认聊天列表和窗口正常显示；实时群事件限定范围通过（观察到 1 条），长期稳定性尚未验证。
@@ -451,7 +465,8 @@
 
 | 记录日期 | 变更 | 依据与状态 |
 | --- | --- | --- |
-| 2026-10-12 | 用户恢复工作，完成 M4 第三段消息候选首轮路由 | 新增账号路由库及 32 项真实 SQLite 检查，生命周期增至 62；专项 94/94、Infrastructure 217/217、Core 296/296、Windows 57/57、OCR 25/25 与 pip check、Node 五文件 31/31、demo 108 项实际通过。课程确认撤销/改变使旧 Task/Notice 转待确认；自动关联变更、M6 重分析协调和真实宿主仍未完成；完整产物与实际验证命令见第 1 节 |
+| 2026-10-12 | 用户再次继续，完成 M4 第四段可靠关联变更与保守消息顺序 | 新入口同消息事务内提取/更新/回执，持久化目标及当前群来源授权；迟到旧/同秒/缺来源时间转待确认。新增关联 30 项，候选路由 36、生命周期 62；专项 128/128、Infrastructure 251/251、Core 296/296、Windows 57/57、OCR 25/25 与 pip check、Node 五文件 32/32、demo 108 项实际通过。通知最终版本及旧催交接受回退期限问题均先红测后修正；真实宿主/UI/提醒投递与 M6 仍待完成，完整命令见第 1 节 |
+| 2026-10-12 | 用户恢复工作，完成 M4 第三段消息候选首轮路由 | 新增账号路由库及 32 项真实 SQLite 检查，生命周期增至 62；专项 94/94、Infrastructure 217/217、Core 296/296、Windows 57/57、OCR 25/25 与 pip check、Node 五文件 31/31、demo 108 项实际通过。课程确认撤销/改变使旧 Task/Notice 转待确认；当时自动关联变更、M6 重分析协调和真实宿主未完成（自动关联变更后续在第四段完成）；完整产物与实际验证命令见第 1 节 |
 | 2026-10-12 | 用户要求保存当前工作，明天继续 | 已核对实现基线 `80274aa` 及干净工作区；补充暂停与恢复顺序、下一步自动路由。仅维护交接及相关文档回归，产品需求不变；当时保存并等待恢复，本次已继续 |
 | 2026-10-12 | M4 第二段完成本地正式事项生命周期（11 日开始，12 日凌晨提交） | 新增 AccountTaskStore、正式事项/待确认模型和 61 项真实 SQLite 检查；Infrastructure 184/184、Core 296/296、Windows 57/57、OCR 25/25 与 pip check、Node 五文件 30/30、demo 108 项均通过。完成/忽略撤销、关联建议、证据、版本及操作幂等已落盘；候选自动路由、正式界面、提醒调度和真实 QQ 宿主联调尚未完成。详细产物与命令见第 1 节 |
 | 2026-10-11 | M4 第一段写入账号独立 SQLite 消息收件箱与本地规则处理器 | 新增 `AccountMessageStore`、`LocalMessageProcessor` 及真实临时 SQLite 回归；Infrastructure 123/123（存储 23、处理器 22），Core 296/296、Windows 57/57、OCR 25/25、Node 五文件 29/29、demo 108 项和 `git diff --check` 均通过。原消息、来源、规则候选和处理版本可在重启后保留；正式事项、提醒调度、OCR 队列与真实 QQ 接入仍未完成 |

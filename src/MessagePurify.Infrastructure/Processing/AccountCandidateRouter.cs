@@ -30,6 +30,13 @@ public sealed class AccountCandidateRouter
     }
 
     public int RoutePending(RuleContext context, IReadOnlySet<string> pinnedGroupIds, int limit = 100)
+        => Route(context, pinnedGroupIds, limit, processUnextracted: false);
+
+    /// <summary>按原发送时间在同一消息事务中提取、核对当前事项并路由首轮结果。</summary>
+    public int ProcessAndRoutePending(RuleContext context, IReadOnlySet<string> pinnedGroupIds, int limit = 100)
+        => Route(context, pinnedGroupIds, limit, processUnextracted: true);
+
+    private int Route(RuleContext context, IReadOnlySet<string> pinnedGroupIds, int limit, bool processUnextracted)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(pinnedGroupIds);
@@ -48,15 +55,31 @@ public sealed class AccountCandidateRouter
             CheckStore(connection, transaction, "inbox", messages.AccountId);
             CheckStore(connection, transaction, "routing", messages.AccountId);
             var pending = NextMessage(connection, transaction, context);
-            if (pending is null) break;
+            if (pending is null || pending.Extraction is null && !processUnextracted) break;
 
             ValidateMessage(pending, context);
-            var extraction = pending.Extraction!;
-            for (var index = 0; index < extraction.Candidates.Count; index++)
+            var extraction = pending.Extraction ?? MessageRuleExtractor.Extract(pending.Message,
+                CurrentContext(connection, transaction, context));
+            var candidates = extraction.Candidates.ToArray();
+            var notices = new List<(string Id, RuleCandidate Candidate)>();
+            for (var index = 0; index < candidates.Length; index++)
             {
-                var candidate = extraction.Candidates[index];
+                var candidate = candidates[index];
                 ValidateEvidence(candidate, pending.Message.Key);
-                if (candidate.Disposition is RuleDisposition.Task or RuleDisposition.Notice &&
+                if (candidate.Disposition is RuleDisposition.Pending or RuleDisposition.Change &&
+                    candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Remind &&
+                    !string.IsNullOrWhiteSpace(context.ConfirmedCourse) && candidate.Course == context.ConfirmedCourse)
+                {
+                    if (extraction.RuleVersion == MessageRuleExtractor.RuleVersion)
+                    {
+                        var refreshed = MessageRuleExtractor.Extract(pending.Message, CurrentContext(connection, transaction, context));
+                        if (refreshed.Candidates.Count == candidates.Length && refreshed.Candidates[index].Action == candidate.Action)
+                            candidates[index] = candidate = refreshed.Candidates[index];
+                        else candidate = AsPending(candidate, "关联提取结果已改变，需要确认");
+                    }
+                    else candidate = AsPending(candidate, "关联规则版本不同，需要确认");
+                }
+                if (candidate.Disposition is RuleDisposition.Task or RuleDisposition.Notice or RuleDisposition.Change &&
                     (string.IsNullOrWhiteSpace(context.ConfirmedCourse) || candidate.Course != context.ConfirmedCourse))
                     candidate = candidate with
                     {
@@ -76,19 +99,21 @@ public sealed class AccountCandidateRouter
                             candidate, "route-task-" + identity, context.Now);
                         break;
                     case RuleDisposition.Pending:
-                    case RuleDisposition.Change:
                         tasks.SavePendingInTransaction(connection, transaction, "review-" + identity,
                             candidate, "route-review-" + identity, context.Now);
                         break;
+                    case RuleDisposition.Change:
+                        var reviewReason = OrderReviewReason(connection, transaction, candidate.TargetTaskId, pending.Message);
+                        if (reviewReason is null)
+                            reviewReason = tasks.ApplyAutomaticChangeInTransaction(connection, transaction, candidate,
+                                "route-change-" + identity, context.Now).ReviewReason;
+                        if (reviewReason is not null)
+                            tasks.SavePendingInTransaction(connection, transaction, "review-" + identity,
+                                AsPending(candidate, reviewReason), "route-review-" + identity, context.Now);
+                        break;
                     case RuleDisposition.Notice:
                         tasks.ValidateCandidate(candidate);
-                        var notice = new StoredNotice("notice-" + identity, messages.AccountId, candidate,
-                            pending.Message.Key, pending.ProcessingVersion, pending.Origin, pending.BatchId,
-                            pending.Message.SentAt, context.Now);
-                        using (var command = Command(connection, transaction,
-                            "INSERT INTO routing.notices(id, notice_json) VALUES($id, $json);",
-                            ("$id", notice.Id), ("$json", JsonSerializer.Serialize(notice))))
-                            command.ExecuteNonQuery();
+                        notices.Add(("notice-" + identity, candidate));
                         break;
                     case RuleDisposition.Ignored:
                         break;
@@ -96,17 +121,94 @@ public sealed class AccountCandidateRouter
                         throw new ArgumentException("候选分类无效。", nameof(candidate));
                 }
             }
+            var routedExtraction = extraction with { Candidates = candidates };
+            var processingVersion = SaveExtraction(connection, transaction, pending, routedExtraction, context.Now);
+            foreach (var item in notices)
+            {
+                var notice = new StoredNotice(item.Id, messages.AccountId, item.Candidate,
+                    pending.Message.Key, processingVersion, pending.Origin, pending.BatchId, pending.Message.SentAt, context.Now);
+                using var command = Command(connection, transaction,
+                    "INSERT INTO routing.notices(id, notice_json) VALUES($id, $json);",
+                    ("$id", notice.Id), ("$json", JsonSerializer.Serialize(notice)));
+                command.ExecuteNonQuery();
+            }
             using (var receipt = Command(connection, transaction, """
                 INSERT INTO routing.route_receipts(account_id, group_id, message_id, processing_version, rule_version, routed_at)
                 VALUES($account, $group, $message, $version, $rules, $at);
                 """, ("$account", messages.AccountId), ("$group", pending.Message.Key.GroupId),
-                ("$message", pending.Message.Key.MessageId), ("$version", pending.ProcessingVersion),
+                ("$message", pending.Message.Key.MessageId), ("$version", processingVersion),
                 ("$rules", extraction.RuleVersion), ("$at", context.Now.ToString("O", CultureInfo.InvariantCulture))))
                 receipt.ExecuteNonQuery();
             transaction.Commit();
             processed++;
         }
         return processed;
+    }
+
+    private static RuleCandidate AsPending(RuleCandidate candidate, string reason) => candidate with
+    {
+        Disposition = RuleDisposition.Pending,
+        ReviewReasons = candidate.ReviewReasons.Append(reason).Distinct().ToArray()
+    };
+
+    private static RuleContext CurrentContext(SqliteConnection connection, SqliteTransaction transaction, RuleContext context)
+    {
+        using var command = Command(connection, transaction, "SELECT record_json FROM main.tasks ORDER BY rowid;");
+        using var reader = command.ExecuteReader();
+        var known = new List<KnownTask>();
+        while (reader.Read())
+        {
+            var task = JsonSerializer.Deserialize<TaskItem>(reader.GetString(0))
+                ?? throw new InvalidDataException("事项记录为空。");
+            if (task.AccountId == context.AccountId && task.Course == context.ConfirmedCourse &&
+                task.Evidence.Any(key => key.AccountId == context.AccountId && key.GroupId == context.GroupId))
+                known.Add(new(task.Id, task.Title, task.Course!, task.Time, task.State, task.Evidence));
+        }
+        // 历史发送者不等于已确认发布者；只使用当前群上下文的 TrustedSenders。
+        return context with { KnownTasks = known };
+    }
+
+    private static string? OrderReviewReason(SqliteConnection connection, SqliteTransaction transaction,
+        string? taskId, SchoolMessage incoming)
+    {
+        if (taskId is null) return "缺少明确目标事项，需要确认";
+        using var command = Command(connection, transaction, """
+            SELECT COUNT(*), COALESCE(SUM(CASE WHEN m.sent_utc_ticks IS NULL THEN 1 ELSE 0 END), 0), MAX(m.sent_utc_ticks)
+            FROM main.task_evidence e
+            LEFT JOIN inbox.messages m ON e.account_id = m.account_id AND e.group_id = m.group_id AND e.message_id = m.message_id
+            WHERE e.task_id = $task AND NOT (e.account_id = $account AND e.group_id = $group AND e.message_id = $message);
+            """, ("$task", taskId), ("$account", incoming.Key.AccountId),
+            ("$group", incoming.Key.GroupId), ("$message", incoming.Key.MessageId));
+        using var reader = command.ExecuteReader();
+        reader.Read();
+        if (reader.GetInt64(1) > 0) return "原事项证据缺少可核对的原消息时间，需要确认";
+        if (reader.GetInt64(0) > 0)
+            return incoming.SentAt.UtcTicks <= reader.GetInt64(2) ? "原消息先后需核对，不能自动覆盖" : null;
+        reader.Close();
+        using var sameSource = Command(connection, transaction, """
+            SELECT COUNT(*) FROM main.task_evidence
+            WHERE task_id = $task AND account_id = $account AND group_id = $group AND message_id = $message;
+            """, ("$task", taskId), ("$account", incoming.Key.AccountId),
+            ("$group", incoming.Key.GroupId), ("$message", incoming.Key.MessageId));
+        return Convert.ToInt64(sameSource.ExecuteScalar(), CultureInfo.InvariantCulture) > 0
+            ? null : "原事项缺少可核对的原消息顺序，需要确认";
+    }
+
+    private static long SaveExtraction(SqliteConnection connection, SqliteTransaction transaction,
+        StoredMessage pending, RuleExtractionResult extraction, DateTimeOffset now)
+    {
+        var json = JsonSerializer.Serialize(extraction);
+        if (pending.Extraction is not null && json == JsonSerializer.Serialize(pending.Extraction))
+            return pending.ProcessingVersion;
+        using var command = Command(connection, transaction, """
+            UPDATE inbox.messages SET extraction_json = $json, rule_version = $rules,
+                processed_at = $at, processing_version = processing_version + 1
+            WHERE account_id = $account AND group_id = $group AND message_id = $message AND processing_version = $version;
+            """, ("$json", json), ("$rules", extraction.RuleVersion),
+            ("$at", now.ToString("O", CultureInfo.InvariantCulture)), ("$account", pending.Message.Key.AccountId),
+            ("$group", pending.Message.Key.GroupId), ("$message", pending.Message.Key.MessageId), ("$version", pending.ProcessingVersion));
+        if (command.ExecuteNonQuery() != 1) throw new InvalidOperationException("消息处理版本已改变，停止当前事务。");
+        return pending.ProcessingVersion + 1;
     }
 
     public IReadOnlyList<StoredNotice> ListNotices()
@@ -134,7 +236,7 @@ public sealed class AccountCandidateRouter
             LEFT JOIN routing.route_receipts r ON r.account_id = m.account_id
                 AND r.group_id = m.group_id AND r.message_id = m.message_id
             WHERE m.account_id = $account AND m.group_id = $group
-                AND m.extraction_json IS NOT NULL AND r.message_id IS NULL {exclusions}
+                AND r.message_id IS NULL {exclusions}
             ORDER BY m.sent_utc_ticks, m.rowid LIMIT 1;
             """, ("$account", context.AccountId), ("$group", context.GroupId));
         for (var index = 0; index < excluded.Length; index++)
@@ -144,8 +246,8 @@ public sealed class AccountCandidateRouter
         return new(JsonSerializer.Deserialize<SchoolMessage>(reader.GetString(0))
             ?? throw new InvalidDataException("消息记录为空。"), (MessageOrigin)reader.GetInt32(1),
             reader.GetString(2), ParseTime(reader.GetString(3)), reader.GetInt64(4),
-            JsonSerializer.Deserialize<RuleExtractionResult>(reader.GetString(5))
-                ?? throw new InvalidDataException("提取结果为空。"), ParseTime(reader.GetString(6)));
+            reader.IsDBNull(5) ? null : JsonSerializer.Deserialize<RuleExtractionResult>(reader.GetString(5))
+                ?? throw new InvalidDataException("提取结果为空。"), reader.IsDBNull(6) ? null : ParseTime(reader.GetString(6)));
     }
 
     private static void ValidateMessage(StoredMessage stored, RuleContext context)
@@ -154,8 +256,9 @@ public sealed class AccountCandidateRouter
         if (message.Key.AccountId != context.AccountId || message.Key.GroupId != context.GroupId || message.IsPrivate ||
             context.ExcludedSenders?.Contains(message.SenderId) == true)
             throw new InvalidDataException("已保存消息不符合当前账号及群范围。");
-        if (stored.ProcessingVersion < 1) throw new InvalidDataException("提取结果缺少有效处理版本。");
-        ArgumentException.ThrowIfNullOrWhiteSpace(stored.Extraction!.RuleVersion);
+        if (stored.ProcessingVersion < 0 || stored.Extraction is not null && stored.ProcessingVersion < 1)
+            throw new InvalidDataException("提取结果缺少有效处理版本。");
+        if (stored.Extraction is not null) ArgumentException.ThrowIfNullOrWhiteSpace(stored.Extraction.RuleVersion);
     }
 
     private void ValidateEvidence(RuleCandidate candidate, MessageKey source)

@@ -148,6 +148,35 @@ public sealed class CandidateRoutingTests : IDisposable
         Assert.Empty(Tasks().ListReviews());
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ProcessAndRoutePending_NoticeUsesFinalPersistedExtractionVersion(bool preExtracted)
+    {
+        var original = Message("original", "10月13日18点提交统计作业");
+        SaveExtracted(original);
+        Assert.Equal(1, Router().RoutePending(Context(), Pinned()));
+        var context = Context() with { TrustedSenders = new HashSet<string> { Sender } };
+        var message = Message("mixed-change", "统计作业延期到10月15日18点；10月16日18点自愿报名讲座") with
+        {
+            SentAt = SentAt.AddMinutes(1),
+            Segments = [new(SegmentKind.Text, "统计作业延期到10月15日18点；10月16日18点自愿报名讲座"),
+                new(SegmentKind.Quote, "原通知", original.Key)]
+        };
+        if (preExtracted) SaveExtracted(message, context);
+        else Assert.True(new LocalMessageProcessor(Messages()).Ingest(message, Pinned(), context,
+            MessageOrigin.Realtime, "live-1", Now));
+
+        Assert.Equal(1, Router().ProcessAndRoutePending(context, Pinned()));
+
+        var saved = Messages().Find(message.Key)!;
+        Assert.True(saved.ProcessingVersion > 0);
+        var notice = Assert.Single(Router().ListNotices());
+        Assert.Equal(saved.ProcessingVersion, notice.ProcessingVersion);
+        Assert.Equal(message.Key, notice.Source);
+        Assert.Equal(new DateOnly(2026, 10, 15), Assert.Single(Tasks().ListTasks()).Time.Date);
+    }
+
     [Fact]
     public void RoutePending_IgnoredMessageOnlyRecordsReceipt()
     {
@@ -372,6 +401,37 @@ public sealed class CandidateRoutingTests : IDisposable
     }
 
     [Fact]
+    public void RoutePending_EarlierUnprocessedMessageBlocksLaterExtractedMessage()
+    {
+        var earlier = Message("earlier");
+        var later = Message("later", "10月14日提交另一份作业") with { SentAt = SentAt.AddMinutes(1) };
+        var processor = new LocalMessageProcessor(Messages());
+        Assert.True(processor.Ingest(earlier, Pinned(), Context(), MessageOrigin.History, "history-1", Now));
+        Assert.True(processor.Ingest(later, Pinned(), Context(), MessageOrigin.History, "history-1", Now));
+        Assert.True(Messages().TrySaveExtraction(later.Key, 0, MessageRuleExtractor.Extract(later, Context()), Now));
+
+        Assert.Equal(0, Router().RoutePending(Context(), Pinned()));
+
+        Assert.Empty(Tasks().ListTasks());
+        Assert.Equal(1, processor.ProcessPending(Context()));
+        Assert.Equal(2, Router().RoutePending(Context(), Pinned()));
+    }
+
+    [Fact]
+    public void ProcessAndRoutePending_ExtractsAndCreatesTaskInOneCall()
+    {
+        var message = Message();
+        Assert.True(new LocalMessageProcessor(Messages()).Ingest(message, Pinned(), Context(),
+            MessageOrigin.Realtime, "live-1", Now));
+
+        Assert.Equal(1, Router().ProcessAndRoutePending(Context(), Pinned()));
+
+        Assert.NotNull(Messages().Find(message.Key)!.Extraction);
+        Assert.Equal(message.Key, Assert.Single(Assert.Single(Tasks().ListTasks()).Evidence));
+        Assert.Equal(0, Router().ProcessAndRoutePending(Context(), Pinned()));
+    }
+
+    [Fact]
     public void ReanalysisAfterReceipt_DoesNotReplayDifferentCandidateOrRestoreCompletedTask()
     {
         var message = Message();
@@ -398,7 +458,7 @@ public sealed class CandidateRoutingTests : IDisposable
     }
 
     [Fact]
-    public void RoutePending_ReliableLinkedChangeCreatesReviewWithoutApplyingCancellation()
+    public void RoutePending_ReliableLinkedChangeAppliesCancellationToOriginalTask()
     {
         SaveExtracted(Message("original", "10月13日18点提交统计作业"));
         Assert.Equal(1, Router().RoutePending(Context(), Pinned()));
@@ -408,6 +468,7 @@ public sealed class CandidateRoutingTests : IDisposable
         var context = Context() with { TrustedSenders = new HashSet<string> { Sender }, KnownTasks = [known] };
         var cancelMessage = Message("cancel", "统计作业取消") with
         {
+            SentAt = SentAt.AddMinutes(1),
             Segments = [new(SegmentKind.Text, "统计作业取消"), new(SegmentKind.Quote, "原通知", original.Evidence[0])]
         };
         SaveExtracted(cancelMessage, context);
@@ -419,13 +480,11 @@ public sealed class CandidateRoutingTests : IDisposable
 
         var current = Assert.Single(Tasks().ListTasks());
         Assert.Equal(original.Id, current.Id);
-        Assert.Equal(TaskState.Active, current.State);
-        Assert.Equal(original.Version, current.Version);
-        Assert.Equal(original.Evidence, current.Evidence);
-        var review = Assert.Single(Tasks().ListReviews());
-        Assert.Equal(ReviewState.Pending, review.State);
-        AssertCandidate(candidate, review.Candidate);
-        Assert.Null(review.Candidate.Time);
+        Assert.Equal(TaskState.Cancelled, current.State);
+        Assert.Equal(original.Version + 1, current.Version);
+        Assert.Equal(original.Time, current.Time);
+        Assert.Contains(cancelMessage.Key, current.Evidence);
+        Assert.Empty(Tasks().ListReviews());
         Assert.Empty(Router().ListNotices());
     }
 

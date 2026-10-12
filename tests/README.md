@@ -1,15 +1,21 @@
 # 项目检查
 
-当前 M4 第三段（2026-10-12）：AccountCandidateRouter 首轮候选自动路由已实现，实际 Release 路由与生命周期专项 94/94（32 + 62）、Infrastructure Release 217/217、Core Release 296/296、Windows Release 57/57、OCR 25/25 且 pip check 通过、Node 五文件 31/31（文档 22、桥 4）、demo 108 项，均退出码 0。Task + 正式 Time 建事项，Pending/Change 保存待确认，Notice 保存本地普通通知列表，Ignored 仅保存回执；每条消息的全部记录、操作和回执使用同一事务，既有 messages/tasks schema 1 保留。普通通知列表入库不等于 Windows 系统通知投递，普通通知转任务、自动可靠关联变更、M6 重新分析协调、正式界面、OCR 队列和真实 QQ/提醒宿主联调尚未完成。
+当前 M4 第四段（2026-10-12）：AccountCandidateRouter 首轮候选自动路由及自动可靠关联变更与保守消息顺序协调已实现，实际 Release 专项 128/128（候选路由 36、关联变更 30、生命周期 62）、Infrastructure Release 251/251、Core Release 296/296、Windows Release 57/57、OCR 25/25 且 `pip check` 通过、Node 五文件 32/32（文档 23、桥 4）、demo 108 项，均退出码 0。Task + 正式 Time 建事项，可靠关联 Change 自动更新同一事项，冲突和 Pending 保存待确认，Notice 保存本地普通通知列表，Ignored 仅保存回执。普通通知列表入库不等于 Windows 系统通知投递，普通通知转任务、完整 M6 重新分析协调、正式界面、OCR 队列、提醒调度、变更一次 Windows 通知和真实 QQ/提醒宿主联调尚未完成。
 
-本轮 `CandidateRoutingTests.cs` 使用真实提取器和临时 SQLite，覆盖普通未确认发布者任务、多行动分流、OCR 建议隔离、重启与历史/实时去重、用户已完成/忽略状态保留、群范围/限量、取消置顶及发送者/课程排除后的继续处理、账号/目录/数据库归属、Change 仅进入待确认、已路由消息更高 ProcessingVersion 不重放、回执失败整条消息回滚和同操作重试。路由前课程确认被撤销或变更时，旧 Task/Notice 降级为待确认；三库只接受持久化 rollback journal，WAL 拒绝且不写结果。路由回执与通知保存在账号目录中的 `routing.sqlite3` schema 1；调用顺序为 Ingest → ProcessPending → RoutePending，本段由本地 API 驱动。
+本轮 `LinkedChangeRoutingTests.cs` 使用真实提取器和临时 SQLite，覆盖取消/延期/新行动/催交、反向入队、预提取批次及更早原消息等待、持久化最新事项替换调用者快照、来源授权、保护时间冲突、取消例外、已完成新行动恢复及历史保留、归档/取消不自动恢复、疑问/OCR/跨群/课程变化、晚到旧消息/同秒/缺来源时间、提取与事项变更整条事务回滚、重试及重启不重放。原 `CandidateRoutingTests.cs` 保留普通未确认发布者、多行动分流、OCR 建议隔离、用户已完成/忽略状态、群范围/限量、暂时排除后的继续处理及账号/目录/数据库归属；可靠取消断言改为自动更新，普通原 Pending/Task/Notice 不升级。
+
+当前调用可用 Ingest → ProcessAndRoutePending：按原发送时间，在单条消息事务中提取并路由原消息；原 RoutePending 入口遇到更早未提取消息先等待。KnownTasks 完全由当前持久化事项投影替换调用者旧快照，只有当前群 TrustedSenders 授权高影响变更，原发送者不自动升级为可信发布者。关联 Pending/Change 首轮重核对，课程确认被撤销或变更时，旧 Task/Notice/Change 降级为待确认。LEFT JOIN 核对全部已关联证据的原消息时间，任一来源缺失时间、晚到旧消息或同秒顺序冲突均转待确认；尚未完整支持 real_seq 或跨群原转发顺序。
+
+自动 Cancel/Postpone/NewRequirement/Remind 共用生命周期事务；受保护时间冲突、Archived/Cancelled 新要求保留待确认，Completed 可靠新要求恢复待办并保留完成历史。自动新要求保留稳定标题，完整新正文保存在原消息、证据和操作历史；自动 Remind 只追加证据，不覆盖正式时间或恢复事项。共享接受逻辑中，Remind 未传 confirmedTime 时不使用候选 Time；用户显式确认新时间仍可修改。消息提取、处理版本、证据、操作和回执一起提交，通知元数据使用最终处理版本。已路由消息的更高 ProcessingVersion 不自动重放，M6 重新分析协调仍待完成；回执失败整条消息回滚且同操作可重试。messages/tasks/routing 三库 schema 1 不变，仅接受持久化 rollback journal，WAL 拒绝且不写结果。
+
+上一段 M4 首轮路由回归（2026-10-12）：Release 专项 94/94（路由 32、生命周期 62）、Infrastructure Release 217/217、Core Release 296/296、Windows Release 57/57、OCR 25/25 且 `pip check` 通过、Node 五文件 31/31（文档 22、桥 4）、demo 108 项，均退出码 0。第三段当时 Pending/Change 仅保存待确认，自动可靠关联变更及消息顺序协调尚未实现；本轮第四段已替代该处理方式。首轮去重、证据保留和本地通知列表继续有效，正式 QQ/界面/提醒宿主仍未接入。
 
 上一轮 M4 生命周期回归（2026-10-11 开始、2026-10-12 保存）：Core Release 296/296、Infrastructure Release 184/184（消息存储 23、消息处理 22、新增生命周期 61）、Windows Release 57/57、OCR 25/25 且 `pip check` 通过、Node 五文件 30/30（文档 21、桥 4）、demo 108 项，均退出码 0。生命周期测试使用真实临时 SQLite，覆盖事务失败回滚、账号隔离/归属、未知结构不重建、候选规范化去重、操作参数冲突、关联变更双版本检查、证据追加、时间保护和撤销边界/旧凭据。此为本轮路由开发前的已验证基线。
 
-本轮路由与生命周期专项命令：
+本轮路由、关联变更与生命周期专项命令：
 
 ```powershell
-& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release --filter 'FullyQualifiedName~CandidateRoutingTests|FullyQualifiedName~TaskLifecycleTests'
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release --filter 'FullyQualifiedName~CandidateRoutingTests|FullyQualifiedName~LinkedChangeRoutingTests|FullyQualifiedName~TaskLifecycleTests'
 ```
 
 上一段置顶群规则及 M4 收件箱回归（2026-10-11）：Core Release 296/296、Infrastructure Release 123/123（含 SQLite 存储 23、消息处理 22）、Windows Release 57/57、OCR 25/25 且 `pip check` 通过、Node 五文件 29/29（文档 20、桥 4）、demo 108 项，均退出码 0。新增 `PinnedGroupProbeTests.cs` 覆盖混合群/无置顶、未知或错误名单不回退、账号错配、实时/分页取消置顶与重连更换范围；桥使用真实 `{get, call}` 结构和数字 `topFlag`，检查其他读取接口不变、未知标记/失败/不完整快照停止。真实 9 个置顶群两轮 18/18 到达日期边界、去重 341、重连 1/1、退出码 0；未观察到本次真实实时群事件，不替代动态置顶或长期稳定性验收。下文旧全群结果为规则变化前的历史记录。
@@ -33,7 +39,7 @@ M2 Task 2 新增 85 项行动提取与 13 项优先级检查，核心合计 289 
 
 M2 Task 3 新增 65 条合成样本、6 项 fixture/指标回归测试和 RuleBaseline CLI。实际 Release 核心全量为 295 项（含 6 项 fixture）；CLI 报告完整匹配 65/65、正式 Task 准确率 23/23、需行动召回 47/47、直接自动覆盖 27/47、待确认占比 23/57、高影响错误 0。无效 CLI 参数退出码 2。合成样本不替代真实 QQ 群消息验收。
 
-Node 文档测试包含 22 项检查：协作规则同步、小任务规则优先级、交付文件和文档链接、整体设计及核心开发状态、M2 计划与阶段、全部设计验收场景的计划覆盖、新版演示的保存方式和真实集成边界、QQ 登录与 OneBot 连接分别记录，以及 Shell/Framework 接入边界；真实 QQ 只读结果、用户窗口反馈、启动异常、实时群事件的限定验证和未验收的长期稳定性/补漏范围须同步。生命周期交付与本轮首轮候选路由状态检查明确本地通知入库、变更待确认、课程确认失效和后续宿主/M6 边界；只读政策检查：不向 QQ 群或私聊发送消息，测试和任务提醒采用本机 Windows 通知。
+Node 文档测试包含 23 项检查：协作规则同步、小任务规则优先级、交付文件和文档链接、整体设计及核心开发状态、M2 计划与阶段、全部设计验收场景的计划覆盖、新版演示的保存方式和真实集成边界、QQ 登录与 OneBot 连接分别记录，以及 Shell/Framework 接入边界；真实 QQ 只读结果、用户窗口反馈、启动异常、实时群事件的限定验证和未验收的长期稳定性/补漏范围须同步。生命周期、首轮候选路由与本轮可靠关联变更状态检查明确本地通知入库、自动应用与冲突待确认、持久化最新目标、当前群来源授权、保守消息顺序和后续宿主/M6 边界；只读政策检查：不向 QQ 群或私聊发送消息，测试和任务提醒采用本机 Windows 通知。
 
 浏览器测试包含 108 项检查，覆盖原有主题／动画、排序、桌面卡片、图片确认及通知转任务，并新增：首次引导、已读行为、完成 1 小时／忽略 24 小时撤销及刷新、归档恢复、搜索与筛选、手动任务与开始时间、自定义提醒、延期及精度失效、人工字段冲突、新行动要求、取消、图片放大及 OCR 折叠、静音通知内容预览、设置与桌面布局保存。图片日期不再单独勾选，检查没有二次勾选框、未提交建议不确立正式时间、按钮直接提交、修改后保存及刷新、仅日期和图片通知提交。详情栏的回归检查在 1100×800 窗口中确认长内容不被裁切，使用 Chrome 原生鼠标滚轮上下滚动及原生点击固定确认按钮，核对任务／通知的去向和错误提示可见性。课程相关 16 项检查覆盖共享选项、两处自定义入口、刷新和重置、重复／空白名称、取消恢复选择、未提交表单保留、待确认／手动任务使用自定义课程及筛选。测试在截止边界显式验证撤销资格，并通过过期动作检查防止越界恢复；未实际等待 1 小时或 24 小时。动画与系统主题测试显式模拟媒体偏好，不依赖本机 Windows 设置。
 
