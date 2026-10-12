@@ -6,9 +6,9 @@
 
 **当前方向：固定时间自动接入、同步消息并恢复普通 QQ。** 2026-10-12 用户明确停止 QQ 快捷方式改造；定时自动切换尚未实现，具体时刻及正在使用 QQ 时的规则待确认。消息存储和两张卡片继续复用，日常 QQ 启动不依赖定制快捷方式。
 
-此前快捷方式安装脚本与瞬时验证只保留为历史，不再重建或推广该入口。用户报告火绒提醒，桌面 QQ.lnk 实际缺失，恢复未成功；原备份仍在 `%LOCALAPPDATA%/MessagePurify/Shortcuts/QQ.original.lnk`，QQ 程序仍在 `D:/QQ/QQ.exe`，安装文件未修改。没有更改火绒设置，也未配置登录 Windows 后自启动。
+此前集成快捷方式安装脚本与瞬时验证只保留为历史，不再重建或推广该入口。用户报告火绒提醒后要求恢复普通 QQ，本轮已用 `packaging/napcat/Restore-QQShortcut.ps1` 恢复桌面 QQ.lnk，直接指向 `D:/QQ/QQ.exe`、启动参数为空，Explorer 桌面列表确认存在。原备份仍在 `%LOCALAPPDATA%/MessagePurify/Shortcuts/QQ.original.lnk`，但带有加密属性，恢复时重新创建普通快捷方式；QQ 安装文件及火绒设置未改，Windows 登录自启动未配置。
 
-以下 Shell 与 Framework 说明保留为技术准备及手动验证路线，不表示定时调度或恢复普通 QQ 已实现。
+以下 Shell 与 Framework 说明保留为技术准备及手动验证路线，不表示定时调度或同步结束后自动恢复普通 QQ 已实现。
 
 1. 本机官方入口实际报“QQ installation was not found in the registry”。QQ 文件存在于 `D:/QQ/QQ.exe`，已提供不依赖注册表的入口：双击 `D:\ai制作的软件\消息提纯\packaging\napcat\Start-NapCat.cmd`。它沿用官方包的五项启动环境及启动器，直接指定实际 QQ 路径，不申请提权。不要运行 `KillQQ.bat`。
 2. 这是 Shell 入口。若要执行 Shell 真实探针，同一账号的普通 QQ 必须先退出；按控制台提示完成对应 QQ 登录。探针不填密码、不代替用户操作，也不把 Shell 当作桌面聊天窗口验收。

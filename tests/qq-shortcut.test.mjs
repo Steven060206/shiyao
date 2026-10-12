@@ -74,3 +74,25 @@ test('QQ 已运行时桌面入口只调用 QQ 激活窗口，普通 Framework �
   assert.notEqual(refused.status, 0);
   assert.match(refused.stderr, /already running/);
 });
+
+test('恢复普通 QQ 图标直接指向 QQ 程序，清除旧脚本参数且可重复恢复', t => {
+  const directory = temporary(t);
+  const qq = path.join(directory, 'QQ 程序.exe');
+  const shortcut = path.join(directory, 'QQ.lnk');
+  fs.writeFileSync(qq, 'not-executed');
+  const restore = () => run(`& ${psQuote(path.join(root, 'packaging/napcat/Restore-QQShortcut.ps1'))} -ShortcutPath ${psQuote(shortcut)} -QqExecutablePath ${psQuote(qq)}`);
+  const recovered = restore();
+  assert.equal(recovered.status, 0, recovered.stderr);
+  assert.equal(fs.realpathSync.native(JSON.parse(recovered.stdout).Target), fs.realpathSync.native(qq));
+  const change = run(`$shell = New-Object -ComObject WScript.Shell; $link = $shell.CreateShortcut(${psQuote(shortcut)}); $link.Arguments = '-OpenExisting'; $link.WindowStyle = 7; $link.Save()`);
+  assert.equal(change.status, 0, change.stderr);
+  assert.equal(restore().status, 0);
+  const inspect = run(`$shell = New-Object -ComObject WScript.Shell; $link = $shell.CreateShortcut(${psQuote(shortcut)}); @{Target=$link.TargetPath; Arguments=$link.Arguments; Icon=$link.IconLocation; Style=$link.WindowStyle} | ConvertTo-Json`);
+  assert.equal(inspect.status, 0, inspect.stderr);
+  const link = JSON.parse(inspect.stdout);
+  assert.equal(fs.realpathSync.native(link.Target), fs.realpathSync.native(qq));
+  assert.equal(fs.realpathSync.native(link.Icon.slice(0, -2)), fs.realpathSync.native(qq));
+  assert.ok(link.Icon.endsWith(',0'));
+  assert.equal(link.Arguments, '');
+  assert.equal(link.Style, 1);
+});

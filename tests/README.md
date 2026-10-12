@@ -1,6 +1,10 @@
 # 项目检查
 
-## 本轮接入方向调整（2026-10-12）
+## 本轮恢复普通 QQ 图标（2026-10-12）
+
+新增 `Restore-QQShortcut.ps1` 及 `qq-shortcut.test.mjs` 第三项：首次创建、直接指向 QQ.exe、QQ 图标、空参数、正常窗口及重复恢复清除旧配置。实际 `node --test tests/qq-shortcut.test.mjs` 3/3，组合验证 `node --test tests/project-rules.test.mjs tests/qq-shortcut.test.mjs` 30/30，均退出 0；合成文件未执行。真实恢复脚本退出 0，桌面 QQ.lnk 持续存在，Explorer 桌面命名空间含 QQ、Target 为原 QQ.exe、Arguments 为空、Encrypted=false，报告 `.tools/desktop-validation/qq-original-restored.json`。原加密备份未改，当前 QQ 未退出或重开，火绒设置未改；集成快捷方式改造仍停止，定时同步尚未实现。
+
+## 上一段接入方向调整（2026-10-12）
 
 用户停止 QQ 快捷方式改造，回到固定时间自动接入、同步置顶群并落盘、结束恢复普通 QQ。桌面 QQ.lnk 实际缺失，用户报告火绒提醒；恢复未成功，不把历史瞬时验证记为当前入口可用。定时自动切换尚未实现，具体时刻与 QQ 使用冲突规则待确认。本轮仅更新有效文档及 `project-rules.test.mjs`：实际 `node --test tests/project-rules.test.mjs` 为 27/27、退出 0，核对新方向、未实现边界及停止推广快捷方式；不通过快捷方式安装/激活测试证明自动切换。
 
