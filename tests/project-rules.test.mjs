@@ -392,6 +392,22 @@ test('每天三次同步、游戏期间禁止同步及游戏结束后补一次�
   assert.doesNotMatch(next, /具体同步时刻.*待确认/);
 });
 
+test('后台读取可行性与接口常驻建议分开记录，未确认前保留按次切换和游戏限制', () => {
+  const requirements = read('docs/requirements.md');
+  assert.match(requirements, /后台同步讨论.*未确认方案/);
+  assert.match(requirements, /隐藏窗口不等于免去 QQ 切换/);
+  assert.match(requirements, /现有定时切换规则继续有效/);
+  const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
+  assert.match(next, /未决定：消息接口随 QQ 常驻，到点后台读取/);
+  assert.match(next, /不取消游戏禁止同步和补一次规则/);
+  assert.match(next, /尚未实现定时后台读取，资源占用及游戏影响未实测/);
+  const spec = read('docs/superpowers/specs/2026-10-10-windows-app-design.md').split('**状态：')[0];
+  assert.match(spec, /每天 08:00、12:00、20:00（北京时间）/);
+  assert.match(spec, /打游戏时禁止同步，游戏结束后合并补同步一次/);
+  assert.match(spec, /待确认建议，不替换当前按次切换规则/);
+  assert.doesNotMatch(spec, /具体时刻.*待确认/);
+});
+
 test('M3 正在实施，实测条件不被协议模拟替代', () => {
   const plan = read('docs/superpowers/plans/2026-10-10-integration-probes.md');
   for (const label of ['Task 1', 'Task 2', 'Task 3', 'get_group_msg_history', 'JSON Lines', 'activationObserved']) {
