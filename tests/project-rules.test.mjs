@@ -427,13 +427,14 @@ test('常驻 A 方案、自动维护本机游戏名单及真实验收边界分�
   assert.doesNotMatch(active, /自动切换普通 QQ 与消息接入环境|同步结束后恢复普通 QQ|游戏检测和中途开始游戏时的停止处理尚未实现/);
 });
 
-test('先验证真实后台同步，游戏实机验收延后但保留保护规则', () => {
+test('先完成确定功能，再统一进行真实验收', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
     const current = read(file).split('## 2.')[0];
-    assert.match(current, /先验证真实 QQ 接入、首次后台同步、批次结束后保持连接及桌面卡片/, file);
-    assert.match(current, /实际游戏期间暂停\/退出后补同步的实机验收延后/, file);
+    assert.match(current, /(?:当前开发顺序|最新工作顺序).*先.*(?:功能|已确定).*统一.*验收/s, file);
+    assert.match(current, /Windows 登录自动启动.*OCR.*完整编辑.*合并拆分.*备份恢复.*桌面卡片恢复/s, file);
+    assert.match(current, /(?:统一|真实).*验收.*(?:后置|完成后)/s, file);
     assert.match(current, /游戏禁止同步.*(?:保持有效|有效需求不变)/, file);
-    assert.match(current, /首次.*同步.*(?:不能替代|不将).*?(?:自然|定时实机)/, file);
+    assert.match(current, /关机\/睡眠漏同步规则仍(?:是)?未决定事项|关机\/睡眠漏同步规则待确认/, file);
   }
 });
 
@@ -442,7 +443,7 @@ test('真实首次同步和常驻通过，固定时刻与游戏实测仍待验�
     const content = read(file);
     assert.match(content, /真实.*首次.*(?:后台同步|同步).*已通过|真实.*首次.*后台同步.*通过|真实首次同步.*常驻.*验收/, file);
     assert.match(content, /自然.*固定.*(?:尚未验收|未验收|未完成)|自然.*到点验收/, file);
-    assert.match(content, /实际游戏.*验收延后/, file);
+    assert.match(content, /实际游戏.*(?:验收延后|统一.*后置|仍需实测|尚未验收)/s, file);
     assert.match(content, /48 项待确认/, file);
     assert.match(content, /0 个.*任务\/通知/, file);
     assert.match(content, /(?:QQ\/正式应用|QQ\/Framework 与正式应用|QQ\/接口与正式应用|QQ 和正式应用).*(?:保持运行|继续运行)|当前 QQ\/Framework 和正式应用运行/, file);
