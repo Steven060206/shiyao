@@ -1,6 +1,30 @@
 # 项目检查
 
-## 本轮常驻后台同步与自动游戏名单（2026-10-12）
+## 本轮真实首次后台同步与常驻验收（2026-10-12）
+
+真实首次后台同步与批次后保持连接已通过，三个自然固定时刻尚未验收。
+
+用户要求先测试真实 QQ 接入、首次后台同步与两张卡片，实际游戏暂停/补同步实机验收延后，原保护规则保持有效。用户正常退出后启动现有 Framework，新版真实检查两次均 ExitCode=0、success=true、synthetic=false；52 个已加入群、9 个置顶群、48 项待确认、0 个任务/通知，重开未增加重复项。两次均 transport=connected、qq=online、receiving=paused、history=complete、error=null、failures=[]；paused 为正常批次结束，连接保持。只读 SQLite 数量为 messages=359、route_receipts=359、reviews=48。
+
+实际命令及报告：
+
+```powershell
+# 本地辅助仅存放于忽略目录，凭据仅传入进程环境
+& ./.tools/desktop-validation/run-resident-check.ps1 -ReportName resident-read-only-first.json -Seconds 35
+& ./.tools/desktop-validation/run-resident-check.ps1 -ReportName resident-read-only-repeat.json -Seconds 35
+& ./packaging/app/Start-MessagePurify.ps1
+& ./.tools/ocr/venv/Scripts/python.exe .tools/desktop-validation/inspect-resident-desktop.py --pid 34036 --close-main --report .tools/desktop-validation/resident-desktop-hidden.json
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId 34036
+# 再次默认启动唤回同一实例，再正常隐藏
+& ./packaging/app/Start-MessagePurify.ps1
+& ./.tools/ocr/venv/Scripts/python.exe .tools/desktop-validation/inspect-resident-desktop.py --pid 34036 --close-main --report .tools/desktop-validation/resident-desktop-reopen.json
+```
+
+正式两张卡片实际均可见、parentClass=SHELLDLL_DefView、child/noActivate=true、topmost=false；关闭主窗口后进程保留、托盘图标存在，重复启动仍为同一 PID 34036、仅一实例。实际 TCP 检查确认该进程到 3001 的 Established 连接保持。QQ/Framework 与正式应用继续运行，主窗口隐藏；没有发送 QQ 或 Windows 通知，没有代用户确认课程/日期或完成真实事项。真实首次同步不能替代自然 08:00/12:00/20:00 到点验收，实际游戏暂停、桌面恢复/多屏和长期稳定性未验收。
+
+本轮新增验收顺序及真实结果的文档回归；实际 `node --test tests/*.test.mjs` 71/71，Infrastructure Release 调度/名单专项 38/38、实际宿主专项 29/29 均退出 0。前一个 filter 使用了未匹配的 NapCatMessageHostTests 类名，已补跑实际 ApplicationMessageHostTests，合计 67 项。生产代码未改，未重跑未改动的 Core/Windows/OCR/demo，不重新发布。两个入口 `-CheckOnly` Ready=true，正式入口 AuthenticationReady=true，发布路径 app-scheduled-sync；本地安全报告均位于 `.tools/desktop-validation/`。
+
+## 上一段常驻后台同步与自动游戏名单（2026-10-12）
 
 用户选择 A，确认 QQ/NapCat Framework 常驻，按北京时间 08:00、12:00、20:00 后台读取置顶群；游戏期间暂停，退出后把错过多个时刻合并补一次。后台调度和常驻宿主已接入，首次非游戏时历史回溯不吞掉下一固定时刻，批次外重连不开启新读取；请求、响应及落盘/路由事务前核对游戏，中途游戏暂停未提交的处理，退出后合并恢复。自动发现和缓存已接入，默认应用启动及每日扫描一次，游戏期间延后目录扫描。本机扫描报告 `.tools/game-validation/installed-games.json`：19 个游戏安装目录，Minecraft 整合包合为一项，最终只读状态 GameRunning=false；不把已打开的 Steam 当作游戏。
 

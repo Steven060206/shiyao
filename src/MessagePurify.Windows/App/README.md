@@ -6,11 +6,11 @@
 
 发布后双击 [启动消息提纯](../../../packaging/app/Start-MessagePurify.cmd)。关闭主窗口会隐藏到托盘；双击托盘图标重新打开，托盘菜单可退出。再次启动会唤起现有窗口。
 
-正式桌面卡片首段已实现并验证，上一版自包含产物位于 `.tools/published/app-tray-fix/`。本轮默认入口已指向 `.tools/published/app-scheduled-sync/`，新版本已自包含发布并通过 13 项合成 Native 验证；旧 app、app-reminders、app-desktop 和 app-tray-fix 目录保留。当前只读检查 QQ、消息提纯均未运行，3001 无监听，本轮没有启动或关闭真实 QQ。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”；上一版关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
+正式桌面卡片首段已实现并验证，上一版自包含产物位于 `.tools/published/app-tray-fix/`。本轮默认入口已指向 `.tools/published/app-scheduled-sync/`，新版本已自包含发布并通过 13 项合成 Native 验证；旧 app、app-reminders、app-desktop 和 app-tray-fix 目录保留。本轮用户正常退出 QQ 后重开 Framework，新版真实首次后台同步与重开去重通过；QQ/正式应用保持运行，主窗口隐藏，两张卡片及托盘可见，3001/6099 监听且应用连接保持。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”；上一版关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
 
 当前产品方向为 QQ/NapCat Framework 常驻，固定时间后台同步。2026-10-12 用户选择 A，已确认常驻方案，替代每次同步切换接入环境及结束后恢复普通 QQ 的旧安排；每天 08:00、12:00、20:00（北京时间）各同步一次，共三次，打游戏时禁止同步。游戏导致错过同步时，结束游戏后补同步一次，同一游戏期间错过多个时刻合并为一次补同步；中途开始游戏时暂停，切回桌面不算游戏结束。后台调度与常驻宿主已接入代码，首次启动的七天历史回溯在非游戏时执行，不吞掉下一个固定时刻；批次结束后保留连接，停止消息处理，空闲重连不触发新读取批次。关机/睡眠漏同步规则待确认。
 
-用户要求将电脑现有游戏全部加入检测，并定期扫描电脑游戏、同步检测名单；默认应用启动及每日扫描一次，游戏期间延后目录扫描。`InstalledGameCatalog` 已接入自动发现、进程匹配和本地缓存 `%LOCALAPPDATA%/MessagePurify/App/game-catalog.json`；每分钟检查是否到期，实际目录扫描每 24 小时一次，进程状态约每秒采样。读取 Steam 库、游戏安装登记、WeGame/常见游戏目录、Epic 清单与 Minecraft 版本目录；只遍历游戏安装位置，不递归扫描整个硬盘。扫描失败保留已有名单并重试，未就绪时暂停同步。已扫描到本机 19 个游戏安装目录，Minecraft 整合包合为一项；报告 `.tools/game-validation/installed-games.json`。Minecraft 只在内存识别 Java 客户端启动标记，不保存启动命令或认证参数。启动器常驻与全屏状态不能直接算作正在玩游戏；真实 QQ 常驻、各游戏实际启动/退出、资源占用与长期稳定性尚未验收。
+用户要求将电脑现有游戏全部加入检测，并定期扫描电脑游戏、同步检测名单；默认应用启动及每日扫描一次，游戏期间延后目录扫描。`InstalledGameCatalog` 已接入自动发现、进程匹配和本地缓存 `%LOCALAPPDATA%/MessagePurify/App/game-catalog.json`；每分钟检查是否到期，实际目录扫描每 24 小时一次，进程状态约每秒采样。读取 Steam 库、游戏安装登记、WeGame/常见游戏目录、Epic 清单与 Minecraft 版本目录；只遍历游戏安装位置，不递归扫描整个硬盘。扫描失败保留已有名单并重试，未就绪时暂停同步。已扫描到本机 19 个游戏安装目录，Minecraft 整合包合为一项；报告 `.tools/game-validation/installed-games.json`。Minecraft 只在内存识别 Java 客户端启动标记，不保存启动命令或认证参数。启动器常驻与全屏状态不能直接算作正在玩游戏；真实 QQ 冷启动、首次同步与批次后连接保持已通过；各游戏实际启动/退出、资源占用与长期稳定性尚未验收。
 
 QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装脚本和备份保留历史，已恢复的桌面 QQ.lnk 仍为普通 QQ.exe、参数为空。原 [Framework 直接入口](../../../packaging/napcat/Start-NapCat-Framework.cmd) 用于首次手动加载与真实验证，要求先正常退出已有 QQ，不能对运行中的 QQ 重复加载。接口未就绪时显示接收暂停并重试，已有本地事项仍可查看；首次连接确定账号，账号变化暂停接收，不自动切换账号。
 
@@ -39,7 +39,7 @@ QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装�
 
 ## 后续功能
 
-自启动、图片下载/OCR 队列、手动新增/完整编辑、通知转任务、完整变化标记、完整 M6 修复、合并拆分及备份恢复未完成。常驻接口的真实冷启动、三个固定时间同步、实际游戏暂停/补同步和自动名单覆盖需验收；真实 QQ 课程确认后的任务端到端、桌面卡片的恢复、多屏与长期稳定性仍需实际验收。Windows 系统通知及声音已取消，应用不向 QQ 发消息。
+自启动、图片下载/OCR 队列、手动新增/完整编辑、通知转任务、完整变化标记、完整 M6 修复、合并拆分及备份恢复未完成。常驻接口真实冷启动和首次同步已通过；三个自然固定时间同步、实际游戏暂停/补同步和自动名单覆盖需验收，用户要求实际游戏验收延后；真实 QQ 课程确认后的任务端到端、桌面卡片的恢复、多屏与长期稳定性仍需实际验收。Windows 系统通知及声音已取消，应用不向 QQ 发消息。
 
 ## 开发和验证
 
@@ -55,7 +55,7 @@ node --test tests/application-ui.test.mjs tests/application-launcher.test.mjs
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId <运行的消息提纯进程ID>
 ```
 
-托盘脚本默认只检查图标，添加 `-ExitApplication` 会实际通过托盘菜单退出该进程。本轮 Infrastructure 418/418、Windows 141/141、Core 301/301、Node 八文件 69/69、OCR 25/25、demo 108 项通过；新版 publish、默认入口 `-CheckOnly` 与 Native 合成 13 项退出 0。本机游戏扫描报告列出 19 个安装目录。当前只读 QQ/消息提纯进程及 3001 监听计数均为 0；不把代码测试、扫描或合成账号验证写为已接入真实常驻 QQ/逐款游戏启动退出已验收。
+托盘脚本默认只检查图标，添加 `-ExitApplication` 会实际通过托盘菜单退出该进程。上一段 Infrastructure 418/418、Windows 141/141、Core 301/301、Node 八文件 69/69、OCR 25/25、demo 108 项通过；新版 publish、默认入口 `-CheckOnly` 与 Native 合成 13 项退出 0。本机游戏扫描报告列出 19 个安装目录。本轮真实检查两次退出 0，均为 52 个群、9 个置顶群、48 项待确认、0 个任务/通知、历史 complete、失败为空；接收 paused 表示批次结束，连接仍 connected 且 QQ online。正式两卡片父窗/style、关闭隐藏、托盘及单实例唤回实际通过，QQ/正式应用继续运行。报告在 `.tools/desktop-validation/resident-*.json`；自然固定时刻和游戏实机验收未完成。本轮 Node 71/71、Infrastructure 调度/名单 38/38 和实际宿主 29/29 退出 0，无生产代码修改或重新发布。
 
 上一版托盘修复验证：Windows Release 141/141、Node 七文件 63/63、原生合成 13 项、独立桌面检查和默认入口检查均退出 0；当时 Infrastructure 未改，沿用 375/375。`.tools/desktop-validation/tray-fix-native-smoke.json` success=true、进程退出 0，覆盖工作区/桥/卡片合成操作；`python tests/app_desktop_test.py --executable .tools/published/app-tray-fix/MessagePurify.exe` 确认父窗/style。该段另用正式数据只读复查真实 QQ，9 个置顶群、48 项待确认、0 个任务/通知、当次历史 complete，未代用户确认课程或日期；这些历史结果不替代本轮真实常驻和游戏验收。
 
