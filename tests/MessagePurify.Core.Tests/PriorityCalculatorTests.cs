@@ -5,6 +5,15 @@ namespace MessagePurify.Core.Tests;
 
 public class PriorityCalculatorTests
 {
+    [Theory]
+    [InlineData("今日提交报告，逾期不收", true)]
+    [InlineData("下周参加考试，影响资格", true)]
+    [InlineData("提交报告，逾期仍接收", false)]
+    [InlineData("不计入成绩，不扣分", false)]
+    [InlineData("通知讨论成绩、考试资格与报名", false)]
+    public void ConsequenceFact_IsIndependentOfPrioritySaturation(string text, bool expected)
+        => Assert.Equal(expected, PriorityCalculator.HasClearConsequence(text));
+
     private static readonly DateTimeOffset Now = DateTimeOffset.Parse("2026-10-10T10:00:00+08:00");
 
     [Theory]

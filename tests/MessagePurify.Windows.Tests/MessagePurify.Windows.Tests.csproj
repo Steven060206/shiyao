@@ -12,6 +12,7 @@
     <Using Include="Xunit" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="../../src/MessagePurify.Windows/App/AppBridgeProtocol.cs" Link="AppBridgeProtocol.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/BridgeProtocol.cs" Link="BridgeProtocol.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/NotificationRoute.cs" Link="NotificationRoute.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/NotificationProtocol.cs" Link="NotificationProtocol.cs" />

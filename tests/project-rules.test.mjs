@@ -26,6 +26,24 @@ test('小任务规则明确服从新的测试和提交要求', () => {
   }
 });
 
+test('正式应用交付记录区分合成闭环、只读宿主与剩余系统功能', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /正式应用首段/, file);
+    assert.match(content, /AccountWorkspace/, file);
+    assert.match(content, /NapCatMessageHost/, file);
+    assert.match(content, /合成.*(?:WebView2|闭环)|WebView2.*合成/, file);
+    assert.match(content, /(?:提醒调度|OCR 队列).*未完成|(?:提醒调度|OCR 队列).*后续/, file);
+    assert.match(content, /真实 QQ.*(?:验证|接口|联调)/, file);
+  }
+  for (const artifact of ['src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj',
+    'src/MessagePurify.Windows/App/packages.lock.json', 'src/MessagePurify.Windows/App/ui/app.js',
+    'src/MessagePurify.Windows/App/README.md', 'packaging/app/Start-MessagePurify.cmd',
+    'tests/application-ui.test.mjs', 'tests/application-launcher.test.mjs']) {
+    assert.ok(fs.statSync(path.join(root, artifact)).isFile(), `正式应用产物缺失：${artifact}`);
+  }
+});
+
 test('项目文档的本地链接、原型与核心交付文件存在', () => {
   const files = [...documents, 'docs/superpowers/specs/2026-10-10-windows-app-design.md', 'docs/superpowers/plans/2026-10-10-windows-app-implementation.md', 'docs/superpowers/plans/2026-10-10-core-foundation.md', 'docs/superpowers/plans/2026-10-10-local-rules.md', 'docs/superpowers/plans/2026-10-10-integration-probes.md', 'tests/README.md'];
   for (const file of files) {
@@ -91,7 +109,8 @@ test('M4 生命周期进度明确区分存储验证和消息宿主联调', () =>
     assert.match(current, /生命周期/, file);
     assert.match(current, /Infrastructure(?: Release)? \d+\/\d+/, file);
     assert.match(current, /自动路由|自动转事项/, file);
-    assert.match(current, /真实 QQ.*(?:未完成|未.*联调|未接入|宿主联调)/, file);
+    assert.match(current, /(?:真实 QQ|正式只读 QQ).*(?:宿主|接收|验证)/, file);
+    assert.match(current, /(?:提醒|OCR).*(?:未完成|后续)/, file);
   }
   assert.match(read(planFile), /SuggestedTime.*(?:永远|不能)/);
   assert.match(read(planFile), /expectedTaskVersion/);
@@ -112,7 +131,8 @@ test('M4 首轮候选路由状态明确本地分流、课程确认和后续实�
     assert.match(content, /普通通知转任务.*(?:待完成|尚未完成|后续阶段)/, file);
     assert.match(content, /自动可靠关联变更/, file);
     assert.match(content, /M6.*重新分析协调.*(?:待完成|尚未完成|后续阶段)/, file);
-    assert.match(content, /正式界面.*OCR 队列.*真实 QQ.*宿主联调.*(?:未完成|尚未完成)/, file);
+    assert.match(content, /正式应用首段.*(?:界面|WebView2|WPF)/, file);
+    assert.match(content, /(?:提醒调度|OCR 队列).*(?:未完成|后续)/, file);
     assert.match(content, /Infrastructure Release 184\/184/, `${file} 保留上轮实际基线`);
     assert.doesNotMatch(content.split('## 2.')[0], /收件箱自动转事项.*尚未完成|消息收件箱到事项的自动路由.*未完成/,
       `${file} 当前状态不能保留已替换的路由结论`);
@@ -153,8 +173,8 @@ test('M4 可靠关联变更状态保留持久化目标、来源授权、保守�
     assert.match(content, /M6.*重新分析协调.*(?:待完成|尚未完成|后续阶段)/, file);
   }
   const current = read('docs/HANDOFF.md').split('### 暂停接续记录')[0];
-  assert.match(current, /第四段|可靠关联变更/);
-  assert.match(current, /真实 QQ.*(?:尚未|未接入|宿主)/);
+  assert.match(read('docs/HANDOFF.md'), /第四段|可靠关联变更/);
+  assert.match(current, /(?:真实|正式只读) QQ.*(?:接收|宿主)|真实正式宿主/);
 });
 
 test('新版演示交付链接可用，保存说明与真实集成阶段一致', () => {
@@ -165,7 +185,7 @@ test('新版演示交付链接可用，保存说明与真实集成阶段一致',
     const content = read(file);
     assert.match(content, /本地存储/, `${file} 需说明演示保存方式`);
     assert.match(content, /撤销.*真实经过时间|真实经过时间.*撤销/, `${file} 需说明撤销计时与演示日期区分`);
-    assert.match(content, /真实应用(?:实现|代码)尚未开始|Windows.*尚未接入/, `${file} 需说明真实集成边界`);
+    assert.match(content, /真实应用(?:实现|代码)尚未开始|Windows.*尚未接入|(?:正式提醒|OCR 队列|桌面卡片).*(?:未完成|后续)/, `${file} 需说明真实集成边界`);
   }
 });
 
@@ -179,7 +199,7 @@ test('需求、交接及设计的当前状态一致记录整体设计已确认',
     assert.match(current, /整体设计已确认/, file);
     assert.match(current, /实施(?:总)?计划/, file);
     assert.match(current, /M1.*正在实施|M1 已完成/, `${file} 需准确记录核心开发阶段`);
-    assert.match(current, /尚未接入/, `${file} 需保留真实集成状态`);
+    assert.match(current, /尚未接入|(?:正式提醒|完整端到端).*(?:未完成|后续)/, `${file} 需保留真实集成边界`);
     assert.doesNotMatch(current, /整体设计尚未确认|完整设计仍待整体核对/, file);
   }
 });

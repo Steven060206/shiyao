@@ -96,7 +96,7 @@ public static class MessageRuleExtractor
                     ? RuleDisposition.Notice : RuleDisposition.Task;
             var priorityTime = formalTime;
             var priority = priorityTime is not null ? PriorityCalculator.Calculate(priorityTime,
-                context.Now, HasClearConsequence(part)) : (int?)null;
+                context.Now, PriorityCalculator.HasClearConsequence(part)) : (int?)null;
             var assessments = new RuleAssessments(
                 new(ocr ? "行动来自图片识别，尚未人工确认" : question ? "疑问" : negated ? "否定行动" : uncertain ? "条件、猜测或转述" : partialCancel ? "仅取消部分要求，不能取消整个事项" : $"明确{action}行动", actionReliable),
                 new(restricted ? "原文限定对象尚未与本人核对" : courseReliable ? "已确认本人课程关系" : "对象相关性尚未确认", audienceReliable),
@@ -191,10 +191,6 @@ public static class MessageRuleExtractor
         text = Regex.Replace(text, date + @"(?:\d{1,2}(?:点|:)(?:\d{1,2})?)?\s*(?:布置|发布|发出)(?:的)?", "");
         return Regex.Replace(text, @"(?:原定|原截止|原计划|原来|上次|之前)\s*" + date + @"(?:\d{1,2}(?:点|:)(?:\d{1,2})?)?(?:截止)?", "");
     }
-
-    private static bool HasClearConsequence(string text) => Match(text,
-        "影响成绩|影响资格|取消资格|逾期不收|计入成绩|扣分") && !Match(text,
-        "不影响(?:成绩|资格)|不计入成绩|不扣分|不会扣分|逾期(?:也|仍)?(?:收|接收)|不是逾期不收");
 
     private static bool Match(string text, string pattern) => Regex.IsMatch(text, pattern);
 }

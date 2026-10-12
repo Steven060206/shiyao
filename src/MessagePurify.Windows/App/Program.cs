@@ -1,0 +1,100 @@
+using System.IO;
+using System.IO.Pipes;
+using System.Windows;
+using Forms = System.Windows.Forms;
+
+namespace MessagePurify.Windows.App;
+
+public static class Program
+{
+    [STAThread]
+    public static int Main(string[] arguments)
+    {
+        var check = arguments.Contains("--smoke-test") || arguments.Contains("--read-only-check");
+        var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MessagePurify", "App");
+        var report = Argument(arguments, "--report") ?? Path.Combine(dataRoot, "validation.json");
+        if (arguments.Contains("--smoke-test")) dataRoot = Path.Combine(Path.GetTempPath(), "messagepurify-app-" + Guid.NewGuid().ToString("N"));
+        using var mutex = new Mutex(true, "Local\\MessagePurify.Application", out var first);
+        if (!first && !check)
+        {
+            try { using var client = new NamedPipeClientStream(".", "MessagePurify.Application", PipeDirection.Out); client.Connect(1000); client.WriteByte(1); }
+            catch (Exception exception) when (exception is IOException or TimeoutException) { }
+            return 0;
+        }
+        var application = new System.Windows.Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+        var exitCode = 0;
+        application.Dispatcher.InvokeAsync(async () =>
+        {
+            AppRuntime? runtime = null;
+            AppWindow? window = null;
+            using var stopping = new CancellationTokenSource();
+            using var tray = new Forms.NotifyIcon { Text = "消息提纯", Icon = System.Drawing.SystemIcons.Application, Visible = !check };
+            async Task Exit()
+            {
+                if (window is not null) { window.Exiting = true; window.Close(); }
+                tray.Visible = false; stopping.Cancel();
+                if (runtime is not null) await runtime.StopAsync();
+                application.Shutdown(exitCode);
+            }
+            try
+            {
+                var synthetic = arguments.Contains("--smoke-test") ? SmokeCheck.CreateWorkspace(dataRoot) : null;
+                runtime = new(dataRoot, synthetic);
+                window = new(runtime, dataRoot, check);
+                var menu = new Forms.ContextMenuStrip();
+                menu.Items.Add("打开消息提纯", null, (_, _) => application.Dispatcher.Invoke(() => { window.Show(); window.Activate(); }));
+                menu.Items.Add("退出", null, async (_, _) => await application.Dispatcher.InvokeAsync(Exit).Task.Unwrap());
+                tray.ContextMenuStrip = menu;
+                tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(() => { window.Show(); window.Activate(); });
+                window.Show();
+                if (!arguments.Contains("--smoke-test")) runtime.Start();
+                if (check)
+                {
+                    await window.Ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                    if (synthetic is not null) await SmokeCheck.RunAsync(window, synthetic, dataRoot, report);
+                    else await SmokeCheck.RunReadOnlyAsync(runtime, report, int.TryParse(Argument(arguments, "--seconds"), out var seconds) ? Math.Clamp(seconds, 1, 120) : 20);
+                    await Exit();
+                }
+                else _ = ListenAsync(window, stopping.Token);
+            }
+            catch (Exception exception)
+            {
+                exitCode = 1;
+                if (check)
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(report))!);
+                    if (arguments.Contains("--smoke-test") || !File.Exists(report))
+                        File.WriteAllText(report, System.Text.Json.JsonSerializer.Serialize(new { success = false, error = "application-check-failed",
+                            detail = arguments.Contains("--smoke-test") ? exception.ToString() : null }));
+                }
+                else System.Windows.MessageBox.Show("程序启动失败，已有数据已保留。请查看应用说明中的依赖检查。", "消息提纯");
+                await Exit();
+            }
+        });
+        application.Run();
+        return exitCode;
+    }
+
+    private static async Task ListenAsync(AppWindow window, CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await using var server = new NamedPipeServerStream("MessagePurify.Application", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+                await server.WaitForConnectionAsync(cancellationToken);
+                var signal = new byte[1];
+                if (await server.ReadAsync(signal, cancellationToken) == 1)
+                    await window.Dispatcher.InvokeAsync(() => { window.Show(); window.Activate(); });
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
+            catch (IOException) { }
+        }
+    }
+
+    private static string? Argument(string[] arguments, string name)
+    {
+        var index = Array.IndexOf(arguments, name);
+        return index >= 0 && index + 1 < arguments.Length ? arguments[index + 1] : null;
+    }
+}

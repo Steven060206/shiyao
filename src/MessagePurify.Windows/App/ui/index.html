@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>消息提纯</title>
+  <link rel="stylesheet" href="app.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="app" id="app">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>消息提纯</div>
+      <p class="brand-caption">学校群消息整理</p>
+      <nav class="nav" id="nav" aria-label="主导航"></nav>
+      <div class="sidebar-foot"><b id="connection-status">等待连接</b><span id="receiving-status">正在读取本地事项</span></div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div class="breadcrumb">消息提纯 <span aria-hidden="true"> / </span><strong id="breadcrumb">任务</strong></div>
+        <div class="top-actions"><span class="connection-badge" id="history-status">历史读取状态待确认</span><button class="button small" data-action="refresh">刷新</button></div>
+      </header>
+      <div class="workarea">
+        <section class="list-pane" id="list-pane" aria-label="事项列表">
+          <div class="page-head"><div><h1 id="page-title">任务</h1><p class="subline" id="page-subline">正在读取本地事项</p></div><div class="date-stamp" id="date-stamp"></div></div>
+          <p class="error" id="host-error" role="alert" hidden></p>
+          <div class="filters" id="filters">
+            <input id="search" type="search" aria-label="搜索事项" placeholder="搜索标题、课程或来源群">
+            <select id="course-filter" aria-label="按课程筛选"><option value="">全部课程</option></select>
+            <select id="state-filter" aria-label="按状态筛选"><option value="active">待办</option></select>
+          </div>
+          <div class="list-summary" id="list-summary"></div>
+          <div class="rows" id="rows"></div>
+          <div id="settings-panel" hidden></div>
+        </section>
+        <aside class="detail-pane" id="detail-pane" aria-label="事项详情">
+          <div class="detail-scroll"><div class="empty"><h2>正在读取</h2><p>等待本地应用提供事项。</p></div></div>
+          <div class="confirmation-bar" hidden></div>
+        </aside>
+      </div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+</body>
+</html>

@@ -1,6 +1,18 @@
 # 项目检查
 
-当前 M4 第四段（2026-10-12）：AccountCandidateRouter 首轮候选自动路由及自动可靠关联变更与保守消息顺序协调已实现，实际 Release 专项 128/128（候选路由 36、关联变更 30、生命周期 62）、Infrastructure Release 251/251、Core Release 296/296、Windows Release 57/57、OCR 25/25 且 `pip check` 通过、Node 五文件 32/32（文档 23、桥 4）、demo 108 项，均退出码 0。Task + 正式 Time 建事项，可靠关联 Change 自动更新同一事项，冲突和 Pending 保存待确认，Notice 保存本地普通通知列表，Ignored 仅保存回执。普通通知列表入库不等于 Windows 系统通知投递，普通通知转任务、完整 M6 重新分析协调、正式界面、OCR 队列、提醒调度、变更一次 Windows 通知和真实 QQ/提醒宿主联调尚未完成。
+正式应用首段（2026-10-12）：AccountWorkspace 已接入三库、账号课程关系及已读，NapCatMessageHost 接收置顶群并尽力读取历史；正式 WPF/WebView2 已自包含发布。合成真实 WebView2 闭环通过，完成/撤销、显式日期确认、接受待确认及重开存储均实际执行。真实 QQ 正式宿主两进程检查退出 0，52 个已加入群、9 个置顶群，40 项待确认，重启仍为 40 项，课程尚未确认，0 个正式任务/通知。本次历史 complete/失败为空不替代持续实时或独立准确率验收。提醒调度、OCR 队列、正式桌面和完整编辑等未完成。应用说明见 [正式应用](../src/MessagePurify.Windows/App/README.md)。
+
+本轮 Infrastructure Release 305/305（工作区 30、宿主 24）、Core 301/301、Windows 77/77，OCR 25/25、demo 108、新应用 Chrome 18/18、应用启动脚本 2/2，完整 Node 七文件 53/53，均退出码 0。正式启动入口已打开真实账号窗口，QQ 保持运行。新验证命令：
+
+```powershell
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app
+node --test tests/application-ui.test.mjs tests/application-launcher.test.mjs
+node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/napcat-launcher.test.mjs tests/napcat-framework-launcher.test.mjs tests/pinned-groups-bridge.test.mjs tests/application-ui.test.mjs tests/application-launcher.test.mjs
+```
+
+WinExe 用 `Start-Process -PassThru -WindowStyle Hidden` 启动，`WaitForExit` 等待并读取退出码；合成检查参数 `--smoke-test --report .tools/app-validation/native-smoke.json`，真实检查参数 `--read-only-check --seconds 20 --report .tools/app-validation/read-only.json`。真实检查凭据只从当前进程环境继承，安全报告只包含数量与错误码。新桥来源/参数 20 项先缺入口红测；工作区/宿主入口、正式页面、配置传递、P0 后果加级缺陷均记录实际先红后绿。未确认发送者的高影响变更保留待确认；课程确认不授予可信身份。已确认群改变关系后旧普通待确认不自动升级。普通通知转任务、M6 重新分析协调、变更一次 Windows 通知尚未完成。真实 QQ 到任务/提醒的完整宿主联调未完成；测试不发 QQ 或 Windows 通知。
+
+上一段 M4 第四段（2026-10-12，历史验证）：AccountCandidateRouter 首轮候选自动路由及自动可靠关联变更与保守消息顺序协调已实现，实际 Release 专项 128/128（候选路由 36、关联变更 30、生命周期 62）、Infrastructure Release 251/251、Core Release 296/296、Windows Release 57/57、OCR 25/25 且 `pip check` 通过、Node 五文件 32/32（文档 23、桥 4）、demo 108 项，均退出码 0。Task + 正式 Time 建事项，可靠关联 Change 自动更新同一事项，冲突和 Pending 保存待确认，Notice 保存本地普通通知列表，Ignored 仅保存回执。普通通知列表入库不等于 Windows 系统通知投递，当时普通通知转任务、完整 M6、正式界面和宿主仍未完成；基础正式界面/只读宿主后来已在本轮接入，提醒调度、OCR 队列及完整真实任务/提醒联调仍未完成。
 
 本轮 `LinkedChangeRoutingTests.cs` 使用真实提取器和临时 SQLite，覆盖取消/延期/新行动/催交、反向入队、预提取批次及更早原消息等待、持久化最新事项替换调用者快照、来源授权、保护时间冲突、取消例外、已完成新行动恢复及历史保留、归档/取消不自动恢复、疑问/OCR/跨群/课程变化、晚到旧消息/同秒/缺来源时间、提取与事项变更整条事务回滚、重试及重启不重放。原 `CandidateRoutingTests.cs` 保留普通未确认发布者、多行动分流、OCR 建议隔离、用户已完成/忽略状态、群范围/限量、暂时排除后的继续处理及账号/目录/数据库归属；可靠取消断言改为自动更新，普通原 Pending/Task/Notice 不升级。
 
@@ -39,7 +51,7 @@ M2 Task 2 新增 85 项行动提取与 13 项优先级检查，核心合计 289 
 
 M2 Task 3 新增 65 条合成样本、6 项 fixture/指标回归测试和 RuleBaseline CLI。实际 Release 核心全量为 295 项（含 6 项 fixture）；CLI 报告完整匹配 65/65、正式 Task 准确率 23/23、需行动召回 47/47、直接自动覆盖 27/47、待确认占比 23/57、高影响错误 0。无效 CLI 参数退出码 2。合成样本不替代真实 QQ 群消息验收。
 
-Node 文档测试包含 23 项检查：协作规则同步、小任务规则优先级、交付文件和文档链接、整体设计及核心开发状态、M2 计划与阶段、全部设计验收场景的计划覆盖、新版演示的保存方式和真实集成边界、QQ 登录与 OneBot 连接分别记录，以及 Shell/Framework 接入边界；真实 QQ 只读结果、用户窗口反馈、启动异常、实时群事件的限定验证和未验收的长期稳定性/补漏范围须同步。生命周期、首轮候选路由与本轮可靠关联变更状态检查明确本地通知入库、自动应用与冲突待确认、持久化最新目标、当前群来源授权、保守消息顺序和后续宿主/M6 边界；只读政策检查：不向 QQ 群或私聊发送消息，测试和任务提醒采用本机 Windows 通知。
+Node 文档测试包含 24 项检查：协作规则同步、小任务规则优先级、交付文件和文档链接、整体设计及核心开发状态、M2 计划与阶段、全部设计验收场景的计划覆盖、新版演示的保存方式和真实集成边界、QQ 登录与 OneBot 连接分别记录，以及 Shell/Framework 接入边界；真实 QQ 只读结果、用户窗口反馈、启动异常、实时群事件的限定验证和未验收的长期稳定性/补漏范围须同步。生命周期、首轮候选路由与本轮可靠关联变更状态检查明确本地通知入库、自动应用与冲突待确认、持久化最新目标、当前群来源授权、保守消息顺序和后续宿主/M6 边界；只读政策检查：不向 QQ 群或私聊发送消息，测试和任务提醒采用本机 Windows 通知。
 
 浏览器测试包含 108 项检查，覆盖原有主题／动画、排序、桌面卡片、图片确认及通知转任务，并新增：首次引导、已读行为、完成 1 小时／忽略 24 小时撤销及刷新、归档恢复、搜索与筛选、手动任务与开始时间、自定义提醒、延期及精度失效、人工字段冲突、新行动要求、取消、图片放大及 OCR 折叠、静音通知内容预览、设置与桌面布局保存。图片日期不再单独勾选，检查没有二次勾选框、未提交建议不确立正式时间、按钮直接提交、修改后保存及刷新、仅日期和图片通知提交。详情栏的回归检查在 1100×800 窗口中确认长内容不被裁切，使用 Chrome 原生鼠标滚轮上下滚动及原生点击固定确认按钮，核对任务／通知的去向和错误提示可见性。课程相关 16 项检查覆盖共享选项、两处自定义入口、刷新和重置、重复／空白名称、取消恢复选择、未提交表单保留、待确认／手动任务使用自定义课程及筛选。测试在截止边界显式验证撤销资格，并通过过期动作检查防止越界恢复；未实际等待 1 小时或 24 小时。动画与系统主题测试显式模拟媒体偏好，不依赖本机 Windows 设置。
 
