@@ -20,6 +20,20 @@ test('同步状态记录真实批次时间和本次运行范围，固定时刻�
   }
 });
 
+test('Windows 登录自动启动已接入，真实登录验收仍后置', () => {
+  const requirements = read('docs/requirements.md');
+  const handoff = read('docs/HANDOFF.md');
+  const readme = read('src/MessagePurify.Windows/App/README.md');
+  assert.match(requirements, /Windows 登录自启动已接入/);
+  assert.match(readme, /HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run/);
+  assert.match(readme, /--background/);
+  assert.match(readme, /登录后的真实系统启动.*(?:后置|待)/);
+  assert.match(read('tests/README.md'), /StartupRegistrationTests.*53\/53/);
+  assert.ok(fs.statSync(path.join(root, 'src/MessagePurify.Windows/App/StartupRegistration.cs')).isFile());
+  assert.ok(fs.statSync(path.join(root, 'src/MessagePurify.Windows/App/AppStartupPreferences.cs')).isFile());
+  assert.match(handoff, /自动启动.*(?:已接入|实现)/);
+});
+
 test('用户 A 已确认两卡片渠道，全部 Windows 系统弹窗和声音取消', () => {
   const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
   assert.match(next, /已确认：第一版仅使用两张桌面卡片/);

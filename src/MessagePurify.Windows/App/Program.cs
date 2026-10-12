@@ -11,6 +11,7 @@ public static class Program
     public static int Main(string[] arguments)
     {
         var check = arguments.Contains("--smoke-test") || arguments.Contains("--read-only-check");
+        var background = arguments.Contains("--background");
         var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MessagePurify", "App");
         var report = Argument(arguments, "--report") ?? Path.Combine(dataRoot, "validation.json");
         if (arguments.Contains("--smoke-test")) dataRoot = Path.Combine(Path.GetTempPath(), "messagepurify-app-" + Guid.NewGuid().ToString("N"));
@@ -42,12 +43,12 @@ public static class Program
             {
                 var synthetic = arguments.Contains("--smoke-test") ? SmokeCheck.CreateWorkspace(dataRoot) : null;
                 runtime = new(dataRoot, synthetic);
-                window = new(runtime, dataRoot, check);
+                window = new(runtime, dataRoot, check || background, registerStartup: !check);
                 var menu = new Forms.ContextMenuStrip();
-                menu.Items.Add("打开消息提纯", null, (_, _) => application.Dispatcher.Invoke(() => { window.Show(); window.Activate(); }));
+                menu.Items.Add("打开消息提纯", null, (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow));
                 menu.Items.Add("退出", null, async (_, _) => await application.Dispatcher.InvokeAsync(Exit).Task.Unwrap());
                 tray.ContextMenuStrip = menu;
-                tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(() => { window.Show(); window.Activate(); });
+                tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow);
                 if (!check || synthetic is not null)
                 {
                     desktop = new(runtime, dataRoot, window.OpenItemAsync);
@@ -101,10 +102,10 @@ public static class Program
             try
             {
                 await using var server = new NamedPipeServerStream("MessagePurify.Application", PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
-                await server.WaitForConnectionAsync(cancellationToken);
+                    await server.WaitForConnectionAsync(cancellationToken);
                 var signal = new byte[1];
                 if (await server.ReadAsync(signal, cancellationToken) == 1)
-                    await window.Dispatcher.InvokeAsync(() => { window.Show(); window.Activate(); });
+                    await window.Dispatcher.InvokeAsync(window.ShowMainWindow);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
             catch (IOException) { }

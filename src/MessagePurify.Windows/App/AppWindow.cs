@@ -18,15 +18,18 @@ public sealed class AppWindow : Window
     private int dirty = 1;
     private bool posting;
     private bool disposed;
+    private bool autoStartEnabled;
     public bool Exiting { get; set; }
     public TaskCompletionSource<bool> Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     public event Action<string, bool>? AppearanceChanged;
     public object DesktopStatus { get; set; } = new { state = "waiting", error = (string?)null };
 
-    public AppWindow(AppRuntime runtime, string dataRoot, bool hidden)
+    public AppWindow(AppRuntime runtime, string dataRoot, bool hidden, bool registerStartup = true)
     {
         this.runtime = runtime;
         this.dataRoot = dataRoot;
+        autoStartEnabled = AppStartupPreferences.Load(dataRoot);
+        if (registerStartup && autoStartEnabled && !StartupRegistration.IsEnabled()) StartupRegistration.SetEnabled(true);
         Title = "消息提纯";
         Width = 1360; Height = 880; MinWidth = 1000; MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -46,6 +49,14 @@ public sealed class AppWindow : Window
     }
 
     private void OnChanged() => Interlocked.Exchange(ref dirty, 1);
+
+    public void ShowMainWindow()
+    {
+        Opacity = 1;
+        ShowInTaskbar = true;
+        Show();
+        Activate();
+    }
 
     private async Task InitializeAsync()
     {
@@ -100,6 +111,26 @@ public sealed class AppWindow : Window
                 Post(new { id = request.Id, success = true });
                 return;
             }
+            if (request!.Operation == "set-autostart")
+            {
+                var enabled = request.Parameters.GetProperty("enabled").GetBoolean();
+                var previous = autoStartEnabled;
+                try
+                {
+                    StartupRegistration.SetEnabled(enabled);
+                    AppStartupPreferences.Save(dataRoot, enabled);
+                    autoStartEnabled = enabled;
+                    Post(new { id = request.Id, success = true, startupEnabled = autoStartEnabled });
+                }
+                catch (Exception exception)
+                {
+                    try { StartupRegistration.SetEnabled(previous); } catch { }
+                    var code = exception is InvalidOperationException { Message: "startup-registration-unavailable" }
+                        ? "startup-registration-unavailable" : "startup-settings-unavailable";
+                    Post(new { id = request.Id, success = false, error = code, startupEnabled = autoStartEnabled });
+                }
+                return;
+            }
             if (request!.Operation != "snapshot")
             {
                 var workspace = runtime.Workspace ?? throw new InvalidOperationException("尚未连接到 QQ 账号。");
@@ -124,15 +155,15 @@ public sealed class AppWindow : Window
         ApplicationSnapshot? snapshot = null;
         try { snapshot = await Task.Run(() => runtime.Workspace?.Snapshot(DateTimeOffset.UtcNow)); }
         catch (Exception) { error ??= "读取本地数据失败，原数据已保留。"; }
-        if (requestId is null) Post(new { type = "state", snapshot, status = runtime.Status, desktop = DesktopStatus, error });
-        else Post(new { id = requestId, success = error is null, error, snapshot, status = runtime.Status, desktop = DesktopStatus });
+        if (requestId is null) Post(new { type = "state", snapshot, status = runtime.Status, desktop = DesktopStatus, startupEnabled = autoStartEnabled, error });
+        else Post(new { id = requestId, success = error is null, error, snapshot, status = runtime.Status, desktop = DesktopStatus, startupEnabled = autoStartEnabled });
     }
 
     public async Task OpenItemAsync(string accountId, string id)
     {
         await Ready.Task;
         if (runtime.Workspace?.AccountId != accountId) return;
-        Show(); Activate();
+        ShowMainWindow();
         await PublishAsync();
         Post(new { type = "open-item", accountId, id });
     }

@@ -27,7 +27,7 @@ function syncAppearance() {
 systemTheme.addEventListener('change', syncAppearance);
 systemMotion.addEventListener('change', syncAppearance);
 
-let snapshot = null, status = null, page = 'tasks', selectedId = null, initialized = false;
+let snapshot = null, status = null, startupEnabled = true, page = 'tasks', selectedId = null, initialized = false;
 let desktop = { state: 'waiting', error: null }, pendingOpenItem = null;
 let filters = { search: '', course: '', state: 'active' }, detailSignature = '', settingsSignature = '', lastFilterPage = null;
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
@@ -64,6 +64,8 @@ function errorLabel(error) {
     napcat_configuration_invalid: 'QQ 连接配置无法识别，请核对本地接口配置。',
     napcat_configuration_unavailable: 'QQ 连接配置暂时无法读取，连接已暂停，请检查文件访问权限。',
     napcat_configuration_ambiguous: '检测到多个启用的 QQ 连接配置，连接已暂停，请核对当前接口。',
+    startup_registration_unavailable: '自动启动设置无法保存，请检查当前用户的注册表权限。',
+    startup_settings_unavailable: '自动启动设置无法保存，本地设置文件未能写入。',
     history_empty_page: '历史消息未继续返回，本群尚未完成补漏。',
     history_no_progress: '历史读取未取得新消息，本群尚未完成补漏。'
   };
@@ -134,6 +136,12 @@ function receive(message) {
       if (!message.success) { hostError = errorLabel(message.error); renderStatus(); }
       return;
     }
+    if (pending.operation === 'set-autostart') {
+      if (!message.success) hostError = errorLabel(message.error);
+      else startupEnabled = Boolean(message.startupEnabled);
+      render();
+      return;
+    }
     if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
       else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: errorLabel(message.error) };
@@ -150,6 +158,7 @@ function receive(message) {
   if (message.type === 'state' && message.error) hostError = errorLabel(message.error);
   if (['attached', 'waiting', 'unavailable'].includes(message.desktop?.state)) desktop = message.desktop;
   if (message.status && (!status || Date.parse(message.status.updatedAt) >= Date.parse(status.updatedAt) || !status.updatedAt)) status = message.status;
+  if (typeof message.startupEnabled === 'boolean') startupEnabled = message.startupEnabled;
   if (message.snapshot) {
     const incoming = message.snapshot;
     const older = snapshot && Date.parse(incoming.generatedAt) < Date.parse(snapshot.generatedAt);
@@ -341,10 +350,11 @@ function updateDetailControls() {
 }
 function renderSettings() {
   const pinnedGroups = (snapshot?.groups || []).filter(group => group.pinned);
-  const signature = JSON.stringify([pinnedGroups, status && { ...status, updatedAt: undefined }, preferences, desktop]);
+  const signature = JSON.stringify([pinnedGroups, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
   if (signature === settingsSignature) return;
   retainFocus($('settings-panel'), () => {
     $('settings-panel').innerHTML = `<section class="settings-section"><h2>界面</h2><div class="setting-row"><span>主题</span><select id="theme-setting"><option value="system">跟随 Windows</option><option value="light">浅色</option><option value="dark">深色</option></select></div><div class="setting-row"><span>动画</span><select id="motion-setting"><option value="system">跟随系统</option><option value="reduce">减少动画</option></select></div></section>
+      <section class="settings-section"><h2>启动</h2><div class="setting-row"><span>登录 Windows 后自动启动</span><select id="autostart-setting"><option value="on">开启</option><option value="off">关闭</option></select></div><p class="hint">开启后登录 Windows 时在托盘后台运行，桌面卡片继续显示。</p></section>
       <section class="settings-section"><h2>课程与置顶群</h2><p>按真实置顶群名称确认课程；无需先填写课程名单。关联变更用于新消息，已有待确认仍需逐项核对。</p>
       ${pinnedGroups.length ? pinnedGroups.map(group => {
         if (!groupDrafts.has(group.groupId)) groupDrafts.set(group.groupId, group.course || group.suggestedCourse || '');
@@ -352,7 +362,7 @@ function renderSettings() {
       }).join('') : '<p class="hint">尚无置顶群名单。连接 QQ 后会显示可确认的真实群。</p>'}</section>
       <section class="settings-section"><h2>${status?.scheduled ? '同步状态' : '接收状态'}</h2><p>${html($('connection-status').textContent)} · ${html($('receiving-status').textContent)}</p>${status?.scheduled ? `<p>上次成功同步（本次运行）：<span id="last-successful-sync">${html(syncTimeLabel(status.lastSuccessfulSyncAt, '本次运行尚无成功同步'))}</span></p><p>下次计划同步：<span id="next-scheduled-sync">${html(syncTimeLabel(status.nextScheduledSyncAt, '计划时间待确认'))}</span></p><p class="hint">每日 08:00、12:00、20:00（北京时间）；游戏期间延后同步。</p>` : `<p>${html($('history-status').textContent)}</p>`}${status?.historyFailures?.length ? '<p>未完成历史读取：</p>' + status.historyFailures.map(failure => `<p>${html(pinnedGroups.find(group => group.groupId === failure.groupId)?.name || failure.groupId)} · ${html(errorLabel(failure.reason))}</p>`).join('') : ''}</section>
       <section class="settings-section"><h2>桌面卡片提醒</h2><p>通过桌面卡片提醒，不播放声音或发送系统通知。</p><p>任务与待确认使用两张常驻桌面卡片，普通群通知仍在通知列表查看。</p><p id="desktop-status">${desktop.state === 'attached' ? '两张桌面卡片已挂载。' : desktop.state === 'unavailable' ? '桌面卡片暂不可用，仍可在主界面查看任务和待确认。' : '桌面卡片正在等待挂载。'}</p></section>`;
-    $('theme-setting').value = preferences.theme; $('motion-setting').value = preferences.motion;
+    $('theme-setting').value = preferences.theme; $('motion-setting').value = preferences.motion; $('autostart-setting').value = startupEnabled ? 'on' : 'off';
   });
   settingsSignature = signature;
 }
@@ -390,6 +400,8 @@ document.addEventListener('change', event => {
     preferences[element.id === 'theme-setting' ? 'theme' : 'motion'] = element.value;
     syncAppearance(); try { localStorage.setItem(preferencesKey, JSON.stringify(preferences)); } catch { toast('界面偏好暂时无法保存'); }
     settingsSignature = '';
+  } else if (element.id === 'autostart-setting') {
+    request('set-autostart', { enabled: element.value === 'on' });
   }
   const form = element.closest('form[data-id]');
   if (form && element.name === 'timeKind') { const item = items().find(item => item.id === form.dataset.id); if (item) draftFor(item).timeKind = element.value; }

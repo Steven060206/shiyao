@@ -16,6 +16,17 @@ public sealed class AppBridgeProtocolTests
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Parses_startup_preference_without_account(bool enabled)
+    {
+        var json = System.Text.Json.JsonSerializer.Serialize(new { id = "startup", operation = "set-autostart", parameters = new { enabled } });
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out var request));
+        Assert.Equal("set-autostart", request!.Operation);
+        Assert.Equal(enabled, request.Parameters.GetProperty("enabled").GetBoolean());
+    }
+
+    [Theory]
     [InlineData("{\"theme\":\"system\",\"reducedMotion\":false}")]
     [InlineData("{\"theme\":\"dark\"}")]
     [InlineData("{\"theme\":\"dark\",\"reducedMotion\":\"true\"}")]

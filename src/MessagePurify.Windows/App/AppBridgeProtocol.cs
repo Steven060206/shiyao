@@ -12,12 +12,12 @@ public static class AppBridgeProtocol
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
-        "reject", "accept-review", "accept-time", "confirm-group", "mark-read", "set-appearance"
+        "reject", "accept-review", "accept-time", "confirm-group", "mark-read", "set-appearance", "set-autostart"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {
         "accountId", "id", "operationId", "version", "date", "time", "timeKind",
-        "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion"
+        "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled"
     };
 
     public static bool IsTrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -40,6 +40,13 @@ public static class AppBridgeProtocol
                 if (parameters.EnumerateObject().Count() != 2 || !Text(parameters, "theme", 8, out var theme)
                     || theme is not ("light" or "dark") || !parameters.TryGetProperty("reducedMotion", out var motion)
                     || motion.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
+                request = new(id, operation, parameters.Clone());
+                return true;
+            }
+            if (operation == "set-autostart")
+            {
+                if (parameters.EnumerateObject().Count() != 1 || !parameters.TryGetProperty("enabled", out var enabled)
+                    || enabled.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
                 request = new(id, operation, parameters.Clone());
                 return true;
             }

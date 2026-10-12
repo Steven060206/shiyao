@@ -1,5 +1,11 @@
 # 项目检查
 
+## 本轮 Windows 登录自动启动实现（2026-10-12）
+
+自动启动使用当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，值为带引号的正式 `MessagePurify.exe --background`；默认开启，设置页可关闭并重新开启。`--background` 隐藏主窗口，保留托盘和桌面卡片；普通手动入口仍显示主窗口。验证模式不会写入当前用户的 Run 项，设置文件使用原子替换并在注册表/文件写入失败时回滚注册表状态。
+
+自动回归：`StartupRegistrationTests` 与 `AppBridgeProtocolTests` 53/53，正式页面 `node --test tests/application-ui.test.mjs` 29/29，应用 Release build 退出 0 且无警告；`git diff --check` 退出 0。直接启动发布版 PID 35380 后，实际查询到 Run 项为 `"D:\ai制作的软件\消息提纯\.tools\published\app-launcher\MessagePurify.exe" --background`；唯一实例先以 `--background` 启动时主窗口句柄为 0，随后从普通入口启动同一 PID 后主窗口正确显示，托盘检查通过；`--smoke-test` 不写入 Run 项。登录后的真实 Windows 自启动和关闭/重新开启的实机验收按用户要求后置到全部确定功能完成后。
+
 ## 本轮消息提纯便捷启动入口（2026-10-12）
 
 新增 `Install-MessagePurifyShortcuts.ps1`：桌面和开始菜单“消息提纯”快捷方式直接指向正式 `MessagePurify.exe`，空参数、正常窗口、发布目录为 `.tools/published/app-launcher/`；同名冲突保留原入口，重复安装保持一致，QQ 快捷方式不改。应用直接启动时优先使用环境凭据，缺失时只读唯一启用的本机 3001 NapCat 配置，配置错误不猜选且不输出凭据。
@@ -22,7 +28,7 @@
 
 实际 UI Automation 执行确认按钮、原生桌面完成、已完成页撤销；只读 SQLite 验证任务 active → completed → active、正式时间 2026-10-09/Time=null/TimeProtected=true、证据保留 1 条、待确认转为 accepted。托盘脚本首轮未找到退出菜单，原因未确定；同一 `tests/app_tray_test.ps1 -ProcessId 8540 -ExitApplication -Verbose` 重跑退出 0、ExitVerified=true，应用退出码 0，未改生产代码。默认入口重开进程 5128，数据库无重复、两卡片父窗/style 正常，原生卡片点击打开的正式日期和原文通过。首次 UIA 读取因未读点及异步详情时序失败，按实际标签兼容未读点并等待详情就绪后通过，未修改生产逻辑。
 
-本机只读报告位于 `.tools/desktop-validation/`：`real-task-accepted.json`、`real-task-completed.json`、`real-task-restored.json`、`real-task-reopened.json`、`real-task-desktop-accepted.json`、`real-task-desktop-reopened.json`、`real-task-native-detail.json`。QQ 未退出，未发送 QQ/Windows 通知；主界面停在真实任务详情，可由用户核对。下一步继续同步状态、自启动、OCR 队列及其他真实任务/桌面恢复场景。
+本机只读报告位于 `.tools/desktop-validation/`：`real-task-accepted.json`、`real-task-completed.json`、`real-task-restored.json`、`real-task-reopened.json`、`real-task-desktop-accepted.json`、`real-task-desktop-reopened.json`、`real-task-native-detail.json`。QQ 未退出，未发送 QQ/Windows 通知；主界面停在真实任务详情，可由用户核对。下一步继续 OCR 队列及其他真实任务/桌面恢复场景。
 
 新增 `AccountWorkspaceTests.DateOnlyReview_UsesOriginalMessageDayAndSurvivesCompleteUndoAndReopen`，采用通用材料文本与合成账号，覆盖以原发送日解析“明天”、日期精度、显式确认、P0、完成/撤销及重开证据保留；单项 1/1、Infrastructure 完整 Release 419/419 通过。文档回归更新当前数量与真实日期确认边界，Node 全量 72/72。生产代码未改，不重新发布，也未重跑未改动的 Core/Windows/OCR/demo。
 

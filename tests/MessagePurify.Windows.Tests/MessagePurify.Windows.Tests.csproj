@@ -15,6 +15,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="../../src/MessagePurify.Windows/App/NapCatConnectionConfiguration.cs" Link="NapCatConnectionConfiguration.cs" />
+    <Compile Include="../../src/MessagePurify.Windows/App/StartupRegistration.cs" Link="StartupRegistration.cs" />
+    <Compile Include="../../src/MessagePurify.Windows/App/AppStartupPreferences.cs" Link="AppStartupPreferences.cs" />
     <Compile Include="../../src/MessagePurify.Windows/App/AppBridgeProtocol.cs" Link="AppBridgeProtocol.cs" />
     <Compile Include="../../src/MessagePurify.Windows/App/DesktopCardProjection.cs" Link="DesktopCardProjection.cs" />
     <Compile Include="../../src/MessagePurify.Windows/App/DesktopLayoutStore.cs" Link="DesktopLayoutStore.cs" />

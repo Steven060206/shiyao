@@ -37,13 +37,14 @@ const status = { transport: 'connected', qq: 'online', receiving: 'active', hist
 const mockScript = `(() => {
   const listeners = new Set();
   const clone = value => JSON.parse(JSON.stringify(value));
-  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, messages: [], hold: true, held: [], failNext: null };
+  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, startupEnabled: true, messages: [], hold: true, held: [], failNext: null };
   backend.emit = data => listeners.forEach(listener => listener({data:clone(data)}));
-  backend.push = () => backend.emit({type:'state',snapshot:backend.snapshot,status:backend.status});
+  backend.push = () => backend.emit({type:'state',snapshot:backend.snapshot,status:backend.status,startupEnabled:backend.startupEnabled});
   backend.release = () => { backend.hold=false; for (const command of backend.held.splice(0)) respond(command); };
   function respond(command) {
     const parameters=command.parameters || {};
     if(command.operation==='set-appearance') { backend.appearance=clone(parameters);backend.emit({id:command.id,success:true});return; }
+    if(command.operation==='set-autostart') { backend.startupEnabled=parameters.enabled;backend.emit({id:command.id,success:true,startupEnabled:backend.startupEnabled});return; }
     if (backend.failNext && command.operation !== 'snapshot' && command.operation !== 'mark-read') {
       const error=backend.failNext;backend.failNext=null;backend.emit({id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
     }
@@ -321,6 +322,15 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.doesNotMatch(await body(), /desktop-unavailable/);
       await capture('ui-desktop-settings-unavailable.png');
       await evaluate('backend.emit({type:"state",desktop:{state:"attached",error:null}})');
+    });
+    await t.test('设置可关闭并重新开启 Windows 登录自动启动', async () => {
+      assert.equal(await evaluate('document.querySelector("#autostart-setting").value'), 'on');
+      await change('#autostart-setting', 'off');
+      assert.deepEqual(await evaluate('backend.messages.filter(message=>message.operation==="set-autostart").at(-1).parameters'), { enabled: false });
+      assert.equal(await evaluate('document.querySelector("#autostart-setting").value'), 'off');
+      await change('#autostart-setting', 'on');
+      assert.deepEqual(await evaluate('backend.messages.filter(message=>message.operation==="set-autostart").at(-1).parameters'), { enabled: true });
+      assert.equal(await evaluate('document.querySelector("#autostart-setting").value'), 'on');
     });
     await t.test('外观桥使用有效主题与布尔运动偏好，用户选择和系统变化即时同步', async () => {
       const appearance = () => evaluate('backend.messages.filter(message=>message.operation==="set-appearance").at(-1)');

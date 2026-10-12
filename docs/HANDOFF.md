@@ -2,13 +2,15 @@
 
 最后更新：2026-10-12（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前实施（基线 `07b6d9c`）：消息提纯自身的桌面与开始菜单便捷入口已完成。首轮指向隐藏 PowerShell 的入口被火绒隔离：桌面于北京时间 18:06:54、开始菜单于 18:06:56，分类 TrojanDownloader/LNK.Agent.g；只读核对 QuarantineEx.db/FilesV3_60 和 log.db/HrLogV3_60 的对应路径与时间，未修改安全设置或隔离内容。现改为普通快捷方式直接指向 MessagePurify.exe、空参数和正常窗口；应用自身读取唯一启用的本机 3001 配置，环境凭据优先，损坏/歧义仅报告安全错误码。
+上一段实施（基线 `07b6d9c`）：消息提纯自身的桌面与开始菜单便捷入口已完成。首轮指向隐藏 PowerShell 的入口被火绒隔离：桌面于北京时间 18:06:54、开始菜单于 18:06:56，分类 TrojanDownloader/LNK.Agent.g；只读核对 QuarantineEx.db/FilesV3_60 和 log.db/HrLogV3_60 的对应路径与时间，未修改安全设置或隔离内容。现改为普通快捷方式直接指向 MessagePurify.exe、空参数和正常窗口；应用自身读取唯一启用的本机 3001 配置，环境凭据优先，损坏/歧义仅报告安全错误码。
 
-本轮验证：快捷方式/旧启动脚本 7/7、配置读取专项 11/11、Windows Release 164/164、Node 全量 80/80；自包含发布至 `.tools/published/app-launcher/`，默认入口 `-CheckOnly` Ready/AuthenticationReady=true，Native 合成 13 项报告 `.tools/desktop-validation/app-launcher-native.json` success=true。当前安装报告 `.tools/desktop-validation/app-launcher-shortcuts-installed.json` 记录桌面与开始菜单入口已实际安装并检查；桌面入口启动 PID 13596，两个桌面卡片均 visible/child/noActivate=true、parentClass=SHELLDLL_DefView、topmost=false。开始菜单入口再次启动保持单实例，主窗口隐藏后再次启动唤回；真实只读报告 `.tools/desktop-validation/app-launcher-read-only.json` 为 connected/online、历史 complete、失败为空，UIA 显示等待下次同步、18:29 成功时间及 20:00 计划时间。QQ 快捷方式和同步规则保持，Windows 登录自启动和 OCR 队列仍待实现。
+上一段验证：快捷方式/旧启动脚本 7/7、配置读取专项 11/11、Windows Release 164/164、Node 全量 80/80；自包含发布至 `.tools/published/app-launcher/`，默认入口 `-CheckOnly` Ready/AuthenticationReady=true，Native 合成 13 项报告 `.tools/desktop-validation/app-launcher-native.json` success=true。当前安装报告 `.tools/desktop-validation/app-launcher-shortcuts-installed.json` 记录桌面与开始菜单入口已实际安装并检查；桌面入口启动 PID 13596，两个桌面卡片均 visible/child/noActivate=true、parentClass=SHELLDLL_DefView、topmost=false。开始菜单入口再次启动保持单实例，主窗口隐藏后再次启动唤回；真实只读报告 `.tools/desktop-validation/app-launcher-read-only.json` 为 connected/online、历史 complete、失败为空，UIA 显示等待下次同步、18:29 成功时间及 20:00 计划时间。QQ 快捷方式和同步规则保持。
 
 最新工作顺序（2026-10-12）：用户要求先把已确定的功能全部实现，再统一进行验收。后续按 Windows 登录自动启动 → 图片下载与 OCR 队列 → 完整编辑/变更标记/通知转任务 → 合并拆分 → 备份恢复 → 桌面卡片恢复推进；自然固定时刻、实际游戏暂停/补同步、长期稳定性和完整真实端到端场景等验收统一后置。关机/睡眠漏同步规则仍是未决定事项，不在未确认前实现。
 
-当前接续（基线 `b4dc8e9`）：常驻同步状态显示已实现并验证，正常等待、正在同步、游戏延后、未补全及连接异常分别显示。上次成功同步（本次运行）仅在实际完成且没有历史失败的批次结束后记录；重连、游戏暂停及状态刷新保留该时间，下一计划时间复用北京时间调度规则。本轮发布至 `.tools/published/app-sync-status/` 并更新默认入口，正式应用已重开为 PID 40840，主窗口停在设置页；真实界面显示等待下次同步、17:51 成功时间及今晚 20:00 计划时间，两卡片和 QQ/接口保持运行。便捷启动、自启动、OCR 队列、自然固定时刻及实际游戏验收继续保留，整体 M3/M8 不标完成。
+上一段接续（基线 `b4dc8e9`）：常驻同步状态显示已实现并验证，正常等待、正在同步、游戏延后、未补全及连接异常分别显示。上次成功同步（本次运行）仅在实际完成且没有历史失败的批次结束后记录；重连、游戏暂停及状态刷新保留该时间，下一计划时间复用北京时间调度规则。本轮发布至 `.tools/published/app-sync-status/` 并更新默认入口，正式应用已重开为 PID 40840，主窗口停在设置页；真实界面显示等待下次同步、17:51 成功时间及今晚 20:00 计划时间，两卡片和 QQ/接口保持运行。便捷启动、自启动、OCR 队列、自然固定时刻及实际游戏验收继续保留，整体 M3/M8 不标完成。
+
+当前接续（Windows 登录自动启动，2026-10-12）：自动启动已接入生产代码和设置页。使用当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`，默认注册 `MessagePurify.exe --background`；`--background` 隐藏主窗口但保留托盘和桌面卡片，普通入口唤回同一实例后正确恢复主窗口，托盘入口也复用该路径。`app-settings.json` 原子保存偏好；注册表或偏好文件写入失败时回滚注册表状态并返回可读错误。验证模式不会写入当前用户 Run 项。`StartupRegistrationTests` 与 `AppBridgeProtocolTests` 53/53、正式页面 29/29、应用 Release build 退出 0 且无警告，`git diff --check` 退出 0；发布版后台启动、普通入口唤回、Run 项查询和托盘检查均通过。登录后的真实 Windows 自启动验收统一后置；下一项继续图片下载与 OCR 队列。
 
 当前验收顺序：用户要求先验证真实 QQ 接入、首次后台同步、批次结束后保持连接及桌面卡片；实际游戏期间暂停/退出后补同步的实机验收延后，游戏禁止同步与自动维护名单的有效需求不变。用户正常退出后，已于约 17:01 重开 Framework；真实首次后台同步与重开去重通过，两张正式卡片及托盘常驻已实际检查。QQ 和正式应用保持运行，主窗口停在新版设置页，显示同步状态，3001/6099 监听且正式应用连接保持。以下上段“未运行/未启动”描述是历史快照，当前结果以本段及本轮记录为准。
 
@@ -38,9 +40,9 @@
 - 先读项目根目录的 `AGENTS.md`；恢复工作时先读 `docs/HANDOFF.md`，再读 `docs/requirements.md`，然后核对实际文件。
 - 普通 QQ 登录不作为 OneBot 连接成功；本轮正式宿主使用只读接口并持久化真实群消息，合成页面操作和真实接收分别记录。
 - 最新规则及结果：只读取 QQ 置顶群。本轮真实只读复查读取 52 个已加入群名单、9 个置顶群历史，当次读取 complete、失败为空，保存 48 项待确认，0 个正式任务/通知；此前两次为 40 项。未自动确认真实课程或日期，没有 QQ 发送或 Windows 通知。Infrastructure 最新完整回归 428/428；动态置顶人工验收、持续实时和长期稳定性未完成，M3 不改为完成。
-- 当前阶段：**整体设计已确认，用户反馈 demo 基本满足要求，实施计划已写入并授权持续开发。M1 已完成，M2 已完成，M3 正在实施并保留真实接收/长期稳定性验收。M4 四段本地基础及正式 WPF/WebView2 主界面、AccountWorkspace 和只读宿主已接入；真实 QQ 历史接收/重启去重、合成 WebView2 已通过。旧方案持久化提醒第一段已验证并保留，Windows 全部系统通知与声音已取消；正式两张桌面卡片首段已实现并验证，当前快照、查看/完成、主题、布局存盘和实际桌面层级通过。多屏、Explorer 重启和睡眠恢复尚未验收；OCR 队列、自启动、M6 修复、完整变化标记/编辑/合并拆分、持续真实使用和完整端到端验收仍未完成，M8 不标为完成。**
+- 当前阶段：**整体设计已确认，用户反馈 demo 基本满足要求，实施计划已写入并授权持续开发。M1 已完成，M2 已完成，M3 正在实施并保留真实接收/长期稳定性验收。M4 四段本地基础及正式 WPF/WebView2 主界面、AccountWorkspace 和只读宿主已接入；真实 QQ 历史接收/重启去重、合成 WebView2 已通过。旧方案持久化提醒第一段已验证并保留，Windows 全部系统通知与声音已取消；正式两张桌面卡片首段已实现并验证，当前快照、查看/完成、主题、布局存盘和实际桌面层级通过。Windows 登录自动启动已接入代码并完成自动/合成验证，登录后的真实系统验收后置。多屏、Explorer 重启和睡眠恢复尚未验收；OCR 队列、M6 修复、完整变化标记/编辑/合并拆分、持续真实使用和完整端到端验收仍未完成，M8 不标为完成。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`；NapCat Shell 与 Framework 的显式路径启动准备位于 `packaging/napcat/`，对应路径回归在 `tests/napcat-launcher.test.mjs` 和 `tests/napcat-framework-launcher.test.mjs`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
-- 历史 demo/probe 概述（本轮正式结果见下节）：demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；当时分页读取 41/52 到达边界、窗口内去重 1098 条，11 群未补全，详见下节。用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。没有注册正式自启动；桌面探针基本操作与当时静音提醒呈现/点击通过，长期稳定性及桌面恢复/多屏仍未验收；声音提醒已取消。
+- 历史 demo/probe 概述（本轮正式结果见下节）：demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；当时分页读取 41/52 到达边界、窗口内去重 1098 条，11 群未补全，详见下节。用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。此前历史版本没有注册正式自启动；本轮已接入代码，登录后的真实系统验收后置。桌面探针基本操作与当时静音提醒呈现/点击通过，长期稳定性及桌面恢复/多屏仍未验收；声音提醒已取消。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
 
 ### 本轮同步状态与时间显示（2026-10-12，已发布并重开）
@@ -705,3 +707,4 @@
 | 2026-10-11 | 静音提醒呈现与点击通过，恢复 Framework 并扩展真实历史分页 | ID 36667 用户确认，点击 Probe ID 匹配；修复带游标读取方向，Infrastructure 60/60。全群复测 41/52 到达边界、窗口内去重 1098，11 群持续 1200 保留未补全；真实 CLI 退出 1，不宣称完整补漏。详细命令、自动回归和范围见第 1 节及集成验证文档；M3 继续实施 |
 
 | 2026-10-11 | 受控重连与跨连接去重限定范围通过 | 新增主动重连探针及回归，Infrastructure 67/67；真实两次账号核对 2/2、重连 1/1，历史 2206、去重 1098、重复 1108。11 群每轮持续 1200，CLI 退出 1；模拟新消息补回与真实无新消息分开记录，正式自动恢复/持久化仍未完成 |
+| 2026-10-12 | 接入 Windows 登录自动启动 | 新增当前用户 Run 注册、`--background` 后台入口、设置页开关和原子偏好文件；验证模式不写入 Run 项，注册表/偏好写入失败回滚注册表状态；修复后台实例被普通入口唤回后主窗口仍透明的问题。`StartupRegistrationTests` 与 `AppBridgeProtocolTests` 53/53、正式页面 29/29、应用 Release build 无警告错误、Native 13 项及默认入口检查通过；发布并重开 `.tools/published/app-launcher/`，后台启动/普通入口唤回/Run 项/托盘检查通过，真实登录 Windows 自启动验收后置，下一项为 OCR 队列 |
