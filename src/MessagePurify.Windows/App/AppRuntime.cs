@@ -41,7 +41,6 @@ public sealed class AppRuntime
     private async Task RunAsync()
     {
         var endpoint = new Uri("ws://127.0.0.1:3001/");
-        var accessToken = Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN");
         var timeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
         var scheduler = new ScheduledSyncRunner(syncController,
             new ScheduledSyncPlanner(timeZone), gameCatalog);
@@ -56,6 +55,9 @@ public sealed class AppRuntime
             {
                 try
                 {
+                    var accessToken = NapCatConnectionConfiguration.ReadAccessToken(
+                        Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN"),
+                        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../napcat/framework/v4.18.37/package/config")));
                     if (Workspace is null)
                     {
                         Status = Status with { Transport = "connecting", Error = null, UpdatedAt = DateTimeOffset.UtcNow };

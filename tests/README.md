@@ -1,5 +1,11 @@
 # 项目检查
 
+## 本轮消息提纯便捷启动入口（2026-10-12）
+
+新增 `Install-MessagePurifyShortcuts.ps1`：桌面和开始菜单“消息提纯”快捷方式直接指向正式 `MessagePurify.exe`，空参数、正常窗口、发布目录为 `.tools/published/app-launcher/`；同名冲突保留原入口，重复安装保持一致，QQ 快捷方式不改。应用直接启动时优先使用环境凭据，缺失时只读唯一启用的本机 3001 NapCat 配置，配置错误不猜选且不输出凭据。
+
+已执行 `node --test tests/application-shortcuts.test.mjs tests/application-launcher.test.mjs tests/application-ui.test.mjs`，快捷方式/入口 7/7、正式页面 35/35；`NapCatConnectionConfigurationTests` 11/11，Windows Release 164/164，Node 全量 80/80。覆盖真实 Windows COM 属性、中文和空格路径、指定发布目录、缺发布/同名冲突、重复安装、环境凭据优先、本机地址过滤、跨文件/同文件歧义、损坏配置脱敏及三种页面错误提示。新产物已发布至 `.tools/published/app-launcher/`；`app-launcher-native.json` success=true、13 项 Native 合成通过，默认入口 `-CheckOnly` Ready/AuthenticationReady=true。当前桌面和开始菜单入口实际安装并启动 PID 13596，两个卡片的桌面父窗/style 检查通过；开始菜单重复启动保持单实例，隐藏主窗口后再次启动唤回；真实只读 `app-launcher-read-only.json` connected/online、历史 complete、失败为空，UIA 时间报告显示 18:29 成功时间和 20:00 计划时间。自然固定时刻、实际游戏暂停/补同步、长期稳定性仍未验收。
+
 ## 本轮同步状态与时间显示验收（2026-10-12）
 
 同步状态显示已实现并验证：正常等待、正在同步、游戏延后、名单未就绪、未补全和连接故障分别显示；“上次成功同步（本次运行）”只记录实际完成且没有历史失败的批次，状态刷新、游戏暂停、失败和空闲重连不伪造成功时间。该时间暂不跨进程持久化；“下次计划同步”复用北京时间 08:00/12:00/20:00，游戏期间继续延后。Chrome 用 America/New_York 时区验证北京时间显示、无记录空状态、草稿/焦点/选择范围和迟到旧状态。

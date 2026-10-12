@@ -166,6 +166,20 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       }
       await evaluate(`backend.status=${JSON.stringify(status)};backend.push()`); await nav('pending');
     });
+    await t.test('直接启动的连接配置错误显示可读原因并保留本地事项', async () => {
+      for (const [error, message] of [
+        ['napcat-configuration-invalid', 'QQ 连接配置无法识别，请核对本地接口配置。'],
+        ['napcat-configuration-unavailable', 'QQ 连接配置暂时无法读取，连接已暂停，请检查文件访问权限。'],
+        ['napcat-configuration-ambiguous', '检测到多个启用的 QQ 连接配置，连接已暂停，请核对当前接口。']
+      ]) {
+        await evaluate(`backend.status={...backend.status,transport:"disconnected",qq:"unknown",receiving:"paused",error:${JSON.stringify(error)}};backend.push()`);
+        assert.equal(await evaluate('document.querySelector("#host-error").textContent'), message);
+        assert.equal(await evaluate('document.querySelector("#host-error").hidden'), false);
+        assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '消息接收已暂停');
+        assert.ok(await evaluate('document.querySelectorAll(".task-row").length') > 0);
+      }
+      await evaluate(`backend.status=${JSON.stringify(status)};backend.push()`);
+    });
     await t.test('游戏期间明确显示延后同步且保留本地事项', async () => {
       await evaluate('backend.status={...backend.status,scheduled:true,receiving:"paused",error:"game-active"};backend.push()');
       assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '游戏中，同步已延后');

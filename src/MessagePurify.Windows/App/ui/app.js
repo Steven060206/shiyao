@@ -61,6 +61,9 @@ function errorLabel(error) {
     pinned_groups_unavailable: '暂时无法读取置顶群范围',
     pinned_state_unavailable: '暂时无法读取置顶群范围，消息接收已暂停。',
     connection_unavailable: '暂未连接 QQ，请确认电脑上的 QQ 已登录。',
+    napcat_configuration_invalid: 'QQ 连接配置无法识别，请核对本地接口配置。',
+    napcat_configuration_unavailable: 'QQ 连接配置暂时无法读取，连接已暂停，请检查文件访问权限。',
+    napcat_configuration_ambiguous: '检测到多个启用的 QQ 连接配置，连接已暂停，请核对当前接口。',
     history_empty_page: '历史消息未继续返回，本群尚未完成补漏。',
     history_no_progress: '历史读取未取得新消息，本群尚未完成补漏。'
   };
