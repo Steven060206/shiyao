@@ -34,6 +34,18 @@ test('Windows 登录自动启动已接入，真实登录验收仍后置', () => 
   assert.match(handoff, /自动启动.*(?:已接入|实现)/);
 });
 
+test('OCR 后置且 QQ 只读边界保持为硬约束', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md',
+    'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /OCR.*(?:后期独立项目|后期基础|后置)/s, file);
+    assert.match(content, /(?:不得|绝不|不向|只读).*QQ.*(?:群聊|群|私聊).*发送|QQ.*只读.*(?:不得|绝不|不向).*发送/s, file);
+  }
+  const requirements = read('docs/requirements.md');
+  assert.match(requirements, /下一项实现完整编辑.*通知转任务.*合并拆分.*备份恢复.*桌面卡片恢复/s);
+  assert.doesNotMatch(requirements.split('## 4. 图片辅助')[0], /下一项实现图片下载与 OCR 队列/);
+});
+
 test('用户 A 已确认两卡片渠道，全部 Windows 系统弹窗和声音取消', () => {
   const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
   assert.match(next, /已确认：第一版仅使用两张桌面卡片/);
@@ -445,7 +457,8 @@ test('先完成确定功能，再统一进行真实验收', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
     const current = read(file).split('## 2.')[0];
     assert.match(current, /(?:当前开发顺序|最新工作顺序).*先.*(?:功能|已确定).*统一.*验收/s, file);
-    assert.match(current, /Windows 登录自动启动.*OCR.*完整编辑.*合并拆分.*备份恢复.*桌面卡片恢复/s, file);
+    assert.match(current, /Windows 登录自动启动.*完整编辑.*合并拆分.*备份恢复.*桌面卡片恢复/s, file);
+    assert.match(current, /OCR.*(?:后期独立项目|后置)/s, file);
     assert.match(current, /(?:统一|真实).*验收.*(?:后置|完成后)/s, file);
     assert.match(current, /游戏禁止同步.*(?:保持有效|有效需求不变)/, file);
     assert.match(current, /关机\/睡眠漏同步规则仍(?:是)?未决定事项|关机\/睡眠漏同步规则待确认/, file);
