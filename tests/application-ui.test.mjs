@@ -141,13 +141,61 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'cancel1', '快照之后兑现桌面打开请求');
     });
     await waitFor('!!document.querySelector(".task-row")');
+    await t.test('常驻同步区分空闲、读取、未补全和连接故障', async () => {
+      await evaluate(`backend.status={...${JSON.stringify(status)},scheduled:true,receiving:"paused",history:"complete",historyFailures:[]};backend.push()`);
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '等待下次同步');
+      assert.equal(await evaluate('document.querySelector("#history-status").textContent'), '等待下次同步');
+      assert.equal(await evaluate('document.querySelector("#host-error").hidden'), true);
+      await evaluate('backend.status.history="pending";backend.push()');
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '等待下次同步');
+      await evaluate('backend.status.history="reading";backend.status.receiving="active";backend.push()');
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '正在同步置顶群消息');
+      await evaluate(`backend.status.history="partial";backend.status.receiving="paused";backend.status.historyFailures=${JSON.stringify(status.historyFailures)};backend.push()`);
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '同步未补全');
+      await nav('settings');
+      assert.match(await evaluate('document.querySelector("#settings-panel").textContent'), /课程群.*历史读取超时/s);
+      for (const fields of [
+        { transport: 'connecting', qq: 'unknown', error: null },
+        { transport: 'disconnected', qq: 'unknown', error: 'connection-failed' },
+        { transport: 'connected', qq: 'offline', error: 'qq-offline' },
+        { transport: 'connected', qq: 'online', error: 'pinned-state-unavailable' }
+      ]) {
+        await evaluate(`backend.status={...backend.status,...${JSON.stringify(fields)},history:"complete",historyFailures:[]};backend.push()`);
+        assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '同步已暂停');
+        assert.doesNotMatch(await evaluate('document.querySelector("#settings-panel").textContent'), /等待下次同步/);
+      }
+      await evaluate(`backend.status=${JSON.stringify(status)};backend.push()`); await nav('pending');
+    });
     await t.test('游戏期间明确显示延后同步且保留本地事项', async () => {
-      await evaluate('backend.status={...backend.status,receiving:"paused",error:"game-active"};backend.push()');
+      await evaluate('backend.status={...backend.status,scheduled:true,receiving:"paused",error:"game-active"};backend.push()');
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '游戏中，同步已延后');
+      assert.equal(await evaluate('document.querySelector("#history-status").textContent'), '游戏中，同步已延后');
       assert.match(await evaluate('document.querySelector("#host-error").textContent'), /游戏运行中.*退出游戏后.*一次/);
       assert.ok(await evaluate('document.querySelectorAll(".task-row").length') > 0);
       await evaluate('backend.status={...backend.status,error:"game-catalog-unavailable"};backend.push()');
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '检测名单未就绪，同步已暂停');
       assert.match(await evaluate('document.querySelector("#host-error").textContent'), /游戏名单.*暂停/);
       await evaluate(`backend.status=${JSON.stringify(status)};backend.push()`);
+    });
+    await t.test('同步时间使用北京时间、注明本次运行且状态推送保留课程草稿焦点', async () => {
+      await evaluate(`backend.status={...${JSON.stringify(status)},scheduled:true,receiving:"paused",history:"complete",historyFailures:[],lastSuccessfulSyncAt:null,nextScheduledSyncAt:"2026-10-13T00:00:00Z"};backend.push()`);
+      await nav('settings');
+      assert.equal(await evaluate('document.querySelector("#last-successful-sync").textContent'), '本次运行尚无成功同步');
+      assert.equal(await evaluate('document.querySelector("#next-scheduled-sync").textContent'), '2026-10-13 08:00（北京时间）');
+      assert.match(await evaluate('document.querySelector("#settings-panel").textContent'), /上次成功同步（本次运行）/);
+      await change('[data-group-id="100"] input[name=course]', '尚未提交的课程');
+      await evaluate('document.querySelector("[data-group-id=\\"100\\"] input").focus();document.activeElement.setSelectionRange(2,5);backend.status.lastSuccessfulSyncAt="2026-10-12T00:05:00Z";backend.status.nextScheduledSyncAt="2026-10-12T04:00:00Z";backend.push()');
+      assert.equal(await evaluate('document.querySelector("#last-successful-sync").textContent'), '2026-10-12 08:05（北京时间）');
+      assert.equal(await evaluate('document.querySelector("#next-scheduled-sync").textContent'), '2026-10-12 12:00（北京时间）');
+      assert.equal(await evaluate('document.activeElement.name'), 'course');
+      assert.equal(await evaluate('document.activeElement.value'), '尚未提交的课程');
+      assert.deepEqual(await evaluate('[document.activeElement.selectionStart,document.activeElement.selectionEnd]'), [2, 5]);
+      await evaluate('backend.emit({type:"state",status:{...backend.status,updatedAt:"2000-01-01T00:00:00Z",lastSuccessfulSyncAt:"2000-01-01T00:00:00Z",nextScheduledSyncAt:null,transport:"disconnected"}})');
+      assert.equal(await evaluate('document.querySelector("#last-successful-sync").textContent'), '2026-10-12 08:05（北京时间）');
+      assert.equal(await evaluate('document.querySelector("#next-scheduled-sync").textContent'), '2026-10-12 12:00（北京时间）');
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '等待下次同步');
+      await change('[data-group-id="100"] input[name=course]', '物理课程');
+      await evaluate(`backend.status=${JSON.stringify(status)};backend.push()`); await nav('pending');
     });
     await t.test('首次有待确认默认进入待确认，来源正文安全且图片不发请求', async () => {
       assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'pending');

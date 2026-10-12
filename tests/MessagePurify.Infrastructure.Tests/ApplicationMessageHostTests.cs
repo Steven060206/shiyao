@@ -23,6 +23,9 @@ public sealed class ApplicationMessageHostTests : IDisposable
         Assert.Equal("unknown", host.Status.Qq);
         Assert.Equal("paused", host.Status.Receiving);
         Assert.Equal("pending", host.Status.History);
+        Assert.False(host.Status.Scheduled);
+        Assert.Null(host.Status.LastSuccessfulSyncAt);
+        Assert.Null(host.Status.NextScheduledSyncAt);
     }
 
     [Fact]
@@ -40,19 +43,98 @@ public sealed class ApplicationMessageHostTests : IDisposable
         var running = host.RunAsync(cancellation.Token);
         try
         {
-            await UntilAsync(() => server.ConnectionCount == 1 && host.Status.Receiving == "paused");
+            await UntilAsync(() => host.Status.Transport == "connected" && host.Status.Receiving == "paused");
             Assert.Empty(server.HistoryParameters);
+            Assert.True(host.Status.Scheduled);
+            Assert.Equal("pending", host.Status.History);
+            Assert.Null(host.Status.LastSuccessfulSyncAt);
+            Assert.True(host.Status.NextScheduledSyncAt > host.Status.UpdatedAt);
+            var startedAt = DateTimeOffset.UtcNow;
             controller.Request(new(SyncRequestKind.Scheduled,
                 DateTimeOffset.Parse("2026-10-12T08:00:00+08:00"), DateTimeOffset.UtcNow));
-            await UntilAsync(() => host.Status.History == "complete" && server.HistoryParameters.Count == 1);
+            await UntilAsync(() => host.Status.History == "complete" && host.Status.Receiving == "paused"
+                && server.HistoryParameters.Count == 1);
             Assert.Equal("task", Assert.Single(workspace.Snapshot(DateTimeOffset.UtcNow).Items).Kind);
             Assert.Equal("paused", host.Status.Receiving);
+            Assert.InRange(host.Status.LastSuccessfulSyncAt!.Value, startedAt, DateTimeOffset.UtcNow);
+            Assert.Equal(host.Status.UpdatedAt, host.Status.LastSuccessfulSyncAt);
         }
         finally
         {
             cancellation.Cancel();
             await running.WaitAsync(TimeSpan.FromSeconds(5));
         }
+    }
+
+    [Fact]
+    public async Task FailedBatchesNeverFabricateOrReplaceLastSuccessfulSyncTime()
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false,
+            HistoryResponder = (_, read) => read == 2 ? (0, BoundaryHistory(Message("success"))) : (1200, null)
+        };
+        var controller = new ResidentSyncController();
+        var host = new NapCatMessageHost(Workspace(confirmed: true), server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var running = host.RunAsync(cancellation.Token);
+        try
+        {
+            for (var batch = 1; batch <= 3; batch++)
+            {
+                controller.Request(new(SyncRequestKind.Scheduled, DateTimeOffset.UtcNow.AddSeconds(batch), DateTimeOffset.UtcNow));
+                await UntilAsync(() => server.HistoryParameters.Count == batch && host.Status.Receiving == "paused"
+                    && host.Status.History == (batch == 2 ? "complete" : "partial"));
+                if (batch == 1) Assert.Null(host.Status.LastSuccessfulSyncAt);
+                if (batch == 2) Assert.NotNull(host.Status.LastSuccessfulSyncAt);
+            }
+            var successfulAt = host.Status.LastSuccessfulSyncAt;
+            Assert.NotNull(successfulAt);
+            Assert.True(host.Status.UpdatedAt > successfulAt);
+            Assert.Equal("api-failed-1200", Assert.Single(host.Status.HistoryFailures).Reason);
+            Assert.Null(new NapCatMessageHost(Workspace(), server.Url, syncController: new()).Status.LastSuccessfulSyncAt);
+            server.Disconnect();
+            await UntilAsync(() => server.ConnectionCount == 2 && host.Status.Transport == "connected");
+            Assert.Equal(successfulAt, host.Status.LastSuccessfulSyncAt);
+            Assert.Equal("partial", host.Status.History);
+            Assert.Single(host.Status.HistoryFailures);
+            Assert.Equal(3, server.HistoryParameters.Count);
+        }
+        finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+
+    [Fact]
+    public async Task IdleReconnectAndGamePauseKeepSuccessTimeWithoutStartingAnotherBatch()
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false, HistoryResponder = (_, _) => (0, BoundaryHistory())
+        };
+        var detector = new MutableGameDetector();
+        var controller = new ResidentSyncController(detector);
+        var host = new NapCatMessageHost(Workspace(), server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(18));
+        var running = host.RunAsync(cancellation.Token);
+        try
+        {
+            controller.Request(new(SyncRequestKind.Startup, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+            await UntilAsync(() => host.Status.LastSuccessfulSyncAt is not null && host.Status.Receiving == "paused");
+            var successfulAt = host.Status.LastSuccessfulSyncAt;
+            detector.Active = true;
+            await UntilAsync(() => host.Status.Error == "game-active");
+            Assert.Equal(successfulAt, host.Status.LastSuccessfulSyncAt);
+            detector.Active = false;
+            await UntilAsync(() => host.Status.Error is null);
+            Assert.Equal(successfulAt, host.Status.LastSuccessfulSyncAt);
+            Assert.Equal("complete", host.Status.History);
+            Assert.True(host.Status.UpdatedAt > successfulAt);
+            server.Disconnect();
+            await UntilAsync(() => server.ConnectionCount == 2 && host.Status.Transport == "connected");
+            Assert.Equal(successfulAt, host.Status.LastSuccessfulSyncAt);
+            Assert.Equal("complete", host.Status.History);
+            Assert.Single(server.HistoryParameters);
+        }
+        finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
     }
 
     [Fact]
@@ -75,6 +157,7 @@ public sealed class ApplicationMessageHostTests : IDisposable
                 controller.Request(new(SyncRequestKind.Scheduled,
                     new DateTimeOffset(2026, 10, 12, hour, 0, 0, TimeSpan.FromHours(8)), DateTimeOffset.UtcNow));
             await UntilAsync(() => host.Status.Error == "game-active");
+            Assert.Null(host.Status.LastSuccessfulSyncAt);
             Assert.Empty(server.HistoryParameters);
             Assert.Equal(0, StoredCount());
             detector.Active = false;
@@ -82,6 +165,7 @@ public sealed class ApplicationMessageHostTests : IDisposable
                 && workspace.Snapshot(DateTimeOffset.UtcNow).Items.Count == 1);
             Assert.Single(server.HistoryParameters);
             Assert.Equal(1, server.ConnectionCount);
+            Assert.NotNull(host.Status.LastSuccessfulSyncAt);
         }
         finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
     }
@@ -108,6 +192,7 @@ public sealed class ApplicationMessageHostTests : IDisposable
         {
             controller.Request(new(SyncRequestKind.Scheduled, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
             await UntilAsync(() => host.Status.Error == "game-active");
+            Assert.Null(host.Status.LastSuccessfulSyncAt);
             Assert.Single(server.HistoryParameters);
             Assert.Equal(0, StoredCount());
             Assert.Empty(workspace.Snapshot(DateTimeOffset.UtcNow).Items);

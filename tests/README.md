@@ -1,6 +1,16 @@
 # 项目检查
 
-## 本轮单条真实事项到卡片验收（2026-10-12）
+## 本轮同步状态与时间显示验收（2026-10-12）
+
+同步状态显示已实现并验证：正常等待、正在同步、游戏延后、名单未就绪、未补全和连接故障分别显示；“上次成功同步（本次运行）”只记录实际完成且没有历史失败的批次，状态刷新、游戏暂停、失败和空闲重连不伪造成功时间。该时间暂不跨进程持久化；“下次计划同步”复用北京时间 08:00/12:00/20:00，游戏期间继续延后。Chrome 用 America/New_York 时区验证北京时间显示、无记录空状态、草稿/焦点/选择范围和迟到旧状态。
+
+本轮实际 Infrastructure 专项 61/61、完整 Release 428/428，Windows Release 153/153，Node 全量 75/75（文档 33），均退出 0。App build 无警告/错误；自包含发布 `.tools/published/app-sync-status/`、默认入口 `-CheckOnly` 通过。Native 合成 13 项通过，`.tools/desktop-validation/sync-status-native.json` success=true、synthetic=true、进程退出 0。
+
+真实只读新版 `run-resident-check.ps1 -PublishDirectory '.tools/published/app-sync-status' -ReportName sync-status-read-only.json -Seconds 20` 退出 0，complete/connected/online、失败为空，记录实际成功时间及下一计划时间。默认入口重开 PID 40840，UIA `inspect-sync-status.ps1 -ProcessId 40840` 显示等待下次同步、17:51 成功时间和今晚 20:00，北京时间标签与本次运行说明通过；独立卡片窗口、托盘及 Established 连接通过。只读 SQLite 核对 1 个任务、46 项 pending、1 项 ignored，原 2026-10-09/无钟点保留。安全报告为 `.tools/desktop-validation/sync-status-*.json`，主窗口停在设置页，QQ 保持运行，未操作真实事项或发送 QQ/Windows 通知。
+
+托盘脚本原根桌面的跨提供程序搜索两次漏掉隐藏按钮；限定 Shell_TrayWnd 后实际找到按钮/图标，脚本改为托盘及该进程窗口范围搜索，旧版菜单退出和新版托盘检查均通过。临时 UIA 脚本首次由 Windows PowerShell 5 误读 UTF-8 中文，改用 PowerShell 7 执行通过；这两项是验证工具修正，不记为软件托盘或设置故障。自然固定时刻、实际游戏暂停/补同步、桌面恢复/多屏及长期稳定性仍未验收；Core/OCR/demo 未改，本轮未重跑。
+
+## 上一段单条真实事项到卡片验收（2026-10-12）
 
 用户选定材料完成通知，核对原消息 10 月 8 日发送，“明天”对应 10 月 9 日；用户回复“就按日期保存”，保存 2026-10-09、无钟点。真实确认、卡片 P0/已逾期/仅有日期、从卡片完成、主界面撤销、退出重开及卡片打开正确原文通过，最终保留待办。当前 1 个待办任务、46 项未处理待确认、1 项已忽略；此前 48 项待确认是 review 类总数，包含 1 项已忽略。未批量确认真实课程关系，不把一个真实例子记为完整端到端或识别准确率完成，实际游戏实机验收继续延后。
 

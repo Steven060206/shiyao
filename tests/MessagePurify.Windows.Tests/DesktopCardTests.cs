@@ -91,6 +91,41 @@ public sealed class DesktopCardTests
         Assert.Equal(error, cards.Error);
     }
 
+    [Theory]
+    [InlineData("connected", "online", "paused", "complete", null, "等待下次同步")]
+    [InlineData("connected", "online", "paused", "pending", null, "等待下次同步")]
+    [InlineData("connected", "online", "active", "reading", null, "正在同步置顶群消息")]
+    [InlineData("connected", "online", "paused", "partial", null, "同步未补全")]
+    [InlineData("connected", "online", "paused", "partial", "game-active", "游戏中，同步已延后")]
+    [InlineData("connected", "online", "paused", "complete", "game-catalog-unavailable", "检测名单未就绪，同步已暂停")]
+    [InlineData("connected", "online", "paused", "complete", "pinned-state-unavailable", "同步已暂停")]
+    [InlineData("connecting", "unknown", "paused", "complete", null, "正在连接 QQ")]
+    [InlineData("disconnected", "unknown", "paused", "complete", "connection-failed", "QQ 连接断开，正在重连")]
+    [InlineData("connected", "offline", "paused", "complete", "qq-offline", "QQ 未登录，已暂停接收")]
+    [InlineData("connected", "online", "paused", "complete", "account-mismatch", "QQ 账号不匹配，已暂停接收")]
+    public void ScheduledCardsDistinguishWaitingSyncingGameAndFailures(string transport, string qq,
+        string receiving, string history, string? error, string expected)
+    {
+        var task = Item("persisted");
+        var status = new MessageHostStatus(transport, qq, receiving, history, error, Now, []) { Scheduled = true };
+
+        var cards = DesktopCardProjection.Build(Snapshot(task), status);
+
+        Assert.Equal(expected, cards.ConnectionText);
+        Assert.Equal(error, cards.Error);
+        Assert.Same(task, Assert.Single(cards.Tasks));
+    }
+
+    [Fact]
+    public void ScheduledHistoryFailuresRemainIncompleteUntilNewBatchStartsReading()
+    {
+        var status = Connected() with { Scheduled = true, Receiving = "paused", HistoryFailures = [new("group-a", "history-timeout")] };
+
+        Assert.Equal("同步未补全", DesktopCardProjection.Build(Snapshot(), status).ConnectionText);
+        Assert.Single(status.HistoryFailures);
+        Assert.Equal("正在同步置顶群消息", DesktopCardProjection.Build(Snapshot(), status with { Receiving = "active", History = "reading" }).ConnectionText);
+    }
+
     [Fact]
     public void WaitingForAccountDataDiffersFromAnEmptyConnectedAccount()
     {

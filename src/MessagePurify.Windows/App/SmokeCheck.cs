@@ -132,6 +132,7 @@ internal static class SmokeCheck
         var status = runtime.Status;
         var success = snapshot is not null && status.Transport == "connected" && status.Qq == "online";
         var safeStatus = new { status.Transport, status.Qq, status.Receiving, status.History, status.Error,
+            status.Scheduled, status.LastSuccessfulSyncAt, status.NextScheduledSyncAt,
             failures = status.HistoryFailures.Select(f => f.Reason).ToArray() };
         var reportFile = Path.GetFullPath(reportPath);
         Directory.CreateDirectory(Path.GetDirectoryName(reportFile)!);

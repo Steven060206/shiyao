@@ -114,6 +114,18 @@ public sealed class ScheduledSyncPlanner
         return null;
     }
 
+    public DateTimeOffset NextSlotAfter(DateTimeOffset instant)
+    {
+        var local = TimeZoneInfo.ConvertTime(instant, timeZone);
+        var date = DateOnly.FromDateTime(local.DateTime);
+        foreach (var clock in FixedTimes)
+        {
+            var candidate = At(date, clock);
+            if (candidate > instant) return candidate;
+        }
+        return At(date.AddDays(1), FixedTimes[0]);
+    }
+
     private DateTimeOffset LatestSlotAtOrBefore(DateTimeOffset instant)
     {
         var local = TimeZoneInfo.ConvertTime(instant, timeZone);

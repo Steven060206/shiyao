@@ -50,6 +50,17 @@ public static class DesktopCardProjection
         if (status.Transport == "connecting") return "正在连接 QQ";
         if (status.Transport != "connected") return "QQ 连接断开，正在重连";
         if (status.Qq != "online") return "QQ 未登录，已暂停接收";
+        if (status.Scheduled)
+        {
+            if (status.Error == "game-active") return "游戏中，同步已延后";
+            if (status.Error == "game-catalog-unavailable") return "检测名单未就绪，同步已暂停";
+            if (status.Error is not null) return "同步已暂停";
+            if (status.History == "reading") return "正在同步置顶群消息";
+            if (status.History == "partial" || status.HistoryFailures.Count != 0) return "同步未补全";
+            if (status.Receiving == "active") return "正在同步置顶群消息";
+            if (status.Receiving == "paused" && status.History is "complete" or "pending") return "等待下次同步";
+            return "同步状态待确认";
+        }
         if (status.Receiving != "active") return "QQ 消息接收已暂停";
         return snapshot is null ? "等待 QQ 账号数据" : "QQ 已连接，正在接收消息";
     }

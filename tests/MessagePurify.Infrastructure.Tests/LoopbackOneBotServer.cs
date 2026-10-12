@@ -26,6 +26,7 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
     public IReadOnlyList<object> EventsOnFirstPinnedRead { get; init; } = [];
     public Func<JsonElement, int, (int Retcode, object? Data)>? HistoryResponder { get; set; }
     public List<JsonElement> HistoryParameters { get; } = [];
+    public void Disconnect() => socket?.Abort();
 
     public LoopbackOneBotServer()
     {

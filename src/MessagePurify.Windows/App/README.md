@@ -2,13 +2,13 @@
 
 当前为可运行的 Windows 应用。AccountWorkspace 使用现有账号独立 SQLite 保存事项；NapCatMessageHost 只读置顶群。正式页面没有样例事项，刷新后仍读取本地数据。
 
-最新真实事项验收（2026-10-12）：用户选定材料完成通知并确认按日期保存，已保存 2026-10-09、无钟点；真实确认、卡片 P0/已逾期/仅有日期、从卡片完成、主界面撤销、退出重开及卡片打开正确原文通过，最终恢复为待办。当前 1 个待办任务、46 项未处理待确认、1 项已忽略，主窗口停在该任务详情，两张卡片和 QQ/接口保持运行。群/课程关系未批量确认；一个真实例子不替代全部课程关系、识别准确率及完整端到端验收。此前 48 项待确认是 review 类总数，包含 1 项已忽略。
+最新真实事项验收（2026-10-12）：用户选定材料完成通知并确认按日期保存，已保存 2026-10-09、无钟点；真实确认、卡片 P0/已逾期/仅有日期、从卡片完成、主界面撤销、退出重开及卡片打开正确原文通过，最终恢复为待办。当前 1 个待办任务、46 项未处理待确认、1 项已忽略，主窗口停在新版设置页，显示同步状态，两张卡片和 QQ/接口保持运行。群/课程关系未批量确认；一个真实例子不替代全部课程关系、识别准确率及完整端到端验收。此前 48 项待确认是 review 类总数，包含 1 项已忽略。
 
 ## 打开
 
 发布后双击 [启动消息提纯](../../../packaging/app/Start-MessagePurify.cmd)。关闭主窗口会隐藏到托盘；双击托盘图标重新打开，托盘菜单可退出。再次启动会唤起现有窗口。
 
-正式桌面卡片首段已实现并验证，上一版自包含产物位于 `.tools/published/app-tray-fix/`。本轮默认入口已指向 `.tools/published/app-scheduled-sync/`，新版本已自包含发布并通过 13 项合成 Native 验证；旧 app、app-reminders、app-desktop 和 app-tray-fix 目录保留。上一段用户正常退出 QQ 后重开 Framework，新版真实首次后台同步与重开去重通过；当时主窗口隐藏，两张卡片及托盘可见。当前已完成一条真实任务验收，QQ/正式应用保持运行，主窗口展示该任务详情，3001/6099 监听且应用连接保持。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”；上一版关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
+正式桌面卡片首段已实现并验证，上一版自包含产物位于 `.tools/published/app-tray-fix/`。本轮默认入口已指向 `.tools/published/app-sync-status/`，新版本已自包含发布并通过 13 项合成 Native 验证；旧 app、app-reminders、app-desktop、app-tray-fix 和 app-scheduled-sync 目录保留。上一段用户正常退出 QQ 后重开 Framework，新版真实首次后台同步与重开去重通过；当时主窗口隐藏，两张卡片及托盘可见。当前已完成一条真实任务验收，QQ/正式应用保持运行，主窗口展示新版设置页，3001/6099 监听且应用连接保持。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”；上一版关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
 
 当前产品方向为 QQ/NapCat Framework 常驻，固定时间后台同步。2026-10-12 用户选择 A，已确认常驻方案，替代每次同步切换接入环境及结束后恢复普通 QQ 的旧安排；每天 08:00、12:00、20:00（北京时间）各同步一次，共三次，打游戏时禁止同步。游戏导致错过同步时，结束游戏后补同步一次，同一游戏期间错过多个时刻合并为一次补同步；中途开始游戏时暂停，切回桌面不算游戏结束。后台调度与常驻宿主已接入代码，首次启动的七天历史回溯在非游戏时执行，不吞掉下一个固定时刻；批次结束后保留连接，停止消息处理，空闲重连不触发新读取批次。关机/睡眠漏同步规则待确认。
 
@@ -17,6 +17,8 @@
 QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装脚本和备份保留历史，已恢复的桌面 QQ.lnk 仍为普通 QQ.exe、参数为空。原 [Framework 直接入口](../../../packaging/napcat/Start-NapCat-Framework.cmd) 用于首次手动加载与真实验证，要求先正常退出已有 QQ，不能对运行中的 QQ 重复加载。接口未就绪时显示接收暂停并重试，已有本地事项仍可查看；首次连接确定账号，账号变化暂停接收，不自动切换账号。
 
 ## 当前可操作
+
+同步状态显示已实现并验证：批次结束显示“等待下次同步”，正在同步、游戏延后、名单未就绪、未补全及连接故障分别显示。设置显示“上次成功同步（本次运行）”和“下次计划同步”，均按北京时间格式化。成功时间只在实际批次完整结束后更新，状态刷新、失败批次、游戏暂停和空闲重连不覆盖；该时间暂不跨进程持久化，无成功记录时明确显示空状态。下次计划复用每天 08:00、12:00、20:00 的调度规则，游戏期间仍延后。真实只读同步与正式 UIA 时间显示、两卡片和托盘已通过；自然固定时刻及实际游戏验收仍未完成。
 
 - 浏览任务、待确认、通知和已完成记录；按标题、课程、来源群搜索，按课程和状态筛选。
 - 查看原群消息正文；打开详情保存已读版本。
@@ -49,7 +51,7 @@ QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装�
 
 ```powershell
 & ./.tools/dotnet/dotnet.exe restore src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --locked-mode
-& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-scheduled-sync
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-sync-status
 & ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release
 & ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release
 node --test tests/project-rules.test.mjs

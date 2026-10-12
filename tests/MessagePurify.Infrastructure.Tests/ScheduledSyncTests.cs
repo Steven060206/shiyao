@@ -5,6 +5,23 @@ namespace MessagePurify.Infrastructure.Tests;
 
 public sealed class ScheduledSyncTests
 {
+    [Theory]
+    [InlineData("2026-10-11T23:59:59Z", "2026-10-12T08:00:00+08:00")]
+    [InlineData("2026-10-12T00:00:00Z", "2026-10-12T12:00:00+08:00")]
+    [InlineData("2026-10-12T03:59:59Z", "2026-10-12T12:00:00+08:00")]
+    [InlineData("2026-10-12T04:00:00Z", "2026-10-12T20:00:00+08:00")]
+    [InlineData("2026-10-12T11:59:59Z", "2026-10-12T20:00:00+08:00")]
+    [InlineData("2026-10-12T12:00:00Z", "2026-10-13T08:00:00+08:00")]
+    [InlineData("2026-12-31T16:01:00Z", "2027-01-01T08:00:00+08:00")]
+    public void NextPlannedSlotUsesBeijingTimeAndIsStrictlyFuture(string instant, string expected)
+    {
+        var planner = new ScheduledSyncPlanner(TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
+        var next = planner.NextSlotAfter(DateTimeOffset.Parse(instant));
+        Assert.Equal(DateTimeOffset.Parse(expected), next);
+        Assert.Equal(TimeSpan.FromHours(8), next.Offset);
+        Assert.Equal(SyncRequestKind.Startup, planner.Evaluate(DateTimeOffset.Parse(instant), false)!.Kind);
+    }
+
     [Fact]
     public void UnpreparedCatalogBlocksSyncWithoutPretendingAGameIsRunning()
     {

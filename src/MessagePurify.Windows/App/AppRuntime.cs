@@ -13,7 +13,8 @@ public sealed class AppRuntime
     private readonly ResidentSyncController syncController;
     private Task? running;
     public AccountWorkspace? Workspace { get; private set; }
-    public MessageHostStatus Status { get; private set; } = new("disconnected", "unknown", "paused", "pending", null, DateTimeOffset.UtcNow, []);
+    public MessageHostStatus Status { get; private set; } = new("disconnected", "unknown", "paused", "pending", null, DateTimeOffset.UtcNow, [])
+    { Scheduled = true };
     public event Action? Changed;
 
     public AppRuntime(string dataRoot, AccountWorkspace? workspace = null)
@@ -90,7 +91,9 @@ public sealed class AppRuntime
                         IOException or InvalidDataException => "local-data-unavailable",
                         _ => "connection-unavailable"
                     };
-                    Status = new("disconnected", "unknown", "paused", "pending", error, DateTimeOffset.UtcNow, []);
+                    Status = Status with { Transport = "disconnected", Qq = "unknown", Receiving = "paused",
+                        History = Status.History == "reading" ? "partial" : Status.History,
+                        Error = error, UpdatedAt = DateTimeOffset.UtcNow };
                     Changed?.Invoke();
                 }
                 try { await Task.Delay(TimeSpan.FromSeconds(5), stopping.Token); }

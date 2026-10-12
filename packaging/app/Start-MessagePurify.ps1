@@ -2,7 +2,7 @@
 param([string]$PublishDirectory, [string]$NapCatConfigurationDirectory, [switch]$CheckOnly)
 $ErrorActionPreference = 'Stop'
 if ([string]::IsNullOrWhiteSpace($PublishDirectory)) {
-    $PublishDirectory = Join-Path $PSScriptRoot '../../.tools/published/app-scheduled-sync'
+    $PublishDirectory = Join-Path $PSScriptRoot '../../.tools/published/app-sync-status'
 }
 $appDirectory = (Resolve-Path -LiteralPath $PublishDirectory).Path
 $appExecutable = Join-Path $appDirectory 'MessagePurify.exe'

@@ -9,7 +9,12 @@ namespace MessagePurify.Infrastructure.Application;
 
 public sealed record HistoryFailure(string GroupId, string Reason);
 public sealed record MessageHostStatus(string Transport, string Qq, string Receiving,
-    string History, string? Error, DateTimeOffset UpdatedAt, IReadOnlyList<HistoryFailure> HistoryFailures);
+    string History, string? Error, DateTimeOffset UpdatedAt, IReadOnlyList<HistoryFailure> HistoryFailures)
+{
+    public bool Scheduled { get; init; }
+    public DateTimeOffset? LastSuccessfulSyncAt { get; init; }
+    public DateTimeOffset? NextScheduledSyncAt { get; init; }
+}
 
 /// <summary>只读本机 QQ 宿主；历史和实时先保存原消息，补漏结束后按原发送时间处理。</summary>
 public sealed class NapCatMessageHost
@@ -21,6 +26,7 @@ public sealed class NapCatMessageHost
     private readonly Uri endpoint;
     private readonly string? accessToken;
     private readonly ResidentSyncController? syncController;
+    private readonly ScheduledSyncPlanner? schedule;
     private MessageHostStatus status = new("disconnected", "unknown", "paused", "pending", null, DateTimeOffset.UtcNow, []);
     private int running;
     private sealed class SyncPausedException : Exception;
@@ -35,6 +41,7 @@ public sealed class NapCatMessageHost
         public readonly HashSet<string> Queued = new(StringComparer.Ordinal);
         public readonly Dictionary<string, string> Failures = new(StringComparer.Ordinal);
         public bool HistoryRunning;
+        public string CompletedHistory = "pending";
         public DateTimeOffset RefreshedAt;
         public string BatchId = "history-" + Guid.NewGuid().ToString("N");
         public DateTimeOffset Cutoff = DateTimeOffset.UtcNow.AddDays(-7);
@@ -51,6 +58,11 @@ public sealed class NapCatMessageHost
         this.endpoint = endpoint;
         this.accessToken = accessToken;
         this.syncController = syncController;
+        if (syncController is not null)
+        {
+            schedule = new(TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai"));
+            status = status with { Scheduled = true, NextScheduledSyncAt = schedule.NextSlotAfter(status.UpdatedAt) };
+        }
     }
 
     public event Action<MessageHostStatus>? StatusChanged;
@@ -64,7 +76,9 @@ public sealed class NapCatMessageHost
         {
             while (!cancellationToken.IsCancellationRequested)
             {
-                Publish("connecting", "unknown", "paused", "pending", null, []);
+                var prior = Status;
+                Publish("connecting", "unknown", "paused", prior.History == "reading" ? "partial" : prior.History,
+                    null, prior.HistoryFailures);
                 try
                 {
                     await using var client = await OneBotClient.ConnectAsync(endpoint, accessToken, cancellationToken: cancellationToken);
@@ -95,6 +109,9 @@ public sealed class NapCatMessageHost
     {
         using var session = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var state = new ConnectionState();
+        state.CompletedHistory = Status.History;
+        state.HistoryRunning = syncController is null;
+        foreach (var failure in Status.HistoryFailures) state.Failures[failure.GroupId] = failure.Reason;
         Task? consuming = null;
         try
         {
@@ -176,7 +193,8 @@ public sealed class NapCatMessageHost
                             syncController is null ? null : () => syncController.CanSync) > 0) DataChanged?.Invoke();
                     EnsureSyncAllowed();
                     state.HistoryRunning = false;
-                    PublishConnected(state);
+                    state.CompletedHistory = state.Failures.Count == 0 ? "complete" : "partial";
+                    PublishConnected(state, completedBatch: true);
                 }
             }
         }
@@ -259,6 +277,7 @@ public sealed class NapCatMessageHost
                 Publish("connected", "online", "paused", Status.History, syncController.PauseReason, Status.HistoryFailures);
                 continue;
             }
+            if (Status.Error is "game-active" or "game-catalog-unavailable") PublishConnected(state);
             if (DateTimeOffset.UtcNow - state.RefreshedAt < IdleRefreshInterval) continue;
             await state.Gate.WaitAsync(cancellationToken);
             try { await RefreshAsync(client, state, cancellationToken, queueHistory: false); }
@@ -415,14 +434,27 @@ public sealed class NapCatMessageHost
         return selected.MessageSequence ?? throw new OneBotProtocolException("history-cursor-missing");
     }
 
-    private void PublishConnected(ConnectionState state) => Publish("connected", "online",
-        syncController is not null && !state.HistoryRunning ? "paused" : "active",
-        state.HistoryRunning ? "reading" : state.Failures.Count == 0 ? "complete" : "partial", null,
-        state.Failures.Select(entry => new HistoryFailure(entry.Key, entry.Value)).OrderBy(item => item.GroupId, StringComparer.Ordinal).ToArray());
-
-    private void Publish(string transport, string qq, string receiving, string history, string? error, IReadOnlyList<HistoryFailure> failures)
+    private void PublishConnected(ConnectionState state, bool completedBatch = false)
     {
-        var current = new MessageHostStatus(transport, qq, receiving, history, error, DateTimeOffset.UtcNow, failures);
+        var blocked = syncController is not null && !syncController.CanSync;
+        Publish("connected", "online",
+            blocked || syncController is not null && !state.HistoryRunning ? "paused" : "active",
+            state.HistoryRunning ? blocked ? "partial" : "reading" : state.CompletedHistory,
+            blocked ? syncController!.PauseReason : null,
+            state.Failures.Select(entry => new HistoryFailure(entry.Key, entry.Value))
+                .OrderBy(item => item.GroupId, StringComparer.Ordinal).ToArray(), completedBatch);
+    }
+
+    private void Publish(string transport, string qq, string receiving, string history, string? error,
+        IReadOnlyList<HistoryFailure> failures, bool completedBatch = false)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var current = new MessageHostStatus(transport, qq, receiving, history, error, now, failures)
+        {
+            Scheduled = syncController is not null,
+            LastSuccessfulSyncAt = completedBatch && failures.Count == 0 ? now : Status.LastSuccessfulSyncAt,
+            NextScheduledSyncAt = schedule?.NextSlotAfter(now)
+        };
         Volatile.Write(ref status, current);
         StatusChanged?.Invoke(current);
     }

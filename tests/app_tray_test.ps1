@@ -37,8 +37,13 @@ try {
             $icon = $null
         }
         if ($null -eq $icon -and -not $openedOverflow) {
-            $toggle = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
-                [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '显示隐藏的图标'))
+            $toggle = $null
+            foreach ($container in $containers) {
+                if ($container.Current.ClassName -ne 'Shell_TrayWnd') { continue }
+                $toggle = $container.FindFirst([System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '显示隐藏的图标'))
+                if ($null -ne $toggle) { break }
+            }
             if ($null -ne $toggle) {
                 $toggle.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke()
                 $openedOverflow = $true
@@ -65,7 +70,13 @@ try {
             [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '退出'))
         $deadline = [DateTime]::UtcNow.AddSeconds($WaitSeconds)
         do {
-            $exitItem = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $exitCondition)
+            $exitItem = $null
+            $appWindows = $root.FindAll([System.Windows.Automation.TreeScope]::Children,
+                [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $ProcessId))
+            foreach ($appWindow in $appWindows) {
+                $exitItem = $appWindow.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $exitCondition)
+                if ($null -ne $exitItem) { break }
+            }
             if ($null -ne $exitItem) { break }
             Start-Sleep -Milliseconds 200
         } while ([DateTime]::UtcNow -lt $deadline)

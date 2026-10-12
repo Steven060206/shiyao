@@ -8,6 +8,18 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('同步状态记录真实批次时间和本次运行范围，固定时刻与游戏实测仍另行验收', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /同步状态显示已实现并验证/, file);
+    assert.match(content, /上次成功同步（本次运行）/, file);
+    assert.match(content, /下次计划同步/, file);
+    assert.match(content, /不跨进程持久化|没有跨进程持久化/, file);
+    assert.match(content, /真实只读.*(?:通过|退出 0)/s, file);
+    assert.match(content, /自然固定时刻.*实际游戏.*(?:未完成|未验收)/, file);
+  }
+});
+
 test('用户 A 已确认两卡片渠道，全部 Windows 系统弹窗和声音取消', () => {
   const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
   assert.match(next, /已确认：第一版仅使用两张桌面卡片/);
