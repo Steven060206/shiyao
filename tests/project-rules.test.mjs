@@ -349,12 +349,19 @@ test('真实 QQ 接入报告保留历史范围、窗口异常和剩余验收', (
   assert.match(report, /M3 仍为“正在实施”/);
 });
 
-test('未确认的自动切换方案只保留在交接事项中', () => {
+test('最新决定改为固定时间自动同步，停止快捷方式方向并记录尚未实现', () => {
   const handoff = read('docs/HANDOFF.md');
   const requirements = read('docs/requirements.md');
-  assert.match(handoff, /未决定：定时自动切换普通 QQ 与 NapCat/);
-  assert.match(handoff, /尚未确认要开发/);
-  assert.doesNotMatch(requirements, /定时自动切换普通 QQ 与 NapCat/);
+  assert.match(handoff, /已明确：固定时间自动切换与同步方向/);
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/integrations/napcat-setup.md', 'src/MessagePurify.Windows/App/README.md']) {
+    const content = read(file);
+    assert.match(content, /固定时间/);
+    assert.match(content, /定时自动切换尚未实现/);
+    assert.match(content, /停止.*快捷方式|快捷方式改造已取消/);
+  }
+  assert.match(requirements, /同步结束后恢复普通 QQ/);
+  assert.match(handoff, /具体同步时刻.*待确认/);
+  assert.doesNotMatch(requirements, /日常重新打开 QQ 直接双击桌面原有/);
 });
 
 test('M3 正在实施，实测条件不被协议模拟替代', () => {
