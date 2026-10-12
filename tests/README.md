@@ -1,6 +1,12 @@
 # 项目检查
 
-## 本轮恢复普通 QQ 图标（2026-10-12）
+## 本轮确认同步时间和游戏限制（2026-10-12）
+
+每天 08:00、12:00、20:00（北京时间）各同步一次，共三次；打游戏时禁止同步。更新文档回归，核对四份当前说明中的时刻、游戏限制和未实现边界，并检查需求有效条款及交接下一步不再将同步时间写为待确认。游戏导致错过同步后的补同步规则仍待确认；现有持续连接宿主未改，定时自动切换及游戏检测尚未实现，本轮没有实际切换 QQ。
+
+实际 `node --test tests/project-rules.test.mjs` 28/28、退出 0；本轮验证仅覆盖文档一致性，不作为定时同步或游戏检测已实现的证据。
+
+## 上一段恢复普通 QQ 图标（2026-10-12）
 
 新增 `Restore-QQShortcut.ps1` 及 `qq-shortcut.test.mjs` 第三项：首次创建、直接指向 QQ.exe、QQ 图标、空参数、正常窗口及重复恢复清除旧配置。实际 `node --test tests/qq-shortcut.test.mjs` 3/3，组合验证 `node --test tests/project-rules.test.mjs tests/qq-shortcut.test.mjs` 30/30，均退出 0；合成文件未执行。真实恢复脚本退出 0，桌面 QQ.lnk 持续存在，Explorer 桌面命名空间含 QQ、Target 为原 QQ.exe、Arguments 为空、Encrypted=false，报告 `.tools/desktop-validation/qq-original-restored.json`。原加密备份未改，当前 QQ 未退出或重开，火绒设置未改；集成快捷方式改造仍停止，定时同步尚未实现。
 

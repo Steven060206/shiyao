@@ -360,8 +360,32 @@ test('最新决定改为固定时间自动同步，停止快捷方式方向并�
     assert.match(content, /停止.*快捷方式|快捷方式改造已取消/);
   }
   assert.match(requirements, /同步结束后恢复普通 QQ/);
-  assert.match(handoff, /具体同步时刻.*待确认/);
+  assert.match(handoff, /游戏导致错过同步.*待确认/);
   assert.doesNotMatch(requirements, /日常重新打开 QQ 直接双击桌面原有/);
+});
+
+test('每天三次同步及游戏期间禁止同步已确认，漏同步规则与实现边界保留', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/integrations/napcat-setup.md', 'src/MessagePurify.Windows/App/README.md']) {
+    const end = file === 'docs/requirements.md' ? '## 3.'
+      : file === 'docs/HANDOFF.md' ? '上一段恢复：'
+      : file === 'docs/integrations/napcat-setup.md' ? '以下 Shell' : '## 当前可操作';
+    const current = read(file).split(end)[0];
+    assert.match(current, /每天 08:00、12:00、20:00（北京时间）各同步一次，共三次/, file);
+    assert.match(current, /打游戏时禁止同步/, file);
+    assert.match(current, /定时自动切换尚未实现/, file);
+    assert.match(current, /游戏检测和中途开始游戏时的停止处理尚未实现/, file);
+    assert.match(current, /游戏导致错过同步.*待确认/, file);
+    assert.doesNotMatch(current, /具体同步时刻.*待确认|具体时刻及.*待确认/, file);
+  }
+  const rules = read('docs/requirements.md').split('\n').filter(line => line.startsWith('- ')).join('\n');
+  assert.match(rules, /固定时间 08:00、12:00、20:00/, '有效需求保留三个时刻');
+  assert.match(rules, /游戏期间不得为同步切换或重启 QQ/, '游戏限制覆盖 QQ 切换');
+  assert.match(rules, /结束游戏后补一次还是等待下个固定时间，尚待用户确认/);
+  assert.doesNotMatch(rules, /具体同步时刻.*待确认/);
+  const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
+  assert.match(next, /不重新询问.*同步时间/);
+  assert.match(next, /不默认选择漏同步处理/);
+  assert.doesNotMatch(next, /具体同步时刻.*待确认/);
 });
 
 test('M3 正在实施，实测条件不被协议模拟替代', () => {
