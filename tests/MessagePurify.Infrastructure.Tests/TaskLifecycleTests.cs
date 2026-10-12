@@ -44,6 +44,25 @@ public sealed class TaskLifecycleTests : IDisposable
     }
 
     [Fact]
+    public void CreateTask_OrdinaryClearActionDoesNotRequireConfirmedPublisher()
+    {
+        var candidate = TaskCandidate();
+        candidate = candidate with
+        {
+            Assessments = candidate.Assessments with
+            {
+                Source = new("普通清楚行动无需可信发布者身份", false)
+            }
+        };
+
+        var task = Store().CreateTask("task-1", candidate, "create-1", Now);
+
+        Assert.Equal(TaskState.Active, task.State);
+        Assert.Equal(candidate.Time, task.Time);
+        Assert.Equal(candidate.Evidence, task.Evidence);
+    }
+
+    [Fact]
     public void CreateTask_SuggestedTimeCannotReplaceExistingFormalTime()
     {
         var candidate = TaskCandidate() with { SuggestedTime = SuggestedTime() };

@@ -23,16 +23,20 @@ public sealed class AccountTaskStore
     }
 
     public TaskItem CreateTask(string id, RuleCandidate candidate, string operationId, DateTimeOffset now)
+        => InTransaction((connection, transaction) => CreateTaskInTransaction(connection, transaction, id, candidate, operationId, now));
+
+    internal TaskItem CreateTaskInTransaction(SqliteConnection connection, SqliteTransaction transaction,
+        string id, RuleCandidate candidate, string operationId, DateTimeOffset now)
     {
         ValidateCandidate(candidate);
         if (candidate.Disposition != RuleDisposition.Task || candidate.TargetTaskId is not null ||
             candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Inform ||
             !candidate.Assessments.Action.Reliable || !candidate.Assessments.Audience.Reliable ||
-            !candidate.Assessments.Course.Reliable || !candidate.Assessments.Time.Reliable ||
-            !candidate.Assessments.Source.Reliable)
+            !candidate.Assessments.Course.Reliable || !candidate.Assessments.Time.Reliable)
             throw new ArgumentException("只有可靠的新任务候选可以自动建立正式事项。", nameof(candidate));
         ValidateTime(candidate.Time);
-        return Write<TaskItem>(operationId, new { Kind = "create", Id = id, Candidate = Canonical(candidate) }, "task", (connection, transaction) =>
+        return WriteInTransaction<TaskItem>(connection, transaction, operationId,
+            new { Kind = "create", Id = id, Candidate = Canonical(candidate) }, "task", (connection, transaction) =>
         {
             ValidateId(id);
             var duplicate = FindBySource<TaskItem>(connection, transaction, "tasks", Canonical(candidate));
@@ -47,11 +51,16 @@ public sealed class AccountTaskStore
     }
 
     public PendingReview SavePending(string id, RuleCandidate candidate, string operationId, DateTimeOffset now)
+        => InTransaction((connection, transaction) => SavePendingInTransaction(connection, transaction, id, candidate, operationId, now));
+
+    internal PendingReview SavePendingInTransaction(SqliteConnection connection, SqliteTransaction transaction,
+        string id, RuleCandidate candidate, string operationId, DateTimeOffset now)
     {
         ValidateCandidate(candidate);
         if (candidate.Disposition is not (RuleDisposition.Pending or RuleDisposition.Change))
             throw new ArgumentException("此入口只保存待确认或关联变更候选。", nameof(candidate));
-        return Write<PendingReview>(operationId, new { Kind = "pending", Id = id, Candidate = Canonical(candidate) }, "review", (connection, transaction) =>
+        return WriteInTransaction<PendingReview>(connection, transaction, operationId,
+            new { Kind = "pending", Id = id, Candidate = Canonical(candidate) }, "review", (connection, transaction) =>
         {
             ValidateId(id);
             var duplicate = FindBySource<PendingReview>(connection, transaction, "reviews", Canonical(candidate));
@@ -292,12 +301,25 @@ public sealed class AccountTaskStore
 
     private T Write<T>(string operationId, object request, string resultKind,
         Func<SqliteConnection, SqliteTransaction, Mutation<T>> mutate, DateTimeOffset now) where T : class
+        => InTransaction((connection, transaction) =>
+            WriteInTransaction(connection, transaction, operationId, request, resultKind, mutate, now));
+
+    private T InTransaction<T>(Func<SqliteConnection, SqliteTransaction, T> mutate)
     {
-        ValidateId(operationId);
-        var requestJson = JsonSerializer.Serialize(request);
         using var connection = Open();
         // BeginTransaction 默认取得写锁；读取版本、更新数据和登记操作都位于同一事务。
         using var transaction = connection.BeginTransaction();
+        var result = mutate(connection, transaction);
+        transaction.Commit();
+        return result;
+    }
+
+    private static T WriteInTransaction<T>(SqliteConnection connection, SqliteTransaction transaction,
+        string operationId, object request, string resultKind,
+        Func<SqliteConnection, SqliteTransaction, Mutation<T>> mutate, DateTimeOffset now) where T : class
+    {
+        ValidateId(operationId);
+        var requestJson = JsonSerializer.Serialize(request);
         using (var replay = Command(connection, transaction,
             "SELECT request_json, result_kind, result_id FROM operations WHERE operation_id = $id;", ("$id", operationId)))
         using (var reader = replay.ExecuteReader())
@@ -309,7 +331,6 @@ public sealed class AccountTaskStore
                 var resultId = reader.GetString(2);
                 reader.Close();
                 var current = Required<T>(connection, transaction, resultKind == "task" ? "tasks" : "reviews", resultId);
-                transaction.Commit();
                 return current;
             }
         }
@@ -322,7 +343,6 @@ public sealed class AccountTaskStore
             ("$before", result.Before is null ? DBNull.Value : JsonSerializer.Serialize(result.Before)),
             ("$after", JsonSerializer.Serialize(result.After ?? result.Current)));
         audit.ExecuteNonQuery();
-        transaction.Commit();
         return result.Current;
     }
 
@@ -338,7 +358,7 @@ public sealed class AccountTaskStore
         Version = snapshot.Version, TimeVersion = snapshot.TimeVersion
     };
 
-    private void ValidateCandidate(RuleCandidate candidate)
+    internal void ValidateCandidate(RuleCandidate candidate)
     {
         ArgumentNullException.ThrowIfNull(candidate);
         ValidateId(candidate.Title);

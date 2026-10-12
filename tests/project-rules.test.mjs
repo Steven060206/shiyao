@@ -68,7 +68,11 @@ test('项目文档的本地链接、原型与核心交付文件存在', () => {
     'docs/superpowers/plans/2026-10-11-task-lifecycle.md',
     'src/MessagePurify.Infrastructure/Tasks/TaskStoreModels.cs',
     'src/MessagePurify.Infrastructure/Tasks/TaskLifecycleService.cs',
-    'tests/MessagePurify.Infrastructure.Tests/TaskLifecycleTests.cs'
+    'tests/MessagePurify.Infrastructure.Tests/TaskLifecycleTests.cs',
+    'docs/superpowers/plans/2026-10-12-candidate-routing.md',
+    'src/MessagePurify.Infrastructure/Processing/AccountCandidateRouter.cs',
+    'src/MessagePurify.Infrastructure/Processing/CandidateRoutingModels.cs',
+    'tests/MessagePurify.Infrastructure.Tests/CandidateRoutingTests.cs'
   ];
   for (const file of artifacts) {
     assert.ok(fs.statSync(path.join(root, file)).isFile(), `交付文件缺失：${file}`);
@@ -91,6 +95,31 @@ test('M4 生命周期进度明确区分存储验证和消息宿主联调', () =>
   assert.match(read(planFile), /expectedTaskVersion/);
   assert.match(read(planFile), /普通通知转换.*后续|普通通知转换.*不在本段/);
   assert.match(read('docs/HANDOFF.md'), /恢复工作时先读.*docs\/HANDOFF\.md.*再读.*docs\/requirements\.md/);
+});
+
+test('M4 首轮候选路由状态明确本地分流、课程确认和后续实现边界', () => {
+  for (const file of ['docs/requirements.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /AccountCandidateRouter.*首轮.*(?:自动路由已实现|自动路由.*已实现)/, file);
+    for (const disposition of ['Task', 'Pending', 'Change', 'Notice', 'Ignored']) {
+      assert.ok(content.includes(disposition), `${file} 缺少 ${disposition} 分流说明`);
+    }
+    assert.match(content, /Change.*待确认/, `${file} 关联变更当前不能写成自动应用`);
+    assert.match(content, /课程确认.*(?:撤销|变更).*Task\/Notice.*降级.*待确认/, file);
+    assert.match(content, /普通通知列表入库不等于 Windows 系统通知投递/, file);
+    assert.match(content, /普通通知转任务.*(?:待完成|尚未完成|后续阶段)/, file);
+    assert.match(content, /自动可靠关联变更/, file);
+    assert.match(content, /M6.*重新分析协调.*(?:待完成|尚未完成|后续阶段)/, file);
+    assert.match(content, /正式界面.*OCR 队列.*真实 QQ.*宿主联调.*(?:未完成|尚未完成)/, file);
+    assert.match(content, /Infrastructure Release 184\/184/, `${file} 保留上轮实际基线`);
+    assert.doesNotMatch(content.split('## 2.')[0], /收件箱自动转事项.*尚未完成|消息收件箱到事项的自动路由.*未完成/,
+      `${file} 当前状态不能保留已替换的路由结论`);
+  }
+  assert.match(read('docs/requirements.md'), /更高 ProcessingVersion 不自动重放/);
+  const readme = read('tests/README.md');
+  assert.match(readme, /FullyQualifiedName~CandidateRoutingTests\|FullyQualifiedName~TaskLifecycleTests/);
+  assert.match(readme, /回执失败整条消息回滚/);
+  assert.match(readme, /WAL 拒绝且不写结果/);
 });
 
 test('新版演示交付链接可用，保存说明与真实集成阶段一致', () => {
