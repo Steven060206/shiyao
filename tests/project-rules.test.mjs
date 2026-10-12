@@ -8,6 +8,17 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('仅用桌面卡片的讨论仍为待确认建议，声音取消规则继续有效', () => {
+  const pending = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
+  assert.match(pending, /未决定：仅使用桌面卡片提醒/);
+  assert.match(pending, /声音提醒此前已取消/);
+  assert.match(pending, /是否取消全部 Windows 弹窗尚待确认/);
+  assert.match(pending, /Windows 投递接入须先等本题明确答复/);
+  const requirements = read('docs/requirements.md');
+  assert.match(requirements, /第一版取消声音提醒，所有 Windows 通知均静音/);
+  assert.match(requirements, /卡片高亮和 Windows 通知提醒/, '未确认建议不替换当前有效规则');
+});
+
 for (const file of documents) {
   test(`${file} 保留测试、交付与提交要求`, () => {
     const content = read(file);
