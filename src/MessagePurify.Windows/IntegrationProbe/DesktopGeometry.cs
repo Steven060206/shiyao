@@ -23,8 +23,9 @@ public static class DesktopGeometry
         if (!Valid(rectangle) || !Valid(monitor)) throw new ArgumentException("Geometry must be finite and positive.");
         var width = Math.Min(rectangle.Width, monitor.Width);
         var height = Math.Min(rectangle.Height, monitor.Height);
-        return new(Math.Clamp(rectangle.X, monitor.X, monitor.X + monitor.Width - width),
-            Math.Clamp(rectangle.Y, monitor.Y, monitor.Y + monitor.Height - height), width, height);
+        // Subtract sizes first so equal bounds cannot round below their origin.
+        return new(Math.Clamp(rectangle.X, monitor.X, monitor.X + (monitor.Width - width)),
+            Math.Clamp(rectangle.Y, monitor.Y, monitor.Y + (monitor.Height - height)), width, height);
     }
 
     private static bool Valid(DesktopRect rect) => double.IsFinite(rect.X) && double.IsFinite(rect.Y) &&

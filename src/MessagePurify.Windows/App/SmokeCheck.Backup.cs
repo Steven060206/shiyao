@@ -80,7 +80,7 @@ internal static partial class SmokeCheck
             await ChangeSettingAsync(window, "theme-setting", "dark");
             await ChangeSettingAsync(window, "motion-setting", "reduce");
             await desktop.RefreshAsync();
-            await WaitAsync(() => desktop.TaskWindow.Background is SolidColorBrush brush && brush.Color == Colors.Black);
+            await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true));
             var baseline = workspace.Snapshot(DateTimeOffset.UtcNow);
             var baselineFingerprint = BackupFingerprint(dataRoot, workspace, baseline);
             var baselineSettings = File.ReadAllText(Path.Combine(dataRoot, "accounts", workspace.AccountId, "workspace-settings.json"));
@@ -170,7 +170,7 @@ internal static partial class SmokeCheck
             await WaitAsync(() => desktop.Snapshot?.Tasks.Count == restored.Items.Count(item => item.Kind == "task" && item.State == "active")
                 && desktop.Snapshot.Pending.Count == restored.Items.Count(item => item.Kind is "review" or "merge-review" && item.State == "pending")
                 && desktop.Layout == baselineLayout
-                && desktop.TaskWindow.Background is SolidColorBrush brush && brush.Color == Colors.Black);
+                && HasDesktopTheme(desktop.TaskWindow, true));
             await CheckStaleBackupCommandAsync(window, workspace, task, baselineGeneration);
             if (workspace.Ingest(imageMessage, pinned, MessageOrigin.History, "native-backup-replay", DateTimeOffset.UtcNow)
                 || new AccountMessageStore(dataRoot, workspace.AccountId).Find(imageKey)?.Message.Segments.Single(segment => segment.Kind == SegmentKind.Image).AssetId != "synthetic-not-downloaded-image")

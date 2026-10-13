@@ -2,11 +2,17 @@
 
 ## 最新正式入口：拾要（2026-10-13）
 
-正式入口已切换到最新版 `.tools/published/app-shiyao/`，桌面及开始菜单已实际改为“拾要”，图标直接引用新exe；已启用的Run同样指向新版本并保留 `--background`。17:44入口属性核对通过，旧实例PID40208继续运行，外观于下次正常退出重开显示。Node151/151、Windows390/390、Native84项合成检查与发布均通过；真实Windows登录自启动仍未验收。图标及迁移回归范围见下方品牌说明。
+正式入口已切换到最新版 `.tools/published/app-desktop-appearance/`，桌面及开始菜单为“拾要”，图标直接引用新exe；已启用Run指向同一版，保留开关和 `--background`。20:04迁移前已备份入口/Run，属性核对通过；旧实例经托盘正常退出、保护四库/设置后正常重开，最终PID41884。Node151/151、Windows391/391、最终代码91项Native及真实父窗/styles检查与Release发布均通过。真实Windows登录自启动仍未验收。
+
+## 桌面卡片外观与小数布局回归（2026-10-13）
+
+`SmokeCheck.DesktopAppearance.cs` 新增7项真实WPF检查：浅深半透明材质、16 DIP圆角外侧透明、空待办154 DIP左右可见高度及下方透明、有事项恢复高度、7 DIP滚动条Thumb实际DragDelta、主题切换保留滚动位置。合成检查使用隔离账号，不操作真实事项。最终代码隔离发布版运行 `python tests/app_desktop_test.py --executable .tools/published/app-desktop-appearance-final/MessagePurify.exe` 退出0、91项通过；正式目录随后同一代码重新publish退出0并正常后台启动。
+
+`DesktopLayoutTests.FractionalSavedPositionsLoadAndRemainUnchangedWhenTheOtherCardMoves` 使用小数DIP坐标验证两种Load、原文件字节保留及单卡保存时另一卡不移动。首次实际失败后定位到 `DesktopGeometry.Clamp` 的浮点上界小于下界，改为先相减尺寸；Windows最终391/391通过。真实PID41884的两窗口坐标/尺寸与保存DIP×1.25一致，原布局文件与任务完整记录未变、四库integrity=ok。最终 `real-desktop-cards-final.png` 经桌面宿主PrintWindow捕获并已打开核对半透明效果/空待办收紧；早先屏幕裁图被浏览器遮挡，不能作为卡片视觉证据。日志、截图、数据/窗口报告在 `.tools/card-appearance-validation/`。审美反馈待用户提供。
 
 ## 上一段正式入口更新（2026-10-13）
 
-此前正式入口已切换到最新版 `.tools/published/app-desktop-recovery/`：当时默认启动脚本、桌面/开始菜单.lnk及已启用的HKCU Run都指向该exe；普通入口空参数、正常窗口，自启动沿用 `--background`。真实COM属性、Ready/AuthenticationReady、隐藏主窗后两入口分别唤回同一PID40208、启动进程退出0且只有1个实例均通过。旧产物保留，开关偏好及真实事项未改，当前观察进程继续运行；真实Windows登录自启动仍未验收。本段为16:55入口更新的历史记录，当前入口以上方拾要段为准。
+此前正式入口已切换到最新版 `.tools/published/app-desktop-recovery/`：当时默认启动脚本、桌面/开始菜单.lnk及已启用的HKCU Run都指向该exe；普通入口空参数、正常窗口，自启动沿用 `--background`。真实COM属性、Ready/AuthenticationReady、隐藏主窗后两入口分别唤回同一PID40208、启动进程退出0且只有1个实例均通过。旧产物保留，开关偏好及真实事项未改，当时观察进程继续运行；真实Windows登录自启动仍未验收。本段为16:55入口更新的历史记录，当前入口以上方拾要段为准。
 
 `Install-MessagePurifyShortcuts.ps1 -PreviousPublishDirectory <明确指定的旧发布目录>` 用于迁移原消息提纯空参数exe入口。默认不接受不同target；即使指定旧版，其他程序或带参数旧入口也拒绝，先核对两个入口再写。`application-shortcuts.test.mjs` 新增迁移和拒绝边界回归，覆盖重复迁移、中文空格路径、旧产物保留及失败时原入口不变。真实入口/Run备份及验证报告位于 `.tools/entry-upgrade/20261013-165509/`；详细命令和持续观察状态见交接文档。
 
@@ -14,7 +20,7 @@
 
 ## 拾要命名与图标（2026-10-13）
 
-产品显示名称改为拾要，默认发布目录为 `.tools/published/app-shiyao/`。`application-branding.test.mjs` 验证 Windows 实际解码PNG透明外侧、接近不透明的中心及ICO九档图像帧；页面回归验证本地图标实际加载与浅深主题可见；快捷方式回归验证旧名迁移、重复安装和其他程序入口保护。Native Smoke 还核对实际WPF窗口名称/图标与WebView图片加载。内部 MessagePurify 数据目录与单实例标识不变；当前连续观察中的旧进程保留，实际迁移和验证结果以交接最新记录为准。
+产品显示名称改为拾要，品牌阶段发布目录为 `.tools/published/app-shiyao/`，当前默认入口以上方外观段为准。`application-branding.test.mjs` 验证 Windows 实际解码PNG透明外侧、接近不透明的中心及ICO九档图像帧；页面回归验证本地图标实际加载与浅深主题可见；快捷方式回归验证旧名迁移、重复安装和其他程序入口保护。Native Smoke 还核对实际WPF窗口名称/图标与WebView图片加载。内部 MessagePurify 数据目录与单实例标识不变；品牌阶段保留旧进程观察，随后已正常退出重开，实际迁移和验证结果以交接最新记录为准。
 
 最终发布版独立运行 `python tests/app_desktop_test.py --executable .tools/published/app-shiyao/MessagePurify.exe` 已通过：84项合成及真实两窗口附着/styles检查，按报告中的待确认/合并建议数量核对最终可见性。原固定“最终为空”的假设不适用于当前合成流程，空待确认隐藏仍在Native流程内验证。PNG/ICO及最终exe产品名/描述和系统提取图标均已核对。首次失败与最终通过日志保留在 `.tools/shiyao-validation/`。
 
@@ -30,7 +36,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/wa
 
 报告 `completed/success` 仅表示观察完成且采样中的两张卡片附着有效；连接提示和 `responding` 须逐样本核对，不能把退出 0 等同于持续在线、无卡顿或长期稳定性通过。卡片无数量时 `itemCount=null`，不能据此猜任务数。
 
-首轮真实冷启动、完整历史读取、正常两卡片/托盘检查及5秒观察通过；当时两小时观察未启动。16:23 时 QQ/应用均已退出，原因未确定；四库完整性正常，启动前任务记录和课程关系未变。接续已重新保护数据并启动Framework/最新应用；北京时间16:40已启动两小时连续观察，预计18:40结束，初始采样正常、尚未完成。报告 `.tools/unattended-validation/continuous-20261013-163828/watch-2h.json` 后台更新，无自动通知；后续须读完整报告核对，不能把已启动写成验收通过。详细命令、状态及本机报告见 `docs/HANDOFF.md`。`application-watch.test.mjs` 覆盖拒绝其他进程、已退出 PID 的安全失败报告及不终止被观察进程。
+首轮真实冷启动、完整历史读取、正常两卡片/托盘检查及5秒观察通过；当时两小时观察未启动。16:23 时 QQ/应用均已退出，原因未确定；四库完整性正常，启动前任务记录和课程关系未变。接续曾于16:40启动两小时连续观察，18:40报告已结束、238样本、completed/success=true、failure=null。外观阶段只核对完成标记，尚未逐样本验收。报告 `.tools/unattended-validation/continuous-20261013-163828/watch-2h.json` 无自动通知；后续须读完整报告核对，不能把完成标记写成稳定性验收通过。详细命令、状态及本机报告见 `docs/HANDOFF.md`。`application-watch.test.mjs` 覆盖拒绝其他进程、已退出 PID 的安全失败报告及不终止被观察进程。
 
 ## 桌面恢复（2026-10-13）
 

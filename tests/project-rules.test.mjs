@@ -14,7 +14,8 @@ test('正式入口已切最新版并保留真实登录与持续观察验收边�
     const content=read(file);
     assert.match(content,/正式入口已切换到最新版/);
     assert.match(content,/拾要/);
-    assert.match(content,/app-shiyao/);
+    const currentEntry = content.slice(content.indexOf('正式入口已切换到最新版')).split('\n')[0];
+    assert.match(currentEntry,/\.tools\/published\/app-desktop-appearance\//);
     assert.match(content,/app-desktop-recovery/);
     assert.match(content,/真实(?:Windows|登录).*自启动仍未验收/);
   }
@@ -32,8 +33,8 @@ test('无人值守首轮记录保护数据及退出未知，不能替代两小�
   }
 });
 
-test('接续真实观察记录开始与未完成状态，保留数据及固定时刻验收边界', () => {
-  const requirements = read('docs/requirements.md').split('最新真实运行核对')[1].split('上一段真实运行核对')[0];
+test('历史真实观察启动记录保留当时状态及固定时刻验收边界', () => {
+  const requirements = read('docs/requirements.md').split('历史连续观察启动记录')[1].split('上一段真实运行核对')[0];
   const handoff = read('docs/HANDOFF.md').split('### 上一段（正式入口更新及两小时连续观察')[1].split('### 上一段（无人值守真实验收')[0];
   for (const content of [requirements, handoff]) {
     assert.match(content, /两小时连续观察已启动，尚未完成/);

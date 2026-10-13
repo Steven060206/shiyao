@@ -59,6 +59,34 @@ public sealed class DesktopLayoutTests : IDisposable
     }
 
     [Fact]
+    public void FractionalSavedPositionsLoadAndRemainUnchangedWhenTheOtherCardMoves()
+    {
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(LayoutPath, """
+            {"schema":1,"tasks":{"x":1389.6,"y":204,"width":340,"height":360},
+            "pending":{"x":1033.6,"y":206.4,"width":340,"height":360}}
+            """);
+        var saved = File.ReadAllBytes(LayoutPath);
+        var expected = new DesktopCardLayout(new(1737, 255, 425, 450), new(1292, 258, 425, 450));
+        var bounds = new DesktopRect(0, 0, 2560, 1380);
+        var store = new DesktopLayoutStore(directory);
+
+        Assert.Equal(expected, store.Load(new[] { bounds }, 1.25));
+        Assert.Null(store.Error);
+        Assert.Equal(expected, store.Load(bounds, 1.25));
+        Assert.Null(store.Error);
+        Assert.Equal(saved, File.ReadAllBytes(LayoutPath));
+
+        var moved = expected with { Tasks = new(1800, 300, 425, 450) };
+        store.SaveCard(moved, 1.25, pending: false);
+        Assert.Null(store.Error);
+        Assert.Equal(moved, new DesktopLayoutStore(directory).Load(new[] { bounds }, 1.25));
+        using var json = JsonDocument.Parse(File.ReadAllText(LayoutPath));
+        Assert.Equal(1033.6, json.RootElement.GetProperty("pending").GetProperty("x").GetDouble());
+        Assert.Equal(206.4, json.RootElement.GetProperty("pending").GetProperty("y").GetDouble());
+    }
+
+    [Fact]
     public void FileStoresDipsAndCurrentScaleRestoresPhysicalCoordinates()
     {
         var store = new DesktopLayoutStore(directory);

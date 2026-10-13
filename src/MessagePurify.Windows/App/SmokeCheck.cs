@@ -38,6 +38,7 @@ internal static partial class SmokeCheck
         var task = initial.Items.Single(i => i.Kind == "task");
         var review = initial.Items.Single(i => i.Kind == "review" && i.State == "pending");
         await WaitAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]') !== null");
+        await CheckDesktopAppearanceAsync(dataRoot, reportPath);
         await WaitAsync(window, "document.title === '拾要' && document.querySelector('img.brand-mark')?.complete && document.querySelector('img.brand-mark').naturalWidth > 0");
         if (window.Title != "拾要" || window.Icon is null)
             throw new InvalidOperationException("拾要窗口名称或图标未加载。");
@@ -50,7 +51,7 @@ internal static partial class SmokeCheck
         await WaitAsync(window, "document.querySelector('#theme-setting') !== null");
         await EvaluateAsync(window, "document.querySelector('#theme-setting').value='dark';document.querySelector('#theme-setting').dispatchEvent(new Event('change',{bubbles:true}))");
         await desktop.RefreshAsync();
-        await WaitAsync(() => desktop.TaskWindow.Background is SolidColorBrush brush && brush.Color == Colors.Black);
+        await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true));
         var reportFile = Path.GetFullPath(reportPath);
         Directory.CreateDirectory(Path.GetDirectoryName(reportFile)!);
         var cardsCapture = Path.Combine(Path.GetDirectoryName(reportFile)!, Path.GetFileNameWithoutExtension(reportFile) + "-cards.png");
@@ -236,7 +237,7 @@ internal static partial class SmokeCheck
                 "cross-group-merge-confirm", "cross-group-merge-evidence-old-id", "cross-group-merge-suggestion-hide",
                 "cache-cleanup-page", "cache-cleanup-old-chat", "cache-cleanup-task-evidence",
                 "cache-cleanup-review-evidence", "cache-cleanup-notice-evidence", "cache-cleanup-reopen",
-                "cache-cleanup-replay-dedup" }.Concat(BackupChecks).Concat(DesktopRecoveryChecks).ToArray(),
+                "cache-cleanup-replay-dedup" }.Concat(BackupChecks).Concat(DesktopRecoveryChecks).Concat(DesktopAppearanceChecks).ToArray(),
             taskCount = final.Items.Count(item => item.Kind == "task" && item.State != "merged"),
             activeTaskCount = final.Items.Count(item => item.Kind == "task" && item.State == "active"),
             mergedTaskCount = final.Items.Count(item => item.State == "merged"),

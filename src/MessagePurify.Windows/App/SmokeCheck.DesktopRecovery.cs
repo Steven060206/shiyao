@@ -150,7 +150,7 @@ internal static partial class SmokeCheck
             if (BackupFingerprint(recoveryRoot, workspace, workspace.Snapshot(DateTimeOffset.UtcNow)) != fingerprint
                 || desktop.Snapshot?.Tasks.Single().ChangeLabel != "新要求"
                 || !desktop.PendingWindow.IsVisible
-                || desktop.TaskWindow.Background is not SolidColorBrush brush || brush.Color != Colors.Black
+                || !HasDesktopTheme(desktop.TaskWindow, true)
                 || desktop.Layout != baselineLayout || File.ReadAllText(layoutPath) != originalLayoutFile
                 || workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == completed.Id).UndoExpiresAt != completed.UndoExpiresAt)
                 throw new InvalidDataException("恢复未保留当前任务、新要求、撤销期限、主题或布局。");

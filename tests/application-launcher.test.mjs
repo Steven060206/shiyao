@@ -13,7 +13,7 @@ test('默认入口选择新发布目录，保留仍在运行的上一版产物',
     const entry = path.join(directory, 'packaging/app/Start-MessagePurify.ps1');
     fs.mkdirSync(path.dirname(entry), {recursive:true});
     fs.copyFileSync(path.join(root, 'packaging/app/Start-MessagePurify.ps1'), entry);
-    for (const release of ['app', 'app-reminders', 'app-desktop', 'app-tray-fix', 'app-scheduled-sync', 'app-sync-status', 'app-launcher', 'app-desktop-recovery', 'app-shiyao']) {
+    for (const release of ['app', 'app-reminders', 'app-desktop', 'app-tray-fix', 'app-scheduled-sync', 'app-sync-status', 'app-launcher', 'app-desktop-recovery', 'app-shiyao', 'app-desktop-appearance']) {
       const published = path.join(directory, '.tools/published', release);
       fs.mkdirSync(path.join(published, 'ui'), {recursive:true});
       fs.writeFileSync(path.join(published, 'MessagePurify.exe'), release);
@@ -22,7 +22,7 @@ test('默认入口选择新发布目录，保留仍在运行的上一版产物',
     const result = spawnSync('powershell.exe', ['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File', entry, '-CheckOnly'], {encoding:'utf8',windowsHide:true});
     assert.equal(result.status, 0, result.stderr);
     assert.equal(fs.realpathSync.native(JSON.parse(result.stdout).Executable),
-      fs.realpathSync.native(path.join(directory, '.tools/published/app-shiyao/MessagePurify.exe')));
+      fs.realpathSync.native(path.join(directory, '.tools/published/app-desktop-appearance/MessagePurify.exe')));
     assert.equal(fs.readFileSync(path.join(directory, '.tools/published/app/MessagePurify.exe'), 'utf8'), 'app');
     assert.equal(fs.readFileSync(path.join(directory, '.tools/published/app-reminders/MessagePurify.exe'), 'utf8'), 'app-reminders');
     assert.equal(fs.readFileSync(path.join(directory, '.tools/published/app-desktop/MessagePurify.exe'), 'utf8'), 'app-desktop');
