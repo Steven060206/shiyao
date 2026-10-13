@@ -15,7 +15,8 @@ public static class DesktopCardProjection
             snapshot.AccountId, snapshot.ConnectionText, layoutError,
             Tasks = snapshot.Tasks.Select(i => new { i.Id, i.Version, i.Priority, i.Unread, i.ChangeLabel, i.Title, i.Due, i.Time,
                 i.TimeKind, i.Course, i.Group, i.Source, Past = IsPast(i, now) }),
-            Pending = snapshot.Pending.Select(i => new { i.Id, i.Version, i.Unread, i.ChangeLabel, i.Title }) });
+            Pending = snapshot.Pending.Select(i => new { i.Id, i.Kind, i.Version, i.Unread, i.ChangeLabel, i.Title,
+                i.Course, i.Group, i.Source, i.ReviewReasons, i.MergeSuggestion }) });
 
     internal static bool IsPast(ApplicationItem item, DateTimeOffset now)
     {
@@ -31,7 +32,7 @@ public static class DesktopCardProjection
         var items = snapshot?.Items ?? [];
         return new(snapshot?.AccountId,
             Sort(items.Where(item => item.Kind == "task" && item.State == "active")),
-            Sort(items.Where(item => item.Kind == "review" && item.State == "pending")),
+            Sort(items.Where(item => item.Kind is "review" or "merge-review" && item.State == "pending")),
             ConnectionText(snapshot, status), status.Error);
     }
 

@@ -205,6 +205,7 @@ internal static class SmokeCheck
         await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == manual.Id).State == "completed");
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2);
         await CheckTaskStructureAsync(window, workspace, runtime, desktop, dataRoot, task.Id, acceptedTask.Id);
+        await CheckCrossGroupMergeSuggestionsAsync(window, workspace, runtime, desktop, dataRoot);
         desktop.Capture(cardsCapture);
         var final = workspace.Snapshot(DateTimeOffset.UtcNow);
         var capture = Path.ChangeExtension(reportFile, ".png");
@@ -217,12 +218,139 @@ internal static class SmokeCheck
                 "manual-task-create", "manual-task-reopen", "manual-task-desktop", "manual-task-complete",
                 "merge-task-conflicts", "merge-task-selection", "merge-task-evidence-history", "merge-task-old-id",
                 "merge-task-desktop", "split-task-create", "split-task-evidence", "split-task-related-navigation",
-                "split-task-pending", "task-structure-reopen", "task-structure-two-cards" },
+                "split-task-pending", "task-structure-reopen", "task-structure-two-cards",
+                "cross-group-merge-suggestion", "cross-group-merge-card", "cross-group-merge-preselected",
+                "cross-group-merge-current-conflict", "cross-group-keep-separate", "cross-group-keep-separate-reopen",
+                "cross-group-merge-confirm", "cross-group-merge-evidence-old-id", "cross-group-merge-suggestion-hide" },
             taskCount = final.Items.Count(item => item.Kind == "task" && item.State != "merged"),
             activeTaskCount = final.Items.Count(item => item.Kind == "task" && item.State == "active"),
             mergedTaskCount = final.Items.Count(item => item.State == "merged"),
             pendingCount = final.Items.Count(item => item.Kind == "review" && item.State == "pending"),
+            mergeSuggestionCount = final.Items.Count(item => item.Kind == "merge-review" && item.State == "pending"),
             capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
+    }
+
+    private static async Task CheckCrossGroupMergeSuggestionsAsync(AppWindow window, AccountWorkspace workspace,
+        AppRuntime runtime, DesktopCardHost desktop, string dataRoot)
+    {
+        var baseline = workspace.Snapshot(DateTimeOffset.UtcNow);
+        HashSet<string> pinned = ["10001", "10101", "10102"];
+        OneBotGroup[] groups = [new("10001", "合成课程群"),
+            new("10101", "数学课程通知群"), new("10102", "数学课程转发群")];
+        workspace.SetAvailableGroups(groups, pinned);
+        var now = DateTimeOffset.UtcNow;
+        foreach (var group in new[] { "10101", "10102" })
+            workspace.Execute(new(workspace.AccountId, "confirm-group", group, "native-cross-group-course-" + group,
+                0, Course: "数学"), now);
+        var originalDate = now.ToOffset(TimeSpan.FromHours(8)).AddDays(8);
+        var separateText = $"{originalDate.Year}年{originalDate.Month}月{originalDate.Day}日之前提交第一轮数学实验报告";
+        var separatePair = IngestCrossGroupPair(workspace, pinned, "101", separateText, now);
+        var separateSuggestion = workspace.Snapshot(now).Items.Single(item => item.Kind == "merge-review");
+        var pair = separateSuggestion.MergeSuggestion ?? throw new InvalidDataException("跨群建议没有记录双方事项和版本。");
+        var first = separatePair.Single(item => item.Id == pair.FirstTaskId);
+        var second = separatePair.Single(item => item.Id == pair.SecondTaskId);
+        if (separateSuggestion.State != "pending" || !separateSuggestion.Title.StartsWith("可能重复：", StringComparison.Ordinal)
+            || separateSuggestion.Evidence.Count != 2 || separateSuggestion.ReviewReasons.Count == 0
+            || first.State != "active" || second.State != "active" || first.Due != second.Due)
+            throw new InvalidOperationException("跨群同原文未形成保留双方正式任务、证据和理由的待确认建议。");
+
+        // Original equality remains a suggestion after a user changes a current formal date.
+        runtime.Refresh();
+        await window.OpenItemAsync(workspace.AccountId, first.Id);
+        await WaitAsync(window, "document.querySelector('#time-form [name=date]') !== null");
+        var changedDate = originalDate.AddDays(2).ToString("yyyy-MM-dd");
+        await SetFormFieldsAsync(window, "time-form", new { date = changedDate });
+        await EvaluateAsync(window, "document.querySelector('#time-form').requestSubmit()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == first.Id).Due == changedDate);
+        separateSuggestion = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == separateSuggestion.Id);
+        pair = separateSuggestion.MergeSuggestion ?? throw new InvalidDataException("手动改日期后建议丢失双方版本。");
+        if (pair.FirstTaskVersion != workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == first.Id).Version)
+            throw new InvalidOperationException("建议没有更新手动修改后的当前任务版本。");
+        runtime.Refresh();
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == baseline.Items.Count(item => item.Kind == "task" && item.State == "active") + 2
+            && desktop.Snapshot.Pending.Count(item => item.Kind == "merge-review") == 1
+            && desktop.Snapshot.Pending.Any(item => item.Id == separateSuggestion.Id));
+        FindButton(desktop.PendingWindow, "open:" + separateSuggestion.Id)
+            .RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(window, "document.querySelector('.task-row.selected')?.dataset.id === " + JsonSerializer.Serialize(separateSuggestion.Id));
+        await WaitAsync(window, "document.querySelector('.detail-title')?.textContent === " + JsonSerializer.Serialize(separateSuggestion.Title));
+        await OpenMergeSuggestionAsync(window, pair);
+        await WaitAsync(window, "document.querySelector('#merge-task-form [name=timeTaskId]')?.closest('.merge-field').classList.contains('conflict') === true"
+            + " && document.querySelector('#merge-task-form').textContent.includes(" + JsonSerializer.Serialize(changedDate) + ")");
+        await EvaluateAsync(window, "document.querySelector('[data-action=keep-separate]').click()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.All(item => item.Id != separateSuggestion.Id));
+        var separated = workspace.Snapshot(DateTimeOffset.UtcNow);
+        if (separated.Items.Single(item => item.Id == first.Id).Due != changedDate
+            || separated.Items.Single(item => item.Id == second.Id).Due != second.Due
+            || separatePair.Any(original => separated.Items.Single(item => item.Id == original.Id).State != "active"))
+            throw new InvalidOperationException("保持独立改变了双方正式时间或任务状态。");
+        var reopenedWorkspace = new AccountWorkspace(dataRoot, workspace.AccountId);
+        reopenedWorkspace.SetAvailableGroups(groups, pinned);
+        var reopened = reopenedWorkspace.Snapshot(DateTimeOffset.UtcNow);
+        if (reopened.Items.Any(item => item.Id == separateSuggestion.Id)
+            || reopened.Items.Single(item => item.Id == first.Id).Due != changedDate
+            || reopened.Items.Single(item => item.Id == second.Id).Due != second.Due)
+            throw new InvalidDataException("重开工作区重新出现已保持独立的建议或丢失当前日期。");
+        runtime.Refresh();
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Pending.All(item => item.Id != separateSuggestion.Id) == true);
+
+        var mergeText = $"{originalDate.Year}年{originalDate.Month}月{originalDate.Day}日之前提交第二轮数学实验报告";
+        var mergePair = IngestCrossGroupPair(workspace, pinned, "102", mergeText, DateTimeOffset.UtcNow);
+        var mergeSuggestion = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Kind == "merge-review");
+        var merge = mergeSuggestion.MergeSuggestion ?? throw new InvalidDataException("第二对跨群建议缺少双方。");
+        runtime.Refresh();
+        await window.OpenItemAsync(workspace.AccountId, mergeSuggestion.Id);
+        await OpenMergeSuggestionAsync(window, merge);
+        await SetFormFieldsAsync(window, "merge-task-form", new { titleTaskId = merge.FirstTaskId,
+            courseTaskId = merge.SecondTaskId, timeTaskId = merge.FirstTaskId,
+            priorityTaskId = merge.SecondTaskId, stateTaskId = merge.FirstTaskId });
+        await EvaluateAsync(window, "document.querySelector('#merge-task-form').requestSubmit()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == merge.SecondTaskId).State == "merged");
+        var merged = workspace.Snapshot(DateTimeOffset.UtcNow);
+        var kept = merged.Items.Single(item => item.Id == merge.FirstTaskId);
+        var old = merged.Items.Single(item => item.Id == merge.SecondTaskId);
+        var evidence = mergePair.SelectMany(item => item.Evidence).Distinct().ToArray();
+        if (old.MergedIntoId != kept.Id || kept.State != "active" || kept.Evidence.Count != 2
+            || evidence.Any(item => !kept.Evidence.Contains(item))
+            || kept.Changes?.Any(change => change.Label.Contains("合并", StringComparison.Ordinal)) != true
+            || merged.Items.Any(item => item.Id == mergeSuggestion.Id))
+            throw new InvalidOperationException("显式跨群合并未保留双方原文、旧 ID、历史或没有移除建议。");
+        await window.OpenItemAsync(workspace.AccountId, old.Id);
+        await WaitAsync(window, "document.querySelector('.task-row.selected')?.dataset.id === " + JsonSerializer.Serialize(kept.Id));
+        var mergedReopenedWorkspace = new AccountWorkspace(dataRoot, workspace.AccountId);
+        mergedReopenedWorkspace.SetAvailableGroups(groups, pinned);
+        var mergedReopened = mergedReopenedWorkspace.Snapshot(DateTimeOffset.UtcNow);
+        if (mergedReopened.Items.Single(item => item.Id == old.Id).MergedIntoId != kept.Id
+            || mergedReopened.Items.Single(item => item.Id == kept.Id).Evidence.Count != 2
+            || mergedReopened.Items.Any(item => item.Id == mergeSuggestion.Id || item.Id == separateSuggestion.Id))
+            throw new InvalidDataException("重开工作区丢失跨群合并或重新显示已处理建议。");
+        runtime.Refresh();
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Pending.All(item => item.Kind != "merge-review") == true
+            && desktop.Snapshot.Tasks.All(item => item.Id != old.Id)
+            && desktop.Snapshot.Tasks.Count == baseline.Items.Count(item => item.Kind == "task" && item.State == "active") + 3);
+    }
+
+    private static ApplicationItem[] IngestCrossGroupPair(AccountWorkspace workspace, IReadOnlySet<string> pinned,
+        string messageId, string text, DateTimeOffset now)
+    {
+        foreach (var group in new[] { "10101", "10102" })
+            workspace.Ingest(new(new(workspace.AccountId, group, messageId), "10002", now,
+                [new(SegmentKind.Text, text)]), pinned, MessageOrigin.Realtime, "synthetic-cross-group-" + messageId, now);
+        var pair = workspace.Snapshot(now).Items.Where(item => item.Kind == "task"
+            && item.Evidence.Any(evidence => evidence.Text == text)).ToArray();
+        if (pair.Length != 2) throw new InvalidOperationException("跨群合成消息没有保留两项独立正式任务。");
+        return pair;
+    }
+
+    private static async Task OpenMergeSuggestionAsync(AppWindow window, ApplicationMergeSuggestion suggestion)
+    {
+        await WaitAsync(window, "document.querySelector('[data-action=open-merge-suggestion]') !== null");
+        await EvaluateAsync(window, "document.querySelector('[data-action=open-merge-suggestion]').click()");
+        await WaitAsync(window, "document.querySelector('#merge-task-form')?.dataset.id === " + JsonSerializer.Serialize(suggestion.FirstTaskId)
+            + " && document.querySelector('#merge-task-form [name=mergeWithId]')?.value === " + JsonSerializer.Serialize(suggestion.SecondTaskId));
     }
 
     private static async Task CheckTaskStructureAsync(AppWindow window, AccountWorkspace workspace,

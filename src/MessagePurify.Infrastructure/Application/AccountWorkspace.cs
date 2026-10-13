@@ -188,6 +188,22 @@ public sealed class AccountWorkspace
                     return new ApplicationGroup(id, name, name, relationship?.Course,
                         relationship?.Excluded == true, pinnedGroups.Contains(id));
                 }).OrderBy(group => group.Name, StringComparer.Ordinal).ToArray();
+            var mergeGroups = groups.Select(group => new CrossGroupMergeGroup(group.GroupId, group.Name,
+                group.Course, group.Excluded)).ToArray();
+            foreach (var match in CrossGroupMergeFinder.Find(taskList, reviews, mergeGroups, messages.Find))
+            {
+                var first = taskById[match.FirstTaskId];
+                var second = taskById[match.SecondTaskId];
+                // 任一方版本递增均使建议重新未读，不用较大版本掩盖另一方修改。
+                var version = checked(match.FirstTaskVersion + match.SecondTaskVersion);
+                items.Add(Item(match.Id, "merge-review", "可能重复：" + first.Title, first.Course, "pending",
+                    null, version, first.Evidence.Concat(second.Evidence).Distinct().ToArray(),
+                    first.Action, now, reasons: match.Reasons) with
+                {
+                    MergeSuggestion = new(match.FirstTaskId, match.FirstTaskVersion,
+                        match.SecondTaskId, match.SecondTaskVersion)
+                });
+            }
             return new(AccountId, items, groups, now, reminders.Synchronize(now));
         }
     }

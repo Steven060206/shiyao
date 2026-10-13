@@ -24,7 +24,11 @@ public sealed record ApplicationItem(string Id, string Kind, string Title, strin
     string Action, bool CanAccept, string? ChangeLabel = null,
     IReadOnlyList<ApplicationChange>? Changes = null,
     IReadOnlyList<ApplicationPendingChange>? PendingChanges = null, string Source = "qq",
-    string? MergedIntoId = null, IReadOnlyList<string>? RelatedItemIds = null);
+    string? MergedIntoId = null, IReadOnlyList<string>? RelatedItemIds = null,
+    ApplicationMergeSuggestion? MergeSuggestion = null);
+
+public sealed record ApplicationMergeSuggestion(string FirstTaskId, long FirstTaskVersion,
+    string SecondTaskId, long SecondTaskVersion);
 
 public sealed record ApplicationChange(string Label, DateTimeOffset At, long Version,
     IReadOnlyList<ApplicationFieldChange> Fields, IReadOnlyList<ApplicationEvidence> Evidence);

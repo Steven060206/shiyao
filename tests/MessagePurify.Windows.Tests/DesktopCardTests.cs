@@ -94,6 +94,89 @@ public sealed class DesktopCardTests
     }
 
     [Fact]
+    public void CrossGroupMergeSuggestionsJoinPendingWithoutAddingReminderTasks()
+    {
+        var first = Item("first-task");
+        var second = Item("second-task") with { Group = "另一课程群" };
+        var review = Item("date-review", "review", "pending");
+        var suggestion = Item("merge-suggestion", "merge-review", "pending", title: "可能重复：Task") with
+        {
+            Group = "课程群 / 另一课程群", ReviewReasons = ["两个已确认课程群中的原文一致，请核对后合并。"]
+        };
+
+        var cards = DesktopCardProjection.Build(Snapshot(first, second, review, suggestion), Connected());
+
+        Assert.Equal(["first-task", "second-task"], cards.Tasks.Select(item => item.Id));
+        Assert.Equal(2, cards.Pending.Count);
+        Assert.Contains(review, cards.Pending);
+        Assert.Same(suggestion, cards.Pending.Single(item => item.Id == suggestion.Id));
+        Assert.Equal("merge-review", cards.Pending.Single(item => item.Id == suggestion.Id).Kind);
+    }
+
+    [Theory]
+    [InlineData("accepted")]
+    [InlineData("ignored")]
+    [InlineData("resolved")]
+    public void ProcessedMergeSuggestionsLeaveThePendingCard(string state)
+    {
+        var first = Item("first-task");
+        var second = Item("second-task");
+        var suggestion = Item("merge-suggestion", "merge-review", "pending");
+        var pending = DesktopCardProjection.Build(Snapshot(first, second, suggestion), Connected());
+        var processed = DesktopCardProjection.Build(Snapshot(first, second, suggestion with { State = state }), Connected());
+
+        Assert.Same(suggestion, Assert.Single(pending.Pending));
+        Assert.Empty(processed.Pending);
+        Assert.Equal(pending.Tasks, processed.Tasks);
+        Assert.NotEqual(DesktopCardProjection.RenderSignature(pending, "dark", null, null, Now),
+            DesktopCardProjection.RenderSignature(processed, "dark", null, null, Now));
+    }
+
+    [Theory]
+    [InlineData("course")]
+    [InlineData("group")]
+    [InlineData("reasons")]
+    public void MergeSuggestionDetailsRefreshThePendingCard(string field)
+    {
+        var suggestion = Item("merge-suggestion", "merge-review", "pending");
+        var changed = field switch
+        {
+            "course" => suggestion with { Course = "数学" },
+            "group" => suggestion with { Group = "课程群 / 另一课程群" },
+            _ => suggestion with { ReviewReasons = ["当前正式时间不同，核对双方原文。"] }
+        };
+        var original = new DesktopCardsSnapshot("account-a", [], [suggestion], "已连接", null);
+        var updated = original with { Pending = [changed] };
+
+        Assert.NotEqual(DesktopCardProjection.RenderSignature(original, "dark", null, null, Now),
+            DesktopCardProjection.RenderSignature(updated, "dark", null, null, Now));
+        Assert.Equal(suggestion.Version, changed.Version);
+    }
+
+    [Theory]
+    [InlineData("first-id")]
+    [InlineData("first-version")]
+    [InlineData("second-id")]
+    [InlineData("second-version")]
+    public void MergeSuggestionPairChangesRefreshThePendingCard(string field)
+    {
+        var pair = new ApplicationMergeSuggestion("first-task", 2, "second-task", 3);
+        var item = Item("merge-suggestion", "merge-review", "pending") with { MergeSuggestion = pair };
+        var changedPair = field switch
+        {
+            "first-id" => pair with { FirstTaskId = "other-first" },
+            "first-version" => pair with { FirstTaskVersion = 4 },
+            "second-id" => pair with { SecondTaskId = "other-second" },
+            _ => pair with { SecondTaskVersion = 5 }
+        };
+        var original = new DesktopCardsSnapshot("account-a", [], [item], "已连接", null);
+        var changed = original with { Pending = [item with { MergeSuggestion = changedPair }] };
+
+        Assert.NotEqual(DesktopCardProjection.RenderSignature(original, "dark", null, null, Now),
+            DesktopCardProjection.RenderSignature(changed, "dark", null, null, Now));
+    }
+
+    [Fact]
     public void TasksSortByPriorityThenDateTimeTitleAndId()
     {
         var snapshot = Snapshot(

@@ -40,9 +40,11 @@ const selected = () => items().find(item => item.id === selectedId);
 const loadedAccount = () => typeof snapshot?.accountId === 'string' && Boolean(snapshot.accountId.trim());
 const manualDraft = () => manualDrafts.get(snapshot?.accountId);
 const structureKey = (accountId, id, mode) => `${accountId}/${id}/${mode}`;
-const structureDraft = () => structureOpen && structureOpen.accountId === snapshot?.accountId ? structureDrafts.get(structureKey(structureOpen.accountId, structureOpen.id, structureOpen.mode)) : null;
+const structureDraft = () => structureOpen && structureOpen.accountId === snapshot?.accountId ? structureDrafts.get(structureOpen.draftKey) : null;
 const structureBusyKey = (accountId, id) => `${accountId}/${id}/structure`;
 const structureOperations = ['merge-tasks', 'split-task', 'keep-separate'];
+const reviewItem = item => ['review', 'merge-review'].includes(item.kind);
+const mergePair = suggestion => [suggestion.mergeSuggestion?.firstTaskId, suggestion.mergeSuggestion?.secondTaskId].map(id => items().find(item => item.id === id && item.kind === 'task' && item.state !== 'merged'));
 const linkedWithoutDate = item => Boolean(item.targetTaskId && ['cancel', 'remind'].includes(item.action));
 const localDate = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const past = item => Boolean(item.due && (item.time ? new Date(`${item.due}T${item.time}:00+08:00`).getTime() < Date.now() : item.due < localDate()));
@@ -90,7 +92,7 @@ function request(operation, parameters, itemId = null) {
   const structural = structureOperations.includes(operation);
   const busyKey = structural ? structureBusyKey(parameters.accountId, itemId) : itemId;
   if (busyKey) busy.add(busyKey);
-  const structureDraftKey = structural ? structureKey(parameters.accountId, itemId, operation === 'split-task' ? 'split' : 'merge') : null;
+  const structureDraftKey = structural ? structureOpen?.accountId === parameters.accountId && structureOpen.id === itemId ? structureOpen.draftKey : structureKey(parameters.accountId, itemId, operation === 'split-task' ? 'split' : 'merge') : null;
   const timer = setTimeout(() => {
     const pending = requests.get(id); if (!pending) return;
     if (pending.structural) {
@@ -107,7 +109,7 @@ function request(operation, parameters, itemId = null) {
     else hostError = errorLabel('command_timeout');
     render();
   }, 15000);
-  const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen && structureKey(structureOpen.accountId, structureOpen.id, structureOpen.mode) } : null;
+  const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen?.draftKey } : null;
   requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, structural, structureDraftKey, structureOperationId: parameters.operationId });
   try { bridge.postMessage({ id, operation, parameters }); }
   catch {
@@ -142,7 +144,7 @@ function openItem(message) {
   if (snapshot.accountId !== message.accountId) {
     hostError = '此事项所属 QQ 账号与当前账号不一致，请核对账号后再打开。'; render(); return;
   }
-  let item = items().find(item => item.id === message.id && ['task', 'review'].includes(item.kind));
+  let item = items().find(item => item.id === message.id && ['task', 'review', 'merge-review'].includes(item.kind));
   const visited = new Set();
   while (item && (item.state === 'merged' && item.mergedIntoId || item.kind === 'review' && item.state === 'accepted' && item.targetTaskId)) {
     if (visited.has(item.id)) { item = null; break; }
@@ -151,7 +153,7 @@ function openItem(message) {
   }
   if (!item) { hostError = '未找到此事项，请刷新后重试。'; render(); return; }
   manualOpen = false; structureOpen = null; mergedSourceId = null;
-  page = item.kind === 'review' ? 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
+  page = reviewItem(item) ? 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
   filters = { search: '', course: '', state: item.state };
   selectedId = item.id; detailError = null; hostError = '';
   render();
@@ -176,7 +178,7 @@ function receive(message) {
     }
     if (pending.structural) {
       const draft = structureDrafts.get(pending.structureDraftKey);
-      pending.openStructure = structureOpen && pending.structureDraftKey === structureKey(structureOpen.accountId, structureOpen.id, structureOpen.mode) && selectedId === pending.itemId;
+      pending.openStructure = structureOpen && pending.structureDraftKey === structureOpen.draftKey && selectedId === pending.itemId;
       if (draft?.operationId === pending.structureOperationId) {
         if (message.success) {
           structureDrafts.delete(pending.structureDraftKey);
@@ -242,7 +244,7 @@ function receive(message) {
       }
       snapshot = incoming;
       if (!initialized) {
-        page = items().some(item => item.kind === 'review' && item.state === 'pending') ? 'pending' : 'tasks';
+        page = items().some(item => reviewItem(item) && item.state === 'pending') ? 'pending' : 'tasks';
         filters.state = page === 'pending' ? 'pending' : 'active'; initialized = true;
       }
     }
@@ -282,7 +284,7 @@ function pageItems() {
   return items().filter(item => {
     if (item.state === 'merged' || item.kind === 'review' && item.state === 'accepted') return false;
     const belongs = page === 'tasks' ? item.kind === 'task' && item.state !== 'completed'
-      : page === 'pending' ? item.kind === 'review'
+      : page === 'pending' ? reviewItem(item)
         : page === 'completed' ? item.kind === 'task' && item.state === 'completed'
           : page === 'notices' ? item.kind === 'notice' : false;
     const stateMatch = page === 'completed' || filters.state === 'all' || item.state === filters.state || page === 'notices' && filters.state === 'active' && item.state === 'converted';
@@ -321,7 +323,7 @@ function syncTimeLabel(value, empty) {
 }
 function renderNav() {
   $('nav').innerHTML = Object.entries(pages).map(([key, label]) => {
-    const relevant = items().filter(item => key === 'pending' ? item.kind === 'review' && item.state === 'pending' : key === 'tasks' ? item.kind === 'task' && item.state === 'active' : key === 'notices' ? item.kind === 'notice' : key === 'completed' ? item.state === 'completed' : false);
+    const relevant = items().filter(item => key === 'pending' ? reviewItem(item) && item.state === 'pending' : key === 'tasks' ? item.kind === 'task' && item.state === 'active' : key === 'notices' ? item.kind === 'notice' : key === 'completed' ? item.state === 'completed' : false);
     const unread = relevant.filter(item => item.unread).length;
     return `<button data-action="nav" data-page="${key}" ${key === page ? 'aria-current="page"' : ''}><span>${label}${unread ? '<i class="unread-dot" aria-label="有未读事项"></i>' : ''}</span>${relevant.length ? `<span class="count" title="共 ${relevant.length} 项，${unread} 项未读">${unread ? `${unread} 未读` : relevant.length}</span>` : ''}</button>`;
   }).join('');
@@ -369,9 +371,9 @@ function renderList() {
   if (!visible.some(item => item.id === selectedId) && !viewingStructure) selectedId = visible[0]?.id || null;
   $('list-summary').innerHTML = `<span>${visible.length} 项${snapshot ? '' : ' · 等待本地应用'}</span><b>${pages[page]}</b>`;
   $('rows').innerHTML = visible.length ? visible.map(item => `<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
-    <div class="row-top"><h2>${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}${item.changeLabel ? `<span class="change-badge">${html(item.changeLabel)}</span>` : ''}</h2><span class="tag ${item.kind === 'review' ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${item.kind === 'review' ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
+    <div class="row-top"><h2>${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}${item.changeLabel ? `<span class="change-badge">${html(item.changeLabel)}</span>` : ''}</h2><span class="tag ${reviewItem(item) ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${reviewItem(item) ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
     <div class="row-meta"><span>${html(item.course || item.group || '来源待核对')}${item.source === 'manual' ? '<span class="manual-source">手动添加</span>' : ''}</span><span>${item.kind === 'task' ? html(dateLabel(item)) : html(states[item.state])}</span></div>
-    ${item.kind === 'review' && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}</button>`).join('') : emptyMessage();
+    ${reviewItem(item) && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}</button>`).join('') : emptyMessage();
 }
 function draftFor(item) {
   if (!drafts.has(item.id)) drafts.set(item.id, {
@@ -426,13 +428,14 @@ function relatedHTML(item) {
   const source = sources.find(candidate => candidate.id === mergedSourceId);
   return `${related.length ? `<section class="related-items"><h3 class="section-label">关联事项</h3>${related.map(candidate => `<button type="button" class="button small" data-action="open-related" data-id="${html(candidate.id)}">${html(candidate.title)} · ${html(states[candidate.state] || '已合并')}</button>`).join('')}</section>` : ''}${sources.length ? `<section class="merged-sources"><h3 class="section-label">合并来源</h3><p class="hint">保留原事项的证据和变更记录。</p>${sources.map(candidate => `<button type="button" class="button small" data-action="view-merged-source" data-id="${html(candidate.id)}">${html(candidate.title)}</button>`).join('')}${source ? `<div class="merged-source-detail"><h3>${html(source.title)}</h3>${historyHTML(source)}${sourceHTML(source)}</div>` : ''}</section>` : ''}`;
 }
-function openStructure(item, mode) {
+function openStructure(item, mode, suggestion = null) {
   if (item.kind !== 'task' || item.state === 'merged' || !loadedAccount()) return;
-  const key = structureKey(snapshot.accountId, item.id, mode);
+  const key = structureKey(snapshot.accountId, item.id, mode) + (suggestion ? `/${suggestion.id}` : '');
+  const other = suggestion && mergePair(suggestion)[1];
   if (!structureDrafts.has(key)) structureDrafts.set(key, mode === 'merge'
-    ? { version: item.version, mergeWithId: '', mergeWithVersion: null, selection: {}, error: '' }
+    ? { version: suggestion?.mergeSuggestion.firstTaskVersion ?? item.version, mergeWithId: other?.id || '', mergeWithVersion: suggestion?.mergeSuggestion.secondTaskVersion ?? null, selection: other ? Object.fromEntries(mergeFields.map(([field, , value]) => [field, value(item) === value(other) ? item.id : ''])) : {}, suggestionId: suggestion?.id, reviewReasons: suggestion?.reviewReasons || [], error: '' }
     : { version: item.version, newItemId: uuid(), title: item.title || '', course: item.course || '', date: item.due || '', time: item.time || '', timeKind: item.timeKind || 'deadline', priority: 'auto', state: ['active', 'completed', 'cancelled', 'archived'].includes(item.state) ? item.state : 'active', evidence: item.evidence || [], evidenceIndexes: (item.evidence || []).map((_, index) => index), error: '' });
-  structureOpen = { accountId: snapshot.accountId, id: item.id, mode }; manualOpen = false;
+  structureOpen = { accountId: snapshot.accountId, id: item.id, mode, draftKey: key }; manualOpen = false;
   detailSignature = ''; render();
 }
 const mergeFields = [
@@ -442,10 +445,15 @@ const mergeFields = [
   ['priorityTaskId', '优先级', item => Number.isInteger(item.priority) ? `P${item.priority}` : '自动'],
   ['stateTaskId', '状态', item => states[item.state] || item.state]
 ];
+const mergeReasonsHTML = reasons => reasons?.length ? `<div class="change-box merge-review-reasons"><b>可能重复，需要人工核对</b><p>${html(reasons.join(' · '))}</p><p>当前正式信息可能经过手动编辑，请核对差异和原文后决定合并或保持独立。</p></div>` : '';
+function mergeSuggestionHTML(suggestion) {
+  const [first, second] = mergePair(suggestion);
+  return `<p class="eyebrow">待确认 · 可能重复</p><h2 class="detail-title">${html(suggestion.title)}</h2>${mergeReasonsHTML(suggestion.reviewReasons)}${first && second ? `<h3 class="section-label">双方当前正式信息</h3>${mergeFields.map(([, label, value]) => `<div class="merge-field ${value(first) !== value(second) ? 'conflict' : ''}"><h3>${label}${value(first) !== value(second) ? '<span>存在差异</span>' : ''}</h3><dl><dt>当前事项</dt><dd>${html(value(first))}</dd><dt>另一事项</dt><dd>${html(value(second))}</dd></dl></div>`).join('')}<div class="detail-actions"><button type="button" class="button primary" data-action="open-merge-suggestion">核对合并或保持独立</button></div><h3 class="section-label">当前事项 · ${html(first.title)}</h3>${sourceHTML(first)}<h3 class="section-label">另一事项 · ${html(second.title)}</h3>${sourceHTML(second)}` : '<p class="hint">关联任务已变化或暂不可用，请刷新后核对。</p>'}`;
+}
 function structureFormHTML(item, draft) {
   const merge = structureOpen.mode === 'merge';
   const other = items().find(candidate => candidate.id === draft.mergeWithId && candidate.kind === 'task' && (candidate.state !== 'merged' || draft.unconfirmed));
-  return `<p class="eyebrow">${merge ? '合并重复事项' : '拆开错误合并'}</p><h2 class="detail-title">${html(item.title)}</h2><p class="hint">${merge ? '当前事项将作为保留项；逐字段选择正式信息，全部证据和历史记录继续保留。' : '保留原事项，另建可独立处理的关联事项。核对行动、时间、证据及状态。'}</p><form class="form structure-form" id="${merge ? 'merge-task-form' : 'split-task-form'}" data-id="${html(item.id)}" novalidate>
+  return `<p class="eyebrow">${merge ? '合并重复事项' : '拆开错误合并'}</p><h2 class="detail-title">${html(item.title)}</h2>${mergeReasonsHTML(draft.reviewReasons)}<p class="hint">${merge ? '当前事项将作为保留项；逐字段选择正式信息，全部证据和历史记录继续保留。' : '保留原事项，另建可独立处理的关联事项。核对行动、时间、证据及状态。'}</p><form class="form structure-form" id="${merge ? 'merge-task-form' : 'split-task-form'}" data-id="${html(item.id)}" novalidate>
     ${merge ? `<label class="field">选择另一项任务<select name="mergeWithId"><option value="">请选择要合并的任务</option>${items().filter(candidate => candidate.kind === 'task' && candidate.id !== item.id && (candidate.state !== 'merged' || draft.unconfirmed && candidate.id === draft.mergeWithId)).map(candidate => `<option value="${html(candidate.id)}" ${candidate.id === draft.mergeWithId ? 'selected' : ''}>${html(candidate.title)} · ${html(candidate.course || '未填写课程')} · ${html(states[candidate.state])}</option>`).join('')}</select></label>${other ? mergeFields.map(([key, label, value]) => `<div class="merge-field ${value(item) !== value(other) ? 'conflict' : ''}"><h3>${label}${value(item) !== value(other) ? '<span>存在差异</span>' : ''}</h3><dl><dt>当前事项</dt><dd>${html(value(item))}</dd><dt>另一事项</dt><dd>${html(value(other))}</dd></dl><label class="field">保留${label}<select name="${key}"><option value="">请选择保留哪项</option><option value="${html(item.id)}" ${draft.selection[key] === item.id ? 'selected' : ''}>当前事项 · ${html(value(item))}</option><option value="${html(other.id)}" ${draft.selection[key] === other.id ? 'selected' : ''}>另一事项 · ${html(value(other))}</option></select></label></div>`).join('') : ''}` : `
       <label class="field">新事项标题（必填）<input name="title" maxlength="256" value="${html(draft.title)}" required></label><label class="field">课程或分类（可留空）<input name="course" maxlength="256" value="${html(draft.course)}" list="task-course-options"><datalist id="task-course-options">${courseOptions().map(course => `<option value="${html(course)}"></option>`).join('')}</datalist></label>
       <label class="field">正式日期（有原消息证据时可留空）<input name="date" type="date" value="${html(draft.date)}"></label><div class="form-grid"><label class="field">时间（可不填）<input name="time" type="time" value="${html(draft.time)}"></label><label class="field">时间类型<select name="timeKind">${['deadline', 'start'].map(kind => `<option value="${kind}" ${draft.timeKind === kind ? 'selected' : ''}>${kind === 'start' ? '开始时间' : '截止时间'}</option>`).join('')}</select></label></div><p class="hint">缺少正式日期且有选中证据时，新事项进入待确认；无原消息的手动事项须补齐日期。仅有日期不会补写具体钟点。</p>
@@ -521,12 +529,13 @@ function renderDetail() {
     updateDetailControls(); return;
   }
   const item = page === 'settings' ? null : selected();
-  const signature = item ? JSON.stringify([{ ...item, version: undefined, targetTaskVersion: undefined, unread: undefined }, mergedSourceId, (item.relatedItemIds || []).map(id => items().find(candidate => candidate.id === id)), items().filter(candidate => candidate.state === 'merged' && candidate.mergedIntoId === item.id)]) : `empty/${page}/${Boolean(snapshot)}/${status?.transport}/${status?.qq}`;
+  const signature = item ? JSON.stringify([{ ...item, version: undefined, targetTaskVersion: undefined, unread: undefined }, item.kind === 'merge-review' ? mergePair(item) : null, mergedSourceId, (item.relatedItemIds || []).map(id => items().find(candidate => candidate.id === id)), items().filter(candidate => candidate.state === 'merged' && candidate.mergedIntoId === item.id)]) : `empty/${page}/${Boolean(snapshot)}/${status?.transport}/${status?.qq}`;
   const scroll = $('detail-pane').querySelector('.detail-scroll'), footer = $('detail-pane').querySelector('.confirmation-bar');
   if (signature !== detailSignature) {
     const sameItem = scroll.querySelector('form')?.dataset.id === item?.id;
     retainFocus(scroll, () => {
       if (!item) scroll.innerHTML = `<div class="empty"><h2>${page === 'settings' ? '仅接收置顶群' : snapshot ? '查看事项详情' : initialMessage()[0]}</h2><p>${page === 'settings' ? '确认群课程后用于新消息。已有待确认仍需逐项核对。' : snapshot ? '选择左侧事项查看原文与操作。' : initialMessage()[1]}</p></div>`;
+      else if (item.kind === 'merge-review') scroll.innerHTML = mergeSuggestionHTML(item);
       else scroll.innerHTML = `<p class="eyebrow">${html(states[item.state] || pages[page])}</p><h2 class="detail-title">${html(item.title)}</h2>${item.changeLabel ? `<p class="detail-change-label change-badge">${html(item.changeLabel)}</p>` : ''}<p class="detail-sub">${html(item.course || '课程待核对')} · ${html(item.group || '来源待核对')}</p>
         ${item.kind === 'task' ? `<div class="deadline-box ${item.state === 'active' && past(item) && item.timeKind !== 'start' ? 'overdue' : ''}"><small>${timeLabel(item)}</small><b>${html(dateLabel(item))}</b><small>${item.state !== 'active' ? html(states[item.state]) : past(item) ? item.timeKind === 'start' ? '开始时间已过' : '已逾期，仍保留待处理' : '按正式日期和时间精度保存'}</small></div>` : ''}
         ${pendingChangesHTML(item)}
@@ -711,7 +720,12 @@ document.addEventListener('click', event => {
   if (action === 'refresh' || action === 'refresh-edit' || action === 'refresh-structure') { hostError = ''; request('snapshot', {}); return; }
   if (action === 'open-related') { openItem({ accountId: snapshot.accountId, id: button.dataset.id }); return; }
   if (action === 'view-merged-source') { mergedSourceId = button.dataset.id; render(); return; }
-  if (action === 'close-structure') { structureOpen = null; detailSignature = ''; render(); return; }
+  if (action === 'close-structure') {
+    const suggestionId = structureDraft()?.suggestionId;
+    structureOpen = null; detailSignature = '';
+    if (suggestionId && items().some(item => item.id === suggestionId)) { openItem({ accountId: snapshot.accountId, id: suggestionId }); return; }
+    render(); return;
+  }
   if (action === 'open-suggestion') {
     const suggestion = items().find(item => item.id === button.dataset.id && item.kind === 'review' && item.state === 'pending');
     if (!suggestion || !snapshot) { hostError = '此建议已处理或暂不可用，请刷新后核对。'; render(); return; }
@@ -727,6 +741,11 @@ document.addEventListener('click', event => {
     request('confirm-group', { accountId: snapshot.accountId, id: groupId, operationId: uuid(), version: 0, course, excluded }, groupId); return;
   }
   const item = selected(); if (!item) return;
+  if (action === 'open-merge-suggestion' && item.kind === 'merge-review') {
+    const [first, second] = mergePair(item);
+    if (!first || !second || first.id === second.id) { hostError = '关联任务已变化或暂不可用，请刷新后核对。'; render(); return; }
+    openItem({ accountId: snapshot.accountId, id: first.id }); openStructure(first, 'merge', item); return;
+  }
   if (action === 'open-merge' || action === 'open-split') { openStructure(item, action === 'open-merge' ? 'merge' : 'split'); return; }
   if (action === 'keep-separate') { saveStructure('keep-separate'); return; }
   if (action === 'use-suggestion') {

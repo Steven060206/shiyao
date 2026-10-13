@@ -2,9 +2,34 @@
 
 最后更新：2026-10-13（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立及拆分已接入代码，并通过自动回归与 Native Smoke 合成验证。真实 QQ 编辑场景、固定时刻/游戏实测、桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分及跨群可能重复建议已接入代码，并通过自动回归与 Native Smoke 合成验证。真实 QQ 编辑场景、固定时刻/游戏实测、桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 当前接续（手动合并与拆分，2026-10-13，已实现并通过自动/Native 合成验证）
+### 当前接续（跨群可能重复建议，2026-10-13，已实现并通过自动/Native 合成验证）
+
+接续基线 `a16ccea`，已核对需求、交接、实际代码及干净工作区，沿用 `codex/m3-integration-probes` 分支。计划为 `docs/superpowers/plans/2026-10-13-cross-group-merge.md`。当前消息模型缺少可核实的跨群原通知身份，故严格匹配完整原文及原始新 Task 候选后提供“可能重复”的人工建议；不自动合并，不放宽跨群延期/取消等关联规则。同课程群须已确认且未排除，保留数字、日期、班级、轮次差异；排除多行动、共享证据、拆分家族，并尊重合并别名上的保持独立决定。
+
+匹配器及工作区快照已写入：`CrossGroupMergeFinder`、`ApplicationItem.MergeSuggestion` 和 `merge-review` 派生项携带双方 ID/版本，复用已实现的合并差异表和保持独立事务；不伪造普通 `PendingReview`。建议已读版本使用双方版本之和，避免较大版本掩盖另一方修改。专项实际执行 `./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release --filter 'FullyQualifiedName~CrossGroupMergeWorkspaceTests|FullyQualifiedName~CrossGroupMergeFinderTests'`：**57/57**、退出 0；工作区新增 5 项先全部因缺少建议失败，再通过。匹配专项 52 项覆盖可靠性、严格原文、班级、独立别名及拆分家族；工作区覆盖原文和双版本、未读重现、处理刷新及重开。文档回归 `node --test tests/project-rules.test.mjs` **40/40**、退出 0。
+
+正式页面已接入待确认列表/数量/默认入口、双方正式值与原文、预选合并差异表及桌面打开建议；保持独立持久化后移除建议，合并/拆分/任一方版本变化后重算。双版本冲突显式刷新保留草稿，未知保存确认原请求，账号及迟到响应隔离。建议不使用普通接受/忽略/拒绝命令。桌面待确认卡片包含建议，提醒卡片继续显示当前正式任务；处理后建议移除。卡片新增 11 项先复现失败（旧 31 项通过），页面新增 8 项先复现默认入口/路由等失败，再实施通过。
+
+本轮实际验证：Core Release **306/306**、Infrastructure Release **611/611**（匹配器56、工作区5）、Windows Release **280/280**（卡片42）均退出 0；App Release build 无警告错误。`node --test tests/*.test.mjs` **125/125**（页面66、文档40）、退出 0。自包含发布 `.tools/published/app-cross-group-merge/` 退出 0，无警告错误；发布版 `--smoke-test --report .tools/desktop-validation/cross-group-merge-native.json` 进程退出 0，success=true、synthetic=true、**45 项**通过（原36+新增9）。检查真实 WebView2/本地桥、卡片打开建议、预选双方、当前手改日期差异、保持独立重开、显式合并证据/历史/旧 ID 以及移除建议；两卡片 parentClass=SHELLDLL_DefView、child/noActivate=true、topmost=false。Native 页面/卡片截图已实际查看。
+
+实际命令（根目录）：
+
+- `./.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release`：306/306。
+- `./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release`：611/611。
+- `./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release`：280/280。
+- `./.tools/dotnet/dotnet.exe build src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release`：退出 0，0警告/0错误。
+- `node --test tests/*.test.mjs`：125/125，退出 0。
+- `./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-cross-group-merge`：退出 0。
+- 发布产物以 `Start-Process -WindowStyle Hidden -PassThru` 启动 `--smoke-test --report .tools/desktop-validation/cross-group-merge-native.json` 并等待：退出 0、45 项通过。
+- `git diff --check`：退出 0。
+
+同步最新阶段时，旧文档断言仍要求“下一项为跨群合并建议协调”，首次 Node 全量 124/125；更新断言核对“跨群建议已接入、下一项缓存清理”后，全量重跑 125/125、退出 0，失败日志保留 `.tools/cross-group-validation/node-doc-state-failure.log`。引用修复后已重新发布并运行45项Native检查，核对报告确为本次进程新写入、成功且为合成数据。
+
+日志 `.tools/cross-group-validation/`；Native 截图 `cross-group-merge-native.png` 和 `cross-group-merge-native-cards.png`；正式页面建议/差异图 `cross-group-suggestion.png` 和 `cross-group-suggestion-merge.png`，四图均已实际查看。一次有限复核发现引用上下文遗漏：4项真实提取回归先因错误建议失败（原52项通过），再保守排除含Quote的来源，匹配56/56通过；针对该修复复核为ADDRESSED，无新增具体问题。对应提交说明为 feat: suggest cross-group duplicate tasks，标识以Git日志为准；默认入口、正在运行版本和真实 QQ 数据未切换，QQ/NapCat 只读；下一步缓存清理、备份恢复、桌面恢复，再统一真实验收。未找到 `maintain-context-hygiene` 技能文件，已按项目规则人工核对阶段、有效需求、代码与实际结果，未删除项目文件。
+
+### 上一段（手动合并与拆分，2026-10-13，已实现并通过自动/Native 合成验证）
 
 接续基线 `5abb6f9`，沿用已确认设计第 7.2 节及既有 `codex/m3-integration-probes` 分支。实施计划为 `docs/superpowers/plans/2026-10-13-task-structure.md`。`merge-tasks` 同事务核对双方版本，逐字段选择标题/行动、课程、正式时间、优先级及状态；选择的当前优先级持久化为显式覆盖，避免选择另一日期时重新分级改变所选值。来源 ID 保留并跳转，原证据、双方历史及旧计划/台账不删除。`keep-separate` 保存双方独立决定，后续显式合并可替代当前关系，旧审计保留。
 
@@ -72,7 +97,7 @@
 
 上一段验证：快捷方式/旧启动脚本 7/7、配置读取专项 11/11、Windows Release 164/164、Node 全量 80/80；自包含发布至 `.tools/published/app-launcher/`，默认入口 `-CheckOnly` Ready/AuthenticationReady=true，Native 合成 13 项报告 `.tools/desktop-validation/app-launcher-native.json` success=true。当前安装报告 `.tools/desktop-validation/app-launcher-shortcuts-installed.json` 记录桌面与开始菜单入口已实际安装并检查；桌面入口启动 PID 13596，两个桌面卡片均 visible/child/noActivate=true、parentClass=SHELLDLL_DefView、topmost=false。开始菜单入口再次启动保持单实例，主窗口隐藏后再次启动唤回；真实只读报告 `.tools/desktop-validation/app-launcher-read-only.json` 为 connected/online、历史 complete、失败为空，UIA 显示等待下次同步、18:29 成功时间及 20:00 计划时间。QQ 快捷方式和同步规则保持。
 
-最新工作顺序（2026-10-13）：用户要求先把已确定的功能全部实现，再统一进行验收。Windows 登录自动启动、普通通知转任务、完整编辑、可读变更记录/卡片变化标记和手动新增和手动合并/保持独立/拆分已完成；下一阶段按跨群合并建议协调及其余确定功能 → 缓存清理 → 备份恢复 → 桌面卡片恢复推进。OCR 图片下载、队列和重分析作为后期独立项目，当前不实现；与本机数据泄露相关的额外安全增强也暂缓。QQ 只读及不得向群聊或私聊发送消息仍是硬约束。自然固定时刻、实际游戏暂停/补同步、长期稳定性和完整真实端到端场景等验收统一后置。关机/睡眠漏同步规则仍是未决定事项，不在未确认前实现。
+最新工作顺序（2026-10-13）：用户要求先把已确定的功能全部实现，再统一进行验收。Windows 登录自动启动、普通通知转任务、完整编辑、可读变更记录/卡片变化标记和手动新增和手动合并/保持独立/拆分已完成；跨群可能重复建议已实现并验证；下一阶段按缓存清理 → 备份恢复 → 桌面卡片恢复推进。OCR 图片下载、队列和重分析作为后期独立项目，当前不实现；与本机数据泄露相关的额外安全增强也暂缓。QQ 只读及不得向群聊或私聊发送消息仍是硬约束。自然固定时刻、实际游戏暂停/补同步、长期稳定性和完整真实端到端场景等验收统一后置。关机/睡眠漏同步规则仍是未决定事项，不在未确认前实现。
 
 上一段接续（基线 `b4dc8e9`）：常驻同步状态显示已实现并验证，正常等待、正在同步、游戏延后、未补全及连接异常分别显示。上次成功同步（本次运行）仅在实际完成且没有历史失败的批次结束后记录；重连、游戏暂停及状态刷新保留该时间，下一计划时间复用北京时间调度规则。本轮发布至 `.tools/published/app-sync-status/` 并更新默认入口，正式应用已重开为 PID 40840，主窗口停在设置页；真实界面显示等待下次同步、17:51 成功时间及今晚 20:00 计划时间，两卡片和 QQ/接口保持运行。便捷启动、自启动、OCR 队列、自然固定时刻及实际游戏验收继续保留，整体 M3/M8 不标完成。
 
@@ -106,7 +131,7 @@
 - 先读项目根目录的 `AGENTS.md`；恢复工作时先读 `docs/HANDOFF.md`，再读 `docs/requirements.md`，然后核对实际文件。
 - 普通 QQ 登录不作为 OneBot 连接成功；本轮正式宿主使用只读接口并持久化真实群消息，合成页面操作和真实接收分别记录。
 - 最新规则及结果：只读取 QQ 置顶群。本轮真实只读复查读取 52 个已加入群名单、9 个置顶群历史，当次读取 complete、失败为空，保存 48 项待确认，0 个正式任务/通知；此前两次为 40 项。未自动确认真实课程或日期，没有 QQ 发送或 Windows 通知。Infrastructure 最新完整回归 501/501；动态置顶人工验收、持续实时和长期稳定性未完成，M3 不改为完成。
-- 当前阶段：**整体设计已确认，用户反馈 demo 基本满足要求，实施计划已写入并授权持续开发。M1 已完成，M2 已完成，M3 正在实施并保留真实接收/长期稳定性验收。M4 四段本地基础及正式 WPF/WebView2 主界面、AccountWorkspace 和只读宿主已接入；真实 QQ 历史接收/重启去重、合成 WebView2 已通过。旧方案持久化提醒第一段已验证并保留，Windows 全部系统通知与声音已取消；正式两张桌面卡片首段已实现并验证，当前快照、查看/完成、主题、布局存盘和实际桌面层级通过。Windows 登录自动启动已接入代码并完成自动/合成验证，登录后的真实系统验收后置。普通通知转任务、完整编辑、可读变更记录/卡片变化标记及手动新增已通过本地专项与 Native Smoke 接入验证；手动合并/保持独立/拆分已实现并验证，下一步为跨群合并建议协调、其余确定功能、备份恢复和桌面恢复。真实 QQ 编辑/任务端到端、持续真实使用和长期稳定性仍未完成；多屏、Explorer 重启和睡眠恢复尚未验收，M8 不标为完成。**
+- 当前阶段：**整体设计已确认，用户反馈 demo 基本满足要求，实施计划已写入并授权持续开发。M1 已完成，M2 已完成，M3 正在实施并保留真实接收/长期稳定性验收。M4 四段本地基础及正式 WPF/WebView2 主界面、AccountWorkspace 和只读宿主已接入；真实 QQ 历史接收/重启去重、合成 WebView2 已通过。旧方案持久化提醒第一段已验证并保留，Windows 全部系统通知与声音已取消；正式两张桌面卡片首段已实现并验证，当前快照、查看/完成、主题、布局存盘和实际桌面层级通过。Windows 登录自动启动已接入代码并完成自动/合成验证，登录后的真实系统验收后置。普通通知转任务、完整编辑、可读变更记录/卡片变化标记及手动新增已通过本地专项与 Native Smoke 接入验证；手动合并/保持独立/拆分已实现并验证，跨群可能重复建议已实现并验证，下一步为缓存清理、备份恢复和桌面恢复。真实 QQ 编辑/任务端到端、持续真实使用和长期稳定性仍未完成；多屏、Explorer 重启和睡眠恢复尚未验收，M8 不标为完成。**
 - 当前可交付产物：文档、原型及六张预览继续保留；新增 `global.json`、`.gitignore`、`src/MessagePurify.Core/` 下的 Time、Reminders、State 和 Rules 核心，`tests/MessagePurify.Core.Tests/` 测试项目，`tests/fixtures/rules/synthetic.json`、`tools/MessagePurify.RuleBaseline/` 及 `docs/verification/rule-baseline.md`。Core、Core.Tests 和 CLI 三个项目各有 `packages.lock.json`；NapCat Shell 与 Framework 的显式路径启动准备位于 `packaging/napcat/`，对应路径回归在 `tests/napcat-launcher.test.mjs` 和 `tests/napcat-framework-launcher.test.mjs`。可重复运行的检查及说明见 `tests/project-rules.test.mjs`、`tests/prototype-qa.mjs`、`tests/README.md`。
 - 历史 demo/probe 概述（本轮正式结果见下节）：demo 已写入并运行浏览器验证，双击 `prototype/index.html` 可打开。事项、偏好、自定义课程／分类、撤销时间戳及桌面模拟布局保存在此浏览器的本地存储，刷新保留进度；“重置示例”恢复事项和卡片布局并保留设置及自定义课程／分类。事项时间固定为 2026-10-09 10:00（北京时间），撤销期限使用真实经过时间。用户已确认普通 QQ 在电脑登录；NapCat Shell 与 Framework 官方包均已下载校验。Shell 是无界面路线，同一账号与普通 QQ 并存时会冲突；当前改由 Framework 在 QQ 主进程中加载并自动登录，6099/3001 同时监听。真实探针取得 52 个群及一群一页的 7 条历史消息；当时分页读取 41/52 到达边界、窗口内去重 1098 条，11 群未补全，详见下节。用户确认聊天列表和窗口正常显示。OCR、隐藏 WebView2 桥和自包含 Windows 探针已有实际结果；已收到 1 条实时群文本事件；通知发布会自动从匹配的官方 Windows App SDK 运行时包提取资源，受控 COM 冷启动回调已通过；专用 URI 入口的用户实际点击通过。此前历史版本没有注册正式自启动；本轮已接入代码，登录后的真实系统验收后置。桌面探针基本操作与当时静音提醒呈现/点击通过，长期稳定性及桌面恢复/多屏仍未验收；声音提醒已取消。
 - 用户要求持续维护交接文档；这是已授权的工作，以后有变化直接同步，不再反复询问是否记录。
@@ -640,8 +665,8 @@
 2. **已确认：明确取消任务移出待办和桌面卡片**，保留“已取消”记录和原文，不记完成；不再发取消系统通知。本地取消与旧操作保护已测试，正式卡片 active/pending 状态过滤已通过。
 3. **旧自定义提醒方案已取消**。ReminderPlanner、提醒设置/计划/台账及既有验证保留为历史，不删除数据，不作为后续 Windows 自动投递工作。
 4. **已确认：已完成任务的可靠新行动恢复待办**，保留完成历史及新旧证据；普通补充不恢复，不可靠关联/时间先待确认。本地状态和路由已测试，正式卡片当前状态刷新及可读变化标记已接入；真实操作验收仍待完成。
-5. **正式两张桌面卡片首段已实现并验证**。自动刷新 AccountWorkspace、点击查看/完成、左右初始布局、拖动缩放与 DIP 存盘、仅附着 Explorer 桌面且不设 Topmost；Native 合成 13 项及独立父窗/style 检查通过，默认入口先更新 app-sync-status，后在便捷入口阶段更新为 app-launcher。托盘生命周期已修复，关闭隐藏、单实例唤回及菜单退出已实际通过；本轮同步状态新版已打开，主窗口保留设置页，QQ/接口保持运行，首次后台同步及重开去重通过。常驻调度与自动游戏名单已通过本地回归及扫描；真实 Framework 冷启动、首次后台读取、空闲保持连接及两卡片常驻已通过；自然固定时间另行核对，实际游戏暂停/合并补同步验收延后，单条真实任务的确认、卡片完成/撤销及重开已通过；同步状态和本次运行成功时间已实现并验证，完整编辑和可读变更记录/卡片变化标记已完成并通过自动/Native 合成验证，手动新增也已完成并通过自动/Native 合成验证，手动合并/保持独立/拆分已实现并验证，下一步为跨群合并建议协调；OCR 队列及 M6 OCR 重分析后置，多屏、Explorer 重启、睡眠恢复及长期稳定性仍待完成。
-6. SQLite 消息/候选/生命周期/路由和旧提醒计划/台账已回归；完整编辑、普通通知转任务、可读变更记录/卡片变化标记已接入并通过本地/页面与 Native Smoke 回归，手动新增已完成并验证，手动合并/保持独立/拆分已完成并验证，下一阶段按“跨群合并建议协调、缓存清理、备份迁移、桌面恢复”顺序实现。OCR 图片下载、OCR 队列和 M6 OCR 重分析改为后期独立项目，不作为当前阶段阻塞项；与本机数据泄露相关的额外安全增强同样后置。7 天只限制未关联缓存分析窗口，事项证据长期保留；统一验收后置到这些功能完成后。
+5. **正式两张桌面卡片首段已实现并验证**。自动刷新 AccountWorkspace、点击查看/完成、左右初始布局、拖动缩放与 DIP 存盘、仅附着 Explorer 桌面且不设 Topmost；Native 合成 13 项及独立父窗/style 检查通过，默认入口先更新 app-sync-status，后在便捷入口阶段更新为 app-launcher。托盘生命周期已修复，关闭隐藏、单实例唤回及菜单退出已实际通过；本轮同步状态新版已打开，主窗口保留设置页，QQ/接口保持运行，首次后台同步及重开去重通过。常驻调度与自动游戏名单已通过本地回归及扫描；真实 Framework 冷启动、首次后台读取、空闲保持连接及两卡片常驻已通过；自然固定时间另行核对，实际游戏暂停/合并补同步验收延后，单条真实任务的确认、卡片完成/撤销及重开已通过；同步状态和本次运行成功时间已实现并验证，完整编辑和可读变更记录/卡片变化标记已完成并通过自动/Native 合成验证，手动新增也已完成并通过自动/Native 合成验证，手动合并/保持独立/拆分已实现并验证，跨群可能重复建议也已实现并验证，下一步为缓存清理；OCR 队列及 M6 OCR 重分析后置，多屏、Explorer 重启、睡眠恢复及长期稳定性仍待完成。
+6. SQLite 消息/候选/生命周期/路由和旧提醒计划/台账已回归；完整编辑、普通通知转任务、可读变更记录/卡片变化标记已接入并通过本地/页面与 Native Smoke 回归，手动新增已完成并验证，手动合并/保持独立/拆分已完成并验证，跨群可能重复建议已完成并验证，下一阶段按“缓存清理、备份迁移、桌面恢复”顺序实现。OCR 图片下载、OCR 队列和 M6 OCR 重分析改为后期独立项目，不作为当前阶段阻塞项；与本机数据泄露相关的额外安全增强同样后置。7 天只限制未关联缓存分析窗口，事项证据长期保留；统一验收后置到这些功能完成后。
 7. 当前 1 个待办任务、46 项未处理待确认、1 项已忽略；单条真实日期确认、卡片显示/完成/撤销/重开及原文入口通过。上一段只读复查为 52 个群、9 个置顶群、48 个 review 类事项（含已忽略）、0 个任务/通知，当次历史 complete、失败为空；此前两次为 40 项且重启无重复。不代表持续实时或未来完整性，真实课程/日期仍待用户核对。旧通知呈现/点击及桌面 probe 验证保留为历史，不代替正式两卡片验收。
 8. 本机 Windows 11 专业版 x64 10.0.26200；项目专用 .NET SDK 10.0.401，开发使用 `.tools/dotnet/dotnet.exe`。Framework 已加载，用户确认聊天列表和窗口正常显示；实时群事件限定范围通过（观察到 1 条），长期稳定性尚未验证。
 9. **安静时段、系统提醒及自定义时间提醒入口已取消**；手机版尚未确定开发，不保留“暂未启用”的入口。
@@ -670,6 +695,7 @@
 
 | 记录日期 | 变更 | 依据与状态 |
 | --- | --- | --- |
+| 2026-10-13 | 完成跨群可能重复建议 | 严格原文及原始可靠单Task候选、已确认同课程群关系生成派生建议；人工核对当前差异后合并或保持独立，排除共享证据、多行动、拆分家族及独立别名，引用上下文遗漏已真实提取复现并修正。页面/卡片/双版本/未读/草稿/重开接通；Core306/306、Infrastructure611/611、Windows280/280、Node125/125（页面66、文档40），发布app-cross-group-merge，Native45项success=true、synthetic=true。默认入口和真实QQ未切换；下一步缓存清理、备份恢复和桌面恢复，统一真实验收后置。 |
 | 2026-10-13 | 完成手动合并、保持独立及拆分 | 双版本事务、字段/状态选择、优先级显式覆盖、旧 ID 跳转、证据及双方历史、独立决定、缺日期待确认和关联导航已接入。草稿/账号/未知保存重试及旧撤销保护回归通过；Core 306/306、Infrastructure 550/550、Windows 269/269、Node 116/116（页面58、文档39）；发布 app-task-structure，Native 合成 36 项 success=true、synthetic=true、退出 0。跨群自动合并建议协调、默认入口切换和统一真实验收仍后置。 |
 | 2026-10-13 | 完成手动新增任务与保存确认保护 | 新增本地 `create-task`、手动来源持久化及旧 JSON 缺省 QQ；标题/课程/日期必填、钟点可选，默认自动分级或显式 P0～P3。共享课程选项、失败/快照草稿保留、账号隔离、幂等重试、保存结果未确认时先确认原请求、迟到响应不打断当前编辑均覆盖。Core 306/306、Infrastructure 501/501、Windows 236/236、Node 全量 102/102（正式页面 45/45、文档 38/38）通过；发布 `.tools/published/app-manual-task/`，Native 合成 25 项报告 `.tools/desktop-validation/manual-task-native.json` success=true、synthetic=true、退出 0。默认入口和真实 QQ 事项未切换，下一项为合并拆分及其余确定功能、备份恢复和桌面恢复，统一真实验收后置。 |
 | 2026-10-13 | 完成可读变更记录与桌面卡片变化标记 | 从 `operations` 审计投影中文字段前后值、北京时间、关联原消息证据及历史顺序；延期/取消/新要求/编辑产生重要变化标签，催交补充仅追加证据；待确认变更保留正式值并可打开建议；`mark-read` 按任务版本确认。Core 306/306、Infrastructure 463/463、Windows 206/206、Node 全量 95/95（正式页面 39/39）通过；自包含发布 `.tools/published/app-change-history-final/`，Native 报告 `.tools/desktop-validation/change-history-native-final.json` success=true、synthetic=true、21 项通过。SmokeCheck 另修正了滚动条 Thumb 与缩放手柄的定位歧义。真实 QQ 编辑场景、默认入口替换和统一真实验收后置，下一步为手动新增、合并拆分、备份恢复和桌面恢复。 |

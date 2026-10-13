@@ -43,7 +43,7 @@ test('OCR 后置且 QQ 只读边界保持为硬约束', () => {
   }
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /普通通知转任务已实现.*完整编辑已接入.*通过自动回归及 Native 合成验证/s);
-  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*手动合并.*拆分已接入.*下一项为跨群合并建议协调.*备份恢复.*桌面卡片恢复/s);
+  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*手动合并.*拆分已接入.*跨群可能重复建议已接入.*下一项为缓存清理.*备份恢复.*桌面卡片恢复/s);
   assert.doesNotMatch(requirements.split('## 4. 图片辅助')[0], /下一项实现图片下载与 OCR 队列/);
 });
 
@@ -634,5 +634,18 @@ test('实施总计划覆盖设计中的全部真实验收场景', () => {
       assert.match(stage, /^M[1-9]$/, `无效阶段：${stage}`);
       assert.ok(plan.includes(`### ${stage}：`), `阶段未定义：${stage}`);
     }
+  }
+});
+
+test('跨群重复建议要求人工核对并保留独立与拆分决定', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
+    const content = read(file);
+    for (const term of ['可能重复', '完整原文', '原始', '不自动合并', '拆分家族', '独立', '只读']) {
+      assert.ok(content.includes(term), `${file} 缺少跨群建议约束：${term}`);
+    }
+  }
+  const plan = read('docs/superpowers/plans/2026-10-13-cross-group-merge.md');
+  for (const term of ['a16ccea', 'merge-review', '双方 ID/版本', '不伪造普通', 'Native Smoke']) {
+    assert.ok(plan.includes(term), `跨群建议计划缺少：${term}`);
   }
 });

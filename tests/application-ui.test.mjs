@@ -33,13 +33,34 @@ const fixture = {
   ]
 };
 fixture.items = fixture.items.map(item => ({ ...itemDefaults, ...item }));
+function mergeSuggestionSnapshot(prefix, accountId = '12345') {
+  const first = { ...structuredClone(fixture.items[0]), id: prefix + '-first', title: '人工改名的实验报告', course: '人工分类', due: '2026-12-28', time: '18:30', priority: 2, version: 110, unread: false, evidence: [{ ...evidence[0], groupName: '实验群', text: '实验群：周一提交报告' }] };
+  const second = { ...structuredClone(fixture.items[1]), id: prefix + '-second', title: '实验报告', course: '物理', due: '2026-12-29', time: null, timeKind: 'start', priority: 1, state: 'completed', version: 120, unread: false, evidence: [{ ...evidence[0], groupId: '101', groupName: '班级群', text: '班级群：周一提交报告' }] };
+  const suggestion = { ...itemDefaults, id: prefix + '-suggestion', kind: 'merge-review', title: '可能重复：人工改名的实验报告', course: '人工分类', group: '实验群 / 班级群', state: 'pending', version: 230, unread: true, reviewReasons: ['同课程的跨群相似事项，需人工核对'], evidence: [...first.evidence, ...second.evidence], mergeSuggestion: { firstTaskId: first.id, firstTaskVersion: 110, secondTaskId: second.id, secondTaskVersion: 120 } };
+  return { ...structuredClone(fixture), accountId, items: [first, second, suggestion] };
+}
 const status = { transport: 'connected', qq: 'online', receiving: 'active', history: 'partial', error: null, updatedAt: '2026-10-12T10:00:00+08:00', historyFailures: [{ groupId: '100', reason: 'history_timeout' }] };
 const mockScript = `(() => {
   const listeners = new Set();
   const clone = value => JSON.parse(JSON.stringify(value));
-  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, startupEnabled: true, messages: [], hold: true, held: [], failNext: null, creationRequests: {}, structureRequests: {} };
+  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, startupEnabled: true, messages: [], hold: true, held: [], failNext: null, creationRequests: {}, structureRequests: {}, separatePairs: {} };
   backend.emit = data => listeners.forEach(listener => listener({data:clone(data)}));
-  backend.push = () => backend.emit({type:'state',snapshot:backend.snapshot,status:backend.status,startupEnabled:backend.startupEnabled});
+  const pairKey = (accountId, firstId, secondId) => JSON.stringify([accountId, ...[firstId, secondId].sort()]);
+  // Mirror the workspace's derived snapshot items; commands still target real tasks.
+  backend.projectMergeSuggestions = () => {
+    if (!backend.snapshot) return;
+    backend.snapshot.items = backend.snapshot.items.filter(suggestion => {
+      if (suggestion.kind !== 'merge-review') return true;
+      const metadata = suggestion.mergeSuggestion;
+      const first = backend.snapshot.items.find(item => item.id === metadata.firstTaskId);
+      const second = backend.snapshot.items.find(item => item.id === metadata.secondTaskId);
+      if (!first || !second || first.state === 'merged' || second.state === 'merged' || backend.separatePairs[pairKey(backend.snapshot.accountId, first.id, second.id)]) return false;
+      metadata.firstTaskVersion = first.version; metadata.secondTaskVersion = second.version;
+      suggestion.version = first.version + second.version;
+      return true;
+    });
+  };
+  backend.push = () => { backend.projectMergeSuggestions(); backend.emit({type:'state',snapshot:backend.snapshot,status:backend.status,startupEnabled:backend.startupEnabled}); };
   backend.release = () => { backend.hold=false; for (const command of backend.held.splice(0)) respond(command); };
   function respond(command) {
     const parameters=command.parameters || {};
@@ -69,7 +90,7 @@ const mockScript = `(() => {
       } else if(command.operation==='split-task') {
         const newItem={...clone(item),id:parameters.newItemId,title:parameters.title,course:parameters.course,kind:parameters.date ? 'task' : 'review',state:parameters.date ? parameters.state : 'pending',due:parameters.date,time:parameters.time,timeKind:parameters.timeKind,priority:parameters.priority??3,version:1,unread:false,canAccept:!parameters.date,evidence:parameters.evidenceIndexes.map(index=>item.evidence[index]),relatedItemIds:[item.id],changes:[{label:'已拆分',at:new Date().toISOString(),fields:[],evidence:[]}]};
         backend.snapshot.items.push(newItem);item.relatedItemIds=[...(item.relatedItemIds||[]),newItem.id];
-      }
+      } else if(command.operation==='keep-separate') backend.separatePairs[pairKey(backend.snapshot.accountId,item.id,other.id)]=true;
       item.version++;backend.structureRequests[parameters.operationId]=JSON.stringify(parameters);
     } else if(command.operation==='create-task') {
       if(item && backend.creationRequests[parameters.id] !== JSON.stringify(parameters)) { backend.emit({id:command.id,success:false,error:'任务 ID 已被其他事项使用。',snapshot:backend.snapshot,status:backend.status});return; }
@@ -99,6 +120,7 @@ const mockScript = `(() => {
         } else item.version++;
       }
     }
+    backend.projectMergeSuggestions();
     if(backend.snapshot)backend.snapshot.generatedAt=new Date().toISOString();
     if(backend.failAfterStructureOnce && ['merge-tasks','split-task','keep-separate'].includes(command.operation)){backend.failAfterStructureOnce=false;backend.emit({id:command.id,success:false,error:'本地数据操作失败，原数据已保留。',snapshot:backend.snapshot,status:backend.status});return;}
     backend.emit({id:command.id,success:true,snapshot:backend.snapshot,status:backend.status});
@@ -1032,6 +1054,104 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await evaluate(`backend.held=backend.held.filter(message=>message.id!==${JSON.stringify(refresh.id)});backend.emit({id:${JSON.stringify(refresh.id)},success:true,snapshot:${JSON.stringify({...accountA,generatedAt:'2099-01-01T00:00:00Z'})}});backend.release()`);
       assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").value'),'B账号刷新草稿');
       await click('[data-action="split-task"]');const saved=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');assert.equal(saved.parameters.accountId,'67890');assert.equal(saved.parameters.version,100);
+    });
+    await t.test('跨群可能重复建议进入待确认计数与新账号默认入口',async()=>{
+      await push(mergeSuggestionSnapshot('merge-default', '67891'));
+      assert.equal(await evaluate('document.querySelector("#page-title").textContent'),'待确认');
+      assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),1);
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'merge-default-suggestion');
+      assert.match(await evaluate('document.querySelector("[data-page=pending] .count").title'),/共 1 项/);
+      assert.match(await evaluate('document.querySelector(".task-row .row-note").textContent'),/跨群相似/);
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="mark-read" && message.parameters.id==="merge-default-suggestion").at(-1).parameters.version'),230);
+      await nav('tasks');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),1);
+    });
+    await t.test('建议详情展示双方当前正式字段和原文，不提供普通确认忽略拒绝',async()=>{
+      await push(mergeSuggestionSnapshot('merge-detail'));await nav('pending');await select('merge-detail-suggestion');
+      const detail=await evaluate('document.querySelector(".detail-scroll").textContent');
+      assert.match(detail,/跨群相似/);assert.match(detail,/人工改名的实验报告/);assert.match(detail,/实验报告/);
+      assert.match(detail,/人工分类/);assert.match(detail,/物理/);assert.match(detail,/2026-12-28 18:30/);assert.match(detail,/2026-12-29/);
+      assert.match(detail,/P2/);assert.match(detail,/P1/);assert.match(detail,/待办/);assert.match(detail,/已完成/);
+      assert.match(detail,/实验群：周一提交报告/);assert.match(detail,/班级群：周一提交报告/);
+      assert.equal(await evaluate('document.querySelectorAll("[data-action=accept-review],[data-action=ignore],[data-action=reject],#review-form").length'),0);
+      assert.equal(await evaluate('document.querySelectorAll("[data-action=open-merge-suggestion]").length'),1);
+      await call('Emulation.setDeviceMetricsOverride',{width:1200,height:1600,deviceScaleFactor:1,mobile:false});
+      try { await capture('cross-group-suggestion.png'); }
+      finally { await call('Emulation.setDeviceMetricsOverride',{width:1200,height:800,deviceScaleFactor:1,mobile:false}); }
+    });
+    await t.test('建议打开预选双方，保留手改正式差异和原任务编辑草稿',async()=>{
+      await push(mergeSuggestionSnapshot('merge-preselect'));await nav('tasks');await select('merge-preselect-first');
+      await change('#time-form [name=title]','尚未保存的任务编辑');await nav('pending');await select('merge-preselect-suggestion');await click('[data-action=open-merge-suggestion]');
+      assert.equal(await evaluate('document.querySelector("#merge-task-form").dataset.id'),'merge-preselect-first');
+      assert.equal(await evaluate('document.querySelector("#merge-task-form [name=mergeWithId]").value'),'merge-preselect-second');
+      assert.equal(await evaluate('document.querySelectorAll("#merge-task-form .merge-field.conflict").length'),5);
+      assert.match(await evaluate('document.querySelector(".detail-scroll").textContent'),/跨群相似/);
+      await call('Emulation.setDeviceMetricsOverride',{width:1200,height:1600,deviceScaleFactor:1,mobile:false});
+      try { await capture('cross-group-suggestion-merge.png'); }
+      finally { await call('Emulation.setDeviceMetricsOverride',{width:1200,height:800,deviceScaleFactor:1,mobile:false}); }
+      await click('[data-action=close-structure]');await nav('tasks');await select('merge-preselect-first');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'),'尚未保存的任务编辑');
+    });
+    await t.test('建议保持独立发送双方版本，刷新和重开不再提示该建议',async()=>{
+      const original=mergeSuggestionSnapshot('merge-separate');await push(original);await nav('pending');await select('merge-separate-suggestion');await click('[data-action=open-merge-suggestion]');await click('[data-action=keep-separate]');
+      const command=await evaluate('backend.messages.filter(message=>message.operation==="keep-separate").at(-1)');
+      assert.deepEqual(command.parameters,{accountId:'12345',id:'merge-separate-first',version:110,operationId:command.parameters.operationId,mergeWithId:'merge-separate-second',mergeWithVersion:120});
+      await nav('pending');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
+      await click('[data-action=refresh]');await push(original);await nav('pending');
+      assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
+      assert.equal(await evaluate('document.querySelector("[data-page=pending] .count")'),null);
+    });
+    await t.test('建议双版本冲突须显式刷新，刷新保留字段选择与编辑草稿',async()=>{
+      await push(mergeSuggestionSnapshot('merge-refresh'));await nav('tasks');await select('merge-refresh-first');await change('#time-form [name=title]','冲突时保留的编辑草稿');
+      await nav('pending');await select('merge-refresh-suggestion');await click('[data-action=open-merge-suggestion]');
+      const selection={titleTaskId:'merge-refresh-first',courseTaskId:'merge-refresh-second',timeTaskId:'merge-refresh-first',priorityTaskId:'merge-refresh-second',stateTaskId:'merge-refresh-first'};
+      for(const [name,value] of Object.entries(selection))await change('#merge-task-form [name='+name+']',value);
+      await evaluate('backend.snapshot.items.find(item=>item.id==="merge-refresh-first").version=111;backend.snapshot.items.find(item=>item.id==="merge-refresh-second").version=121;backend.snapshot.items[0].title="后台的新正式标题";backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
+      await click('[data-action=merge-tasks]');const failed=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      assert.equal(failed.parameters.version,110);assert.equal(failed.parameters.mergeWithVersion,120);
+      assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/草稿已保留.*刷新/);
+      for(const [name,value] of Object.entries(selection))assert.equal(await evaluate('document.querySelector("#merge-task-form [name='+name+']").value'),value);
+      await click('[data-action=refresh-structure]');
+      assert.match(await evaluate('document.querySelector("#merge-task-form").textContent'),/后台的新正式标题/);
+      for(const [name,value] of Object.entries(selection))assert.equal(await evaluate('document.querySelector("#merge-task-form [name='+name+']").value'),value);
+      await click('[data-action=merge-tasks]');const saved=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      assert.equal(saved.parameters.version,111);assert.equal(saved.parameters.mergeWithVersion,121);assert.notEqual(saved.parameters.operationId,failed.parameters.operationId);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'),'冲突时保留的编辑草稿');
+      await nav('pending');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
+    });
+    await t.test('桌面 open-item 打开跨群建议并阻止另一账号路由',async()=>{
+      await push(mergeSuggestionSnapshot('merge-desktop'));await nav('tasks');await evaluate('backend.emit({type:"open-item",accountId:"12345",id:"merge-desktop-suggestion"})');
+      assert.equal(await evaluate('document.querySelector("#page-title").textContent'),'待确认');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'merge-desktop-suggestion');
+      assert.match(await evaluate('document.querySelector(".detail-scroll").textContent'),/班级群：周一提交报告/);
+      await evaluate('backend.emit({type:"open-item",accountId:"67890",id:"merge-desktop-suggestion"})');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'merge-desktop-suggestion');
+      assert.match(await body(),/账号.*不一致/);
+    });
+    await t.test('建议保存超时锁定原请求，重复提交确认不切换字段',async()=>{
+      await push(mergeSuggestionSnapshot('merge-unknown'));await nav('pending');await select('merge-unknown-suggestion');await click('[data-action=open-merge-suggestion]');
+      for(const name of ['titleTaskId','courseTaskId','timeTaskId','priorityTaskId','stateTaskId'])await change('#merge-task-form [name='+name+']','merge-unknown-first');
+      await evaluate('window.originalSuggestionSetTimeout=window.setTimeout;window.setTimeout=(handler,ms,...args)=>{const id=window.originalSuggestionSetTimeout(handler,ms,...args);if(ms===15000)window.suggestionTimeout={handler,id};return id;};backend.hold=true');
+      try{
+        await click('[data-action=merge-tasks]');const first=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+        await evaluate('clearTimeout(window.suggestionTimeout.id);window.suggestionTimeout.handler()');
+        assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/尚未确认/);
+        assert.equal(await evaluate('document.querySelector("#merge-task-form [name=titleTaskId]").disabled'),true);
+        await change('#merge-task-form [name=titleTaskId]','merge-unknown-second');await click('[data-action=merge-tasks]');
+        assert.deepEqual(await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1).parameters'),first.parameters);
+        await evaluate('backend.release()');await nav('pending');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
+      }finally{await evaluate('window.setTimeout=window.originalSuggestionSetTimeout;backend.release()');}
+    });
+    await t.test('建议合并选择按账号隔离，旧账号迟到保存不清新账号草稿',async()=>{
+      const accountA=mergeSuggestionSnapshot('merge-account'),accountB=mergeSuggestionSnapshot('merge-account','67890');
+      await push(accountA);await nav('pending');await select('merge-account-suggestion');await click('[data-action=open-merge-suggestion]');
+      for(const name of ['titleTaskId','courseTaskId','timeTaskId','priorityTaskId','stateTaskId'])await change('#merge-task-form [name='+name+']','merge-account-first');
+      await evaluate('backend.hold=true');await click('[data-action=merge-tasks]');const first=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      await push(accountB);await nav('pending');await select('merge-account-suggestion');await click('[data-action=open-merge-suggestion]');await change('#merge-task-form [name=titleTaskId]','merge-account-second');
+      await evaluate('backend.held=backend.held.filter(message=>message.id!=='+JSON.stringify(first.id)+');backend.emit({id:'+JSON.stringify(first.id)+',success:true,snapshot:'+JSON.stringify({...accountA,generatedAt:'2099-01-01T00:00:00Z'})+'});backend.release()');
+      assert.equal(await evaluate('document.querySelector("#merge-task-form [name=titleTaskId]").value'),'merge-account-second');
+      assert.equal(await evaluate('document.querySelector("#merge-task-form [name=titleTaskId]").disabled'),false);
+      await click('[data-action=keep-separate]');const saved=await evaluate('backend.messages.filter(message=>message.operation==="keep-separate").at(-1)');
+      assert.equal(saved.parameters.accountId,'67890');assert.notEqual(saved.parameters.operationId,first.parameters.operationId);
     });
     assert.deepEqual(browserErrors, []);
   } finally {
