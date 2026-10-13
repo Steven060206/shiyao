@@ -122,7 +122,14 @@ public sealed class AccountWorkspace
     {
         lock (gate)
         {
-            var taskList = tasks.ListTasks();
+            var taskList = tasks.ListTasks(includeMerged: true);
+            var taskById = taskList.ToDictionary(task => task.Id, StringComparer.Ordinal);
+            string CurrentTaskId(string id)
+            {
+                var visited = new HashSet<string>(StringComparer.Ordinal);
+                while (taskById.TryGetValue(id, out var current) && current.MergedIntoId is { } next && visited.Add(id)) id = next;
+                return id;
+            }
             var reviews = tasks.ListReviews();
             var history = tasks.ListTaskHistory().GroupBy(entry => entry.After.Id)
                 .ToDictionary(group => group.Key, group => group.Select(TaskChangeProjection.Build)
@@ -130,37 +137,44 @@ public sealed class AccountWorkspace
             var items = new List<ApplicationItem>();
             foreach (var task in taskList)
             {
-                var changes = history.GetValueOrDefault(task.Id) ?? [];
-                var important = changes.LastOrDefault(change => change.Important);
-                var pending = reviews.Where(review => review.State == ReviewState.Pending && review.Candidate.TargetTaskId == task.Id)
+                var ownChanges = history.GetValueOrDefault(task.Id) ?? [];
+                var changes = ownChanges.Concat(taskList.Where(source => source.MergedIntoId is not null && CurrentTaskId(source.Id) == task.Id)
+                    .SelectMany(source => history.GetValueOrDefault(source.Id) ?? [])).OrderBy(change => change.Entry.At).ToArray();
+                var important = ownChanges.LastOrDefault(change => change.Important);
+                var pending = reviews.Where(review => review.State == ReviewState.Pending && review.Candidate.TargetTaskId is { } targetId && CurrentTaskId(targetId) == task.Id)
                     .Select(review => new ApplicationPendingChange(review.Id, TaskChangeProjection.SuggestionLabel(review.Candidate.Action),
                         FormatDate(review.Candidate.Time ?? review.Candidate.SuggestedTime),
                         FormatTime(review.Candidate.Time ?? review.Candidate.SuggestedTime),
                         (review.Candidate.Time?.Kind ?? review.Candidate.SuggestedTime?.Kind ?? task.Time.Kind).ToString().ToLowerInvariant(),
                         review.Candidate.ReviewReasons)).ToArray();
-                items.Add(Item(task.Id, "task", task.Title, task.Course, task.State.ToString().ToLowerInvariant(),
+                items.Add(Item(task.Id, "task", task.Title, task.Course, task.MergedIntoId is null ? task.State.ToString().ToLowerInvariant() : "merged",
                     task.Time, task.Version, task.Evidence, task.Action, now,
                     undoId: task.UndoOperationId, undoExpires: task.UndoExpiresAt, priorityOverride: task.PriorityOverride,
                     unreadVersion: important?.Entry.After.Version ?? task.Version,
                     changeLabel: important?.Badge, changes: changes.Reverse().Select(change => new ApplicationChange(
                         change.Label, change.Entry.At, change.Entry.After.Version, change.Fields, Evidence(change.Entry.Evidence))).ToArray(),
-                    pendingChanges: pending, source: task.Source));
+                    pendingChanges: pending, source: task.Source) with
+                    { MergedIntoId = task.MergedIntoId is null ? null : CurrentTaskId(task.Id), RelatedItemIds = task.RelatedItemIds });
             }
-            foreach (var review in reviews.Where(review => review.State is ReviewState.Pending or ReviewState.Ignored))
+            foreach (var review in reviews.Where(review => review.State is ReviewState.Pending or ReviewState.Ignored || review.SplitParentTaskId is not null))
             {
                 var candidate = review.Candidate;
-                var target = taskList.FirstOrDefault(task => task.Id == candidate.TargetTaskId);
-                var reason = AcceptanceProblem(candidate, target is not null);
+                var targetId = candidate.TargetTaskId ?? (review.State == ReviewState.Accepted ? review.AcceptedTaskId : null);
+                var target = targetId is null ? null : taskList.FirstOrDefault(task => task.Id == CurrentTaskId(targetId));
+                var reason = AcceptanceProblem(candidate, target is not null, review.SplitParentTaskId is not null);
                 items.Add(Item(review.Id, "review", candidate.Title, candidate.Course,
                     review.State.ToString().ToLowerInvariant(), candidate.Time, review.Version, candidate.Evidence,
-                    candidate.Action, now, candidate.TargetTaskId, target?.Version, review.UndoOperationId,
+                    candidate.Action, now, target?.Id ?? targetId, target?.Version, review.UndoOperationId,
                     review.UndoExpiresAt, reason is null ? candidate.ReviewReasons :
                         candidate.ReviewReasons.Append(reason).Distinct().ToArray(), candidate.SuggestedTime,
-                    review.State == ReviewState.Pending && reason is null));
+                    review.State == ReviewState.Pending && reason is null) with
+                    { RelatedItemIds = review.SplitParentTaskId is { } parentId ? [CurrentTaskId(parentId)] : null,
+                      TimeKind = (candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind ?? review.SplitTimeKind ?? Core.TimeKind.Deadline).ToString().ToLowerInvariant() });
             }
             foreach (var notice in router.ListNotices())
             {
-                var converted = taskList.FirstOrDefault(task => task.Id == "notice-task-" + notice.Id);
+                var convertedId = CurrentTaskId("notice-task-" + notice.Id);
+                var converted = taskList.FirstOrDefault(task => task.Id == convertedId);
                 items.Add(Item(notice.Id, "notice", notice.Candidate.Title, notice.Candidate.Course,
                     converted is null ? "active" : "converted", notice.Candidate.Time, notice.ProcessingVersion,
                     notice.Candidate.Evidence, notice.Candidate.Action, now, converted?.Id, converted?.Version,
@@ -250,13 +264,25 @@ public sealed class AccountWorkspace
                         ReadTime(command, null) ?? throw new ArgumentException("保存任务前须填写正式日期。"),
                         command.Priority, now); break;
                 case "convert-notice": ConvertNotice(command, now); break;
+                case "merge-tasks":
+                    ArgumentException.ThrowIfNullOrWhiteSpace(command.MergeWithId);
+                    tasks.MergeTasks(command.Id, command.MergeWithId, command.OperationId, command.Version,
+                        command.MergeWithVersion ?? throw new ArgumentException("须核对另一事项版本。"),
+                        command.MergeSelection ?? throw new ArgumentException("须选择合并字段和状态。"), now,
+                        command.Priority ?? throw new ArgumentException("须确认要保留的优先级。")); break;
+                case "keep-separate":
+                    ArgumentException.ThrowIfNullOrWhiteSpace(command.MergeWithId);
+                    tasks.KeepSeparate(command.Id, command.MergeWithId, command.OperationId, command.Version,
+                        command.MergeWithVersion ?? throw new ArgumentException("须核对另一事项版本。"), now); break;
+                case "split-task": SplitTask(command, now); break;
                 case "accept-review":
                     var review = tasks.FindReview(command.Id) ?? throw new KeyNotFoundException("待确认事项不存在。");
                     var candidate = review.Candidate;
-                    var problem = AcceptanceProblem(candidate, candidate.TargetTaskId is not null && tasks.FindTask(candidate.TargetTaskId) is not null);
+                    var problem = AcceptanceProblem(candidate, candidate.TargetTaskId is not null && tasks.FindTask(candidate.TargetTaskId) is not null,
+                        review.SplitParentTaskId is not null);
                     if (problem is not null) throw new ArgumentException(problem);
                     tasks.AcceptReview(command.Id, candidate.TargetTaskId ?? "accepted-" + command.Id,
-                        command.OperationId, command.Version, ReadTime(command, candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind),
+                        command.OperationId, command.Version, ReadTime(command, candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind ?? review.SplitTimeKind),
                         now, command.TargetTaskVersion); break;
                 case "confirm-group": ConfirmGroup(command); break;
                 case "set-reminder":
@@ -329,10 +355,37 @@ public sealed class AccountWorkspace
             command.OperationId, now);
     }
 
-    private static string? AcceptanceProblem(RuleCandidate candidate, bool targetExists)
+    private void SplitTask(WorkspaceCommand command, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(command.NewItemId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(command.Title);
+        var parent = tasks.FindTask(command.Id) ?? throw new KeyNotFoundException("原事项不存在。");
+        var indexes = command.EvidenceIndexes ?? throw new ArgumentException("须核对拆分证据。");
+        if (indexes.Any(index => index < 0 || index >= parent.Evidence.Count) || indexes.Distinct().Count() != indexes.Count)
+            throw new ArgumentException("证据选择已变化，请核对原事项。");
+        var state = command.State switch
+        {
+            "active" => TaskState.Active, "completed" => TaskState.Completed,
+            "cancelled" => TaskState.Cancelled, "archived" => TaskState.Archived,
+            _ => throw new ArgumentException("须选择拆出事项的状态。")
+        };
+        var kind = command.TimeKind switch
+        {
+            "deadline" => Core.TimeKind.Deadline, "start" => Core.TimeKind.Start,
+            _ => throw new ArgumentException("须选择截止或开始时间。")
+        };
+        var hasDate = !string.IsNullOrEmpty(command.Date);
+        if (!hasDate && !string.IsNullOrEmpty(command.Time)) throw new ArgumentException("填写钟点时须同时提供日期。");
+        var time = hasDate ? ReadTime(command, kind) : null;
+        tasks.SplitTask(command.Id, command.NewItemId, command.OperationId, command.Version,
+            new(command.Title, command.Course, time, command.Priority, state,
+                indexes.Select(index => parent.Evidence[index]).ToArray(), kind), now);
+    }
+
+    private static string? AcceptanceProblem(RuleCandidate candidate, bool targetExists, bool userSplit = false)
     {
         if (candidate.Action == RuleAction.Inform) return "此项需要确认为通知，当前事项入口尚不支持。";
-        if (candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement && candidate.TargetTaskId is null)
+        if (!userSplit && candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement && candidate.TargetTaskId is null)
             return "关联变更缺少目标事项，需先核对关联。";
         if (candidate.TargetTaskId is not null && !targetExists) return "关联目标事项不存在，需先核对关联。";
         return null;

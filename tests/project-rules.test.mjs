@@ -43,7 +43,7 @@ test('OCR 后置且 QQ 只读边界保持为硬约束', () => {
   }
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /普通通知转任务已实现.*完整编辑已接入.*通过自动回归及 Native 合成验证/s);
-  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*下一项为合并拆分.*备份恢复.*桌面卡片恢复/s);
+  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*手动合并.*拆分已接入.*下一项为跨群合并建议协调.*备份恢复.*桌面卡片恢复/s);
   assert.doesNotMatch(requirements.split('## 4. 图片辅助')[0], /下一项实现图片下载与 OCR 队列/);
 });
 
@@ -509,7 +509,7 @@ test('先完成确定功能，再统一进行真实验收', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
     const current = read(file).split('## 2.')[0];
     assert.match(current, /(?:当前开发顺序|最新工作顺序).*先.*(?:功能|已确定).*统一.*验收/s, file);
-    assert.match(current, /Windows 登录自动启动.*完整编辑.*合并拆分.*备份恢复.*桌面卡片恢复/s, file);
+    assert.match(current, /Windows 登录自动启动.*完整编辑.*(?:手动合并|合并拆分).*备份恢复.*桌面卡片恢复/s, file);
     assert.match(current, /OCR.*(?:后期独立项目|后置)/s, file);
     assert.match(current, /(?:统一|真实).*验收.*(?:后置|完成后)/s, file);
     assert.match(current, /游戏禁止同步.*(?:保持有效|有效需求不变)/, file);
@@ -607,6 +607,17 @@ test('学校群名仅辅助候选，保留用户确认及非正式名称例外',
     assert.match(content, /红框.*学校相关群/, file);
     assert.match(content, /非正式名称/, file);
     assert.match(content, /群名.*辅助|名称.*辅助/, file);
+  }
+});
+
+test('手动合并与拆分规则保留差异选择、原证据和人工纠错', () => {
+  const requirements = read('docs/requirements.md');
+  for (const term of ['合并重复事项', '拆开错误合并', '逐字段选择', '保持独立', '旧事项 ID', '双方历史', '拆出项进入待确认', '重复请求不重复创建', '不得撤销人工纠错决定']) {
+    assert.ok(requirements.includes(term), `任务结构纠错规则缺失：${term}`);
+  }
+  const plan = read('docs/superpowers/plans/2026-10-13-task-structure.md');
+  for (const term of ['merge-tasks', 'keep-separate', 'split-task', 'Native Smoke', '5abb6f9']) {
+    assert.ok(plan.includes(term), `实施依据缺失：${term}`);
   }
 });
 

@@ -3,7 +3,7 @@
 const $ = id => document.getElementById(id);
 const html = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const pages = { tasks: '任务', pending: '待确认', notices: '通知', completed: '已完成', settings: '设置' };
-const states = { active: '待办', converted: '已转为任务', completed: '已完成', archived: '已归档', cancelled: '已取消', pending: '待确认', ignored: '已忽略', rejected: '已拒绝', accepted: '已确认' };
+const states = { active: '待办', converted: '已转为任务', completed: '已完成', archived: '已归档', cancelled: '已取消', pending: '待确认', ignored: '已忽略', rejected: '已拒绝', accepted: '已确认', merged: '已合并' };
 const descriptions = { tasks: '保留待办，直到完成或归档', pending: '核对原文，补齐信息后再确认', notices: '无需完成的群消息', completed: '保留完成记录和消息来源', settings: '连接状态、课程关联与界面偏好' };
 const preferencesKey = 'message-purify-preferences';
 const preferences = { theme: 'system', motion: 'system' };
@@ -31,14 +31,18 @@ let snapshot = null, status = null, startupEnabled = true, page = 'tasks', selec
 let desktop = { state: 'waiting', error: null }, pendingOpenItem = null;
 let filters = { search: '', course: '', state: 'active' }, detailSignature = '', settingsSignature = '', lastFilterPage = null;
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
-let manualOpen = false;
-const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
+let manualOpen = false, structureOpen = null, mergedSourceId = null;
+const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), structureDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
 const bridge = window.chrome?.webview;
 const uuid = () => crypto.randomUUID();
 const items = () => snapshot?.items || [];
 const selected = () => items().find(item => item.id === selectedId);
 const loadedAccount = () => typeof snapshot?.accountId === 'string' && Boolean(snapshot.accountId.trim());
 const manualDraft = () => manualDrafts.get(snapshot?.accountId);
+const structureKey = (accountId, id, mode) => `${accountId}/${id}/${mode}`;
+const structureDraft = () => structureOpen && structureOpen.accountId === snapshot?.accountId ? structureDrafts.get(structureKey(structureOpen.accountId, structureOpen.id, structureOpen.mode)) : null;
+const structureBusyKey = (accountId, id) => `${accountId}/${id}/structure`;
+const structureOperations = ['merge-tasks', 'split-task', 'keep-separate'];
 const linkedWithoutDate = item => Boolean(item.targetTaskId && ['cancel', 'remind'].includes(item.action));
 const localDate = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const past = item => Boolean(item.due && (item.time ? new Date(`${item.due}T${item.time}:00+08:00`).getTime() < Date.now() : item.due < localDate()));
@@ -83,23 +87,33 @@ function toast(message) {
 function request(operation, parameters, itemId = null) {
   if (!bridge) { hostError = errorLabel('bridge_unavailable'); renderStatus(); return; }
   const id = uuid();
-  if (itemId) busy.add(itemId);
+  const structural = structureOperations.includes(operation);
+  const busyKey = structural ? structureBusyKey(parameters.accountId, itemId) : itemId;
+  if (busyKey) busy.add(busyKey);
+  const structureDraftKey = structural ? structureKey(parameters.accountId, itemId, operation === 'split-task' ? 'split' : 'merge') : null;
   const timer = setTimeout(() => {
     const pending = requests.get(id); if (!pending) return;
-    requests.delete(id); if (pending.itemId) busy.delete(pending.itemId);
-    if (pending.operation === 'create-task') {
+    if (pending.structural) {
+      pending.timedOut = true;
+      const draft = structureDrafts.get(pending.structureDraftKey);
+      if (draft?.operationId === pending.structureOperationId) { draft.unconfirmed = true; draft.error = '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。'; }
+    } else requests.delete(id);
+    releaseBusy(pending);
+    if (pending.structural) { /* Retain the request so a late response can confirm this operation. */ }
+    else if (pending.operation === 'create-task') {
       const draft = manualDrafts.get(pending.accountId);
       if (draft?.id === pending.itemId) { draft.unconfirmed = true; draft.error = '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。'; }
     } else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: errorLabel('command_timeout') };
     else hostError = errorLabel('command_timeout');
     render();
   }, 15000);
-  const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId } : null;
-  requests.set(id, { operation, itemId, timer, refreshTarget, accountId: parameters.accountId });
+  const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen && structureKey(structureOpen.accountId, structureOpen.id, structureOpen.mode) } : null;
+  requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, structural, structureDraftKey, structureOperationId: parameters.operationId });
   try { bridge.postMessage({ id, operation, parameters }); }
   catch {
-    clearTimeout(timer); requests.delete(id); if (itemId) busy.delete(itemId);
-    if (operation === 'create-task' && manualDraft()?.id === itemId) manualDraft().error = errorLabel('bridge_unavailable');
+    clearTimeout(timer); requests.delete(id); if (busyKey) busy.delete(busyKey);
+    if (structural && structureDrafts.get(structureDraftKey)) structureDrafts.get(structureDraftKey).error = errorLabel('bridge_unavailable');
+    else if (operation === 'create-task' && manualDraft()?.id === itemId) manualDraft().error = errorLabel('bridge_unavailable');
     else hostError = errorLabel('bridge_unavailable');
   }
   updateDetailControls(); renderStatus();
@@ -108,6 +122,9 @@ function command(operation, item, extra = {}) {
   if (!snapshot || !item || busy.has(item.id)) return;
   detailError = null;
   request(operation, { accountId: snapshot.accountId, id: item.id, operationId: uuid(), version: item.version, ...extra }, item.id);
+}
+function releaseBusy(pending) {
+  if (pending.busyKey && ![...requests.values()].some(request => request.busyKey === pending.busyKey && !request.timedOut)) busy.delete(pending.busyKey);
 }
 function markRead(item) {
   if (!item?.unread || !snapshot) return;
@@ -125,9 +142,15 @@ function openItem(message) {
   if (snapshot.accountId !== message.accountId) {
     hostError = '此事项所属 QQ 账号与当前账号不一致，请核对账号后再打开。'; render(); return;
   }
-  const item = items().find(item => item.id === message.id && ['task', 'review'].includes(item.kind));
+  let item = items().find(item => item.id === message.id && ['task', 'review'].includes(item.kind));
+  const visited = new Set();
+  while (item && (item.state === 'merged' && item.mergedIntoId || item.kind === 'review' && item.state === 'accepted' && item.targetTaskId)) {
+    if (visited.has(item.id)) { item = null; break; }
+    visited.add(item.id);
+    item = items().find(candidate => candidate.id === (item.mergedIntoId || item.targetTaskId));
+  }
   if (!item) { hostError = '未找到此事项，请刷新后重试。'; render(); return; }
-  manualOpen = false;
+  manualOpen = false; structureOpen = null; mergedSourceId = null;
   page = item.kind === 'review' ? 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
   filters = { search: '', course: '', state: item.state };
   selectedId = item.id; detailError = null; hostError = '';
@@ -140,7 +163,7 @@ function receive(message) {
   const pending = requests.get(message.id);
   if (pending) {
     clearTimeout(pending.timer); requests.delete(message.id);
-    if (pending.itemId) busy.delete(pending.itemId);
+    releaseBusy(pending);
     if (pending.operation === 'set-appearance') {
       if (!message.success) { hostError = errorLabel(message.error); renderStatus(); }
       return;
@@ -151,6 +174,28 @@ function receive(message) {
       render();
       return;
     }
+    if (pending.structural) {
+      const draft = structureDrafts.get(pending.structureDraftKey);
+      pending.openStructure = structureOpen && pending.structureDraftKey === structureKey(structureOpen.accountId, structureOpen.id, structureOpen.mode) && selectedId === pending.itemId;
+      if (draft?.operationId === pending.structureOperationId) {
+        if (message.success) {
+          structureDrafts.delete(pending.structureDraftKey);
+          for (const [id, retry] of requests) if (retry.structural && retry.accountId === pending.accountId && retry.structureOperationId === pending.structureOperationId) { clearTimeout(retry.timer); requests.delete(id); }
+          busy.delete(pending.busyKey);
+        } else {
+          const freshFailure = message.snapshot?.accountId === pending.accountId && Date.parse(message.snapshot.generatedAt) >= Date.parse(snapshot?.generatedAt || message.snapshot.generatedAt);
+          const payload = JSON.parse(draft.payloadSignature);
+          const possiblySaved = Array.isArray(message.snapshot?.items) && (pending.operation === 'split-task' ? message.snapshot.items.some(item => item.id === payload.newItemId)
+            : pending.operation === 'merge-tasks' ? message.snapshot.items.some(item => item.id === payload.mergeWithId && item.state === 'merged' && item.mergedIntoId === pending.itemId)
+              : !['version_conflict', 'stale_version'].includes(message.error) && message.snapshot.items.some(item => item.id === pending.itemId && item.version > payload.version));
+          draft.unconfirmed = !freshFailure || possiblySaved || ['command_timeout', 'operation_conflict'].includes(message.error);
+          draft.refresh = !draft.unconfirmed && ['version_conflict', 'stale_version'].includes(message.error);
+          draft.error = draft.unconfirmed ? '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。' : draft.refresh ? '事项已有变化，合并或拆分草稿已保留。请刷新并核对最新内容后再保存。' : errorLabel(message.error);
+        }
+      }
+      if (pending.accountId !== snapshot?.accountId) { render(); return; }
+    }
+    if (pending.operation === 'snapshot' && pending.refreshTarget && pending.refreshTarget.accountId !== snapshot?.accountId) { render(); return; }
     if (pending.operation === 'create-task') {
       const draft = manualDrafts.get(pending.accountId);
       pending.openCreation = manualOpen && page === 'tasks' && pending.accountId === snapshot?.accountId && draft?.id === pending.itemId;
@@ -165,7 +210,8 @@ function receive(message) {
       }
       if (pending.accountId !== snapshot?.accountId) { render(); return; }
     }
-    if (!message.success) {
+    if (pending.structural) { /* The operation's own draft carries its error and retry state. */ }
+    else if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
       else if (pending.operation === 'create-task') { /* Keep the account's manual draft for retry. */ }
       else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: pending.operation === 'edit-task' && message.error === 'version_conflict' ? '事项已有变化，编辑草稿已保留。请刷新并核对最新内容后再保存。' : errorLabel(message.error), refreshEdit: pending.operation === 'edit-task' && message.error === 'version_conflict' };
@@ -192,7 +238,7 @@ function receive(message) {
     if (!older) {
       if (snapshot && snapshot.accountId !== incoming.accountId) {
         drafts.clear(); groupDrafts.clear(); readAttempts.clear(); selectedId = null; initialized = false;
-        manualOpen = false; detailError = null;
+        manualOpen = false; structureOpen = null; mergedSourceId = null; detailError = null;
       }
       snapshot = incoming;
       if (!initialized) {
@@ -205,9 +251,25 @@ function receive(message) {
     if (pending.openCreation) { manualOpen = false; page = 'tasks'; filters = { search: '', course: '', state: 'active' }; selectedId = pending.itemId; }
     toast('手动任务已添加');
   }
+  if (pending?.structural && message.success && pending.accountId === snapshot?.accountId) {
+    toast({ 'merge-tasks': '重复事项已合并', 'split-task': '已拆出关联事项', 'keep-separate': '已保留为独立事项' }[pending.operation]);
+    if (pending.openStructure) { openItem({ accountId: pending.accountId, id: pending.itemId }); return; }
+  }
   if (pending?.operation === 'snapshot' && message.success && pending.refreshTarget && pending.refreshTarget.accountId === snapshot?.accountId) {
     const item = items().find(item => item.id === pending.refreshTarget.id), draft = item && drafts.get(item.id);
     if (item?.kind === 'task' && draft) draft.version = item.version;
+    const structuralDraft = structureDrafts.get(pending.refreshTarget.structureDraftKey);
+    if (item?.kind === 'task' && structuralDraft && !structuralDraft.unconfirmed) {
+      structuralDraft.version = item.version;
+      const other = items().find(candidate => candidate.id === structuralDraft.mergeWithId);
+      if (other?.kind === 'task' && other.state !== 'merged') structuralDraft.mergeWithVersion = other.version;
+      if (structuralDraft.evidence) {
+        const selectedEvidence = structuralDraft.evidenceIndexes.map(index => JSON.stringify(structuralDraft.evidence[index]));
+        structuralDraft.evidence = item.evidence || [];
+        structuralDraft.evidenceIndexes = structuralDraft.evidence.map((source, index) => selectedEvidence.includes(JSON.stringify(source)) ? index : -1).filter(index => index >= 0);
+      }
+      structuralDraft.refresh = false; structuralDraft.error = ''; detailSignature = '';
+    }
     if (detailError?.id === item?.id) detailError = null;
   }
   if (pendingOpenItem && snapshot) { openItem(pendingOpenItem); return; }
@@ -218,6 +280,7 @@ bridge?.addEventListener('message', event => receive(event.data));
 function pageItems() {
   const search = filters.search.trim().toLocaleLowerCase();
   return items().filter(item => {
+    if (item.state === 'merged' || item.kind === 'review' && item.state === 'accepted') return false;
     const belongs = page === 'tasks' ? item.kind === 'task' && item.state !== 'completed'
       : page === 'pending' ? item.kind === 'review'
         : page === 'completed' ? item.kind === 'task' && item.state === 'completed'
@@ -302,7 +365,8 @@ function renderList() {
   if (isSettings) { renderSettings(); return; }
   renderFilters();
   const visible = pageItems();
-  if (!visible.some(item => item.id === selectedId)) selectedId = visible[0]?.id || null;
+  const viewingStructure = structureOpen?.accountId === snapshot?.accountId && structureOpen?.id === selectedId && selected()?.kind === 'task';
+  if (!visible.some(item => item.id === selectedId) && !viewingStructure) selectedId = visible[0]?.id || null;
   $('list-summary').innerHTML = `<span>${visible.length} 项${snapshot ? '' : ' · 等待本地应用'}</span><b>${pages[page]}</b>`;
   $('rows').innerHTML = visible.length ? visible.map(item => `<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
     <div class="row-top"><h2>${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}${item.changeLabel ? `<span class="change-badge">${html(item.changeLabel)}</span>` : ''}</h2><span class="tag ${item.kind === 'review' ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${item.kind === 'review' ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
@@ -345,7 +409,7 @@ function evidenceHTML(evidence) {
   return evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('');
 }
 function sourceHTML(item) {
-  if (item.source === 'manual') return '<section class="source-section"><h3 class="section-label">任务来源</h3><p class="hint">手动添加，使用任务的优先级和完成规则。</p></section>';
+  if (item.source === 'manual' && !item.evidence?.length) return '<section class="source-section"><h3 class="section-label">任务来源</h3><p class="hint">手动添加，使用任务的优先级和完成规则。</p></section>';
   return '<section class="source-section"><h3 class="section-label">原始消息</h3>' + (item.evidence?.length ? evidenceHTML(item.evidence) : '<p class="hint">暂无可显示的原消息正文。</p>') + '</section>';
 }
 function historyHTML(item) {
@@ -356,15 +420,71 @@ function pendingChangesHTML(item) {
   if (!item.pendingChanges?.length) return '';
   return `<section class="pending-changes"><h3 class="section-label">待确认变更</h3><p class="hint">核对并接受建议前，保留当前正式信息。</p>${item.pendingChanges.map(change => `<article class="change-box"><b>${html(change.label)}</b>${change.due ? `<p>拟定${change.timeKind === 'start' ? '开始' : '截止'}：${html(dateLabel(change))}</p>` : ''}${change.reasons?.length ? `<p>${html(change.reasons.join(' · '))}</p>` : ''}<button type="button" class="button small" data-action="open-suggestion" data-id="${html(change.id)}">查看建议</button></article>`).join('')}</section>`;
 }
+function relatedHTML(item) {
+  const related = (item.relatedItemIds || []).map(id => items().find(candidate => candidate.id === id)).filter(Boolean);
+  const sources = items().filter(candidate => candidate.state === 'merged' && candidate.mergedIntoId === item.id);
+  const source = sources.find(candidate => candidate.id === mergedSourceId);
+  return `${related.length ? `<section class="related-items"><h3 class="section-label">关联事项</h3>${related.map(candidate => `<button type="button" class="button small" data-action="open-related" data-id="${html(candidate.id)}">${html(candidate.title)} · ${html(states[candidate.state] || '已合并')}</button>`).join('')}</section>` : ''}${sources.length ? `<section class="merged-sources"><h3 class="section-label">合并来源</h3><p class="hint">保留原事项的证据和变更记录。</p>${sources.map(candidate => `<button type="button" class="button small" data-action="view-merged-source" data-id="${html(candidate.id)}">${html(candidate.title)}</button>`).join('')}${source ? `<div class="merged-source-detail"><h3>${html(source.title)}</h3>${historyHTML(source)}${sourceHTML(source)}</div>` : ''}</section>` : ''}`;
+}
+function openStructure(item, mode) {
+  if (item.kind !== 'task' || item.state === 'merged' || !loadedAccount()) return;
+  const key = structureKey(snapshot.accountId, item.id, mode);
+  if (!structureDrafts.has(key)) structureDrafts.set(key, mode === 'merge'
+    ? { version: item.version, mergeWithId: '', mergeWithVersion: null, selection: {}, error: '' }
+    : { version: item.version, newItemId: uuid(), title: item.title || '', course: item.course || '', date: item.due || '', time: item.time || '', timeKind: item.timeKind || 'deadline', priority: 'auto', state: ['active', 'completed', 'cancelled', 'archived'].includes(item.state) ? item.state : 'active', evidence: item.evidence || [], evidenceIndexes: (item.evidence || []).map((_, index) => index), error: '' });
+  structureOpen = { accountId: snapshot.accountId, id: item.id, mode }; manualOpen = false;
+  detailSignature = ''; render();
+}
+const mergeFields = [
+  ['titleTaskId', '标题', item => item.title || '（未填写）'],
+  ['courseTaskId', '课程或分类', item => item.course || '（未填写）'],
+  ['timeTaskId', '正式时间', item => `${timeLabel(item)} · ${dateLabel(item)}`],
+  ['priorityTaskId', '优先级', item => Number.isInteger(item.priority) ? `P${item.priority}` : '自动'],
+  ['stateTaskId', '状态', item => states[item.state] || item.state]
+];
+function structureFormHTML(item, draft) {
+  const merge = structureOpen.mode === 'merge';
+  const other = items().find(candidate => candidate.id === draft.mergeWithId && candidate.kind === 'task' && (candidate.state !== 'merged' || draft.unconfirmed));
+  return `<p class="eyebrow">${merge ? '合并重复事项' : '拆开错误合并'}</p><h2 class="detail-title">${html(item.title)}</h2><p class="hint">${merge ? '当前事项将作为保留项；逐字段选择正式信息，全部证据和历史记录继续保留。' : '保留原事项，另建可独立处理的关联事项。核对行动、时间、证据及状态。'}</p><form class="form structure-form" id="${merge ? 'merge-task-form' : 'split-task-form'}" data-id="${html(item.id)}" novalidate>
+    ${merge ? `<label class="field">选择另一项任务<select name="mergeWithId"><option value="">请选择要合并的任务</option>${items().filter(candidate => candidate.kind === 'task' && candidate.id !== item.id && (candidate.state !== 'merged' || draft.unconfirmed && candidate.id === draft.mergeWithId)).map(candidate => `<option value="${html(candidate.id)}" ${candidate.id === draft.mergeWithId ? 'selected' : ''}>${html(candidate.title)} · ${html(candidate.course || '未填写课程')} · ${html(states[candidate.state])}</option>`).join('')}</select></label>${other ? mergeFields.map(([key, label, value]) => `<div class="merge-field ${value(item) !== value(other) ? 'conflict' : ''}"><h3>${label}${value(item) !== value(other) ? '<span>存在差异</span>' : ''}</h3><dl><dt>当前事项</dt><dd>${html(value(item))}</dd><dt>另一事项</dt><dd>${html(value(other))}</dd></dl><label class="field">保留${label}<select name="${key}"><option value="">请选择保留哪项</option><option value="${html(item.id)}" ${draft.selection[key] === item.id ? 'selected' : ''}>当前事项 · ${html(value(item))}</option><option value="${html(other.id)}" ${draft.selection[key] === other.id ? 'selected' : ''}>另一事项 · ${html(value(other))}</option></select></label></div>`).join('') : ''}` : `
+      <label class="field">新事项标题（必填）<input name="title" maxlength="256" value="${html(draft.title)}" required></label><label class="field">课程或分类（可留空）<input name="course" maxlength="256" value="${html(draft.course)}" list="task-course-options"><datalist id="task-course-options">${courseOptions().map(course => `<option value="${html(course)}"></option>`).join('')}</datalist></label>
+      <label class="field">正式日期（有原消息证据时可留空）<input name="date" type="date" value="${html(draft.date)}"></label><div class="form-grid"><label class="field">时间（可不填）<input name="time" type="time" value="${html(draft.time)}"></label><label class="field">时间类型<select name="timeKind">${['deadline', 'start'].map(kind => `<option value="${kind}" ${draft.timeKind === kind ? 'selected' : ''}>${kind === 'start' ? '开始时间' : '截止时间'}</option>`).join('')}</select></label></div><p class="hint">缺少正式日期且有选中证据时，新事项进入待确认；无原消息的手动事项须补齐日期。仅有日期不会补写具体钟点。</p>
+      <div class="form-grid"><label class="field">优先级<select name="priority"><option value="auto" ${draft.priority === 'auto' ? 'selected' : ''}>自动（按日期调整）</option>${[0, 1, 2, 3].map(priority => `<option value="${priority}" ${String(priority) === draft.priority ? 'selected' : ''}>P${priority}</option>`).join('')}</select></label><label class="field">新任务状态<select name="state">${['active', 'completed', 'cancelled', 'archived'].map(state => `<option value="${state}" ${draft.state === state ? 'selected' : ''}>${states[state]}</option>`).join('')}</select></label></div>
+      <fieldset class="split-evidence"><legend>新事项使用的原消息证据</legend><p class="hint">原事项继续保留全部证据，可让两项共享同一条原消息。</p>${draft.evidence.length ? draft.evidence.map((source, index) => `<label class="evidence-choice"><input type="checkbox" name="evidenceIndex" value="${index}" ${draft.evidenceIndexes.includes(index) ? 'checked' : ''}><span>证据 ${index + 1} · ${html(source.groupName || source.groupId || '来源待核对')}<small>${html(source.text)}</small></span></label>`).join('') : '<p class="hint">此任务没有原消息证据。</p>'}</fieldset>`}
+    <p class="error" id="structure-error" role="alert" hidden></p><button type="button" class="button" data-action="refresh-structure" hidden>刷新并核对最新内容</button><div class="detail-actions"><button type="submit" class="button primary" data-action="${merge ? 'merge-tasks' : 'split-task'}">${merge ? '确认合并' : '拆出关联事项'}</button>${merge ? '<button type="button" class="button" data-action="keep-separate">保持独立</button>' : ''}<button type="button" class="button" data-action="close-structure">返回详情</button></div></form>`;
+}
+function saveStructure(operation) {
+  const item = selected(), draft = structureDraft();
+  if (!item || !draft || busy.has(item.id) || busy.has(structureBusyKey(snapshot.accountId, item.id))) return;
+  if (draft.unconfirmed) { request(draft.operation, { ...JSON.parse(draft.payloadSignature), operationId: draft.operationId }, item.id); return; }
+  let extra;
+  if (operation === 'split-task') {
+    const title = draft.title.trim(), course = draft.course.trim();
+    const validDate = !draft.date || /^\d{4}-\d{2}-\d{2}$/.test(draft.date) && Number(draft.date.slice(0, 4)) > 0 && !Number.isNaN(Date.parse(draft.date + 'T00:00:00Z')) && new Date(draft.date + 'T00:00:00Z').toISOString().slice(0, 10) === draft.date;
+    draft.error = !title ? '请填写新事项标题。' : draft.title.length > 256 || draft.course.length > 256 ? '标题和课程不能超过 256 个字符。' : /[\u0000-\u001f\u007f]/.test(draft.title + draft.course) ? '标题和课程不能包含控制字符。' : !draft.date && !draft.evidenceIndexes.length ? '无原消息证据时，请补齐正式日期。' : !validDate ? '请填写有效日期。' : draft.time && (!draft.date || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.time)) ? '填写时间时也需要有效日期。' : !['deadline', 'start'].includes(draft.timeKind) ? '请选择截止时间或开始时间。' : draft.priority !== 'auto' && !/^[0-3]$/.test(draft.priority) ? '请选择自动或 P0 至 P3 的优先级。' : !['active', 'completed', 'cancelled', 'archived'].includes(draft.state) ? '请选择新任务状态。' : '';
+    extra = { newItemId: draft.newItemId, title, course, date: draft.date || null, time: draft.time || null, timeKind: draft.timeKind, priority: draft.priority === 'auto' ? null : Number(draft.priority), state: draft.state, evidenceIndexes: [...draft.evidenceIndexes].sort((a, b) => a - b) };
+  } else {
+    const other = items().find(candidate => candidate.id === draft.mergeWithId && candidate.kind === 'task' && candidate.state !== 'merged' && candidate.id !== item.id);
+    const priority = (draft.selection.priorityTaskId === item.id ? item : other)?.priority;
+    draft.error = !other ? '请选择另一项有效任务。' : operation === 'merge-tasks' && mergeFields.some(([key]) => ![item.id, other.id].includes(draft.selection[key])) ? '请逐项选择保留哪个字段和状态。' : operation === 'merge-tasks' && (!Number.isInteger(priority) || priority < 0 || priority > 3) ? '请核对要保留的 P0 至 P3 优先级。' : '';
+    extra = { mergeWithId: draft.mergeWithId, mergeWithVersion: draft.mergeWithVersion, ...(operation === 'merge-tasks' ? { mergeSelection: { ...draft.selection }, priority } : {}) };
+  }
+  if (draft.error) { updateDetailControls(); return; }
+  const payload = { accountId: snapshot.accountId, id: item.id, version: draft.version, ...extra };
+  const signature = JSON.stringify([operation, payload]);
+  if (signature !== draft.requestSignature) { draft.operationId = uuid(); draft.requestSignature = signature; draft.payloadSignature = JSON.stringify(payload); draft.operation = operation; }
+  request(operation, { ...payload, operationId: draft.operationId }, item.id);
+}
 function actionsHTML(item) {
   const button = (action, label, primary = false) => `<button class="button ${primary ? 'primary' : ''}" data-action="${action}">${label}</button>`;
   if (item.kind === 'review') return item.state === 'pending' ? button('ignore', '忽略') + button('reject', '拒绝建议') : item.state === 'ignored' && canUndo(item) ? button('undo-ignore', '撤销') : '';
   if (item.kind === 'notice') return item.state === 'converted' && item.targetTaskId ? button('open-target', '查看任务', true) : '';
   if (item.kind !== 'task') return '';
-  if (item.state === 'active') return button('complete', '完成', true) + button('archive', '归档');
-  if (item.state === 'completed') return (canUndo(item) ? button('undo-complete', '撤销') : '') + button('archive', '归档');
-  if (item.state === 'archived') return button('restore', '恢复为待办');
-  return '';
+  const structure = item.state !== 'merged' ? button('open-merge', '合并重复事项') + button('open-split', '拆开错误合并') : '';
+  if (item.state === 'active') return button('complete', '完成', true) + button('archive', '归档') + structure;
+  if (item.state === 'completed') return (canUndo(item) ? button('undo-complete', '撤销') : '') + button('archive', '归档') + structure;
+  if (item.state === 'archived') return button('restore', '恢复为待办') + structure;
+  return structure;
 }
 function retainFocus(container, replace) {
   const active = document.activeElement;
@@ -382,6 +502,16 @@ function retainFocus(container, replace) {
   }
 }
 function renderDetail() {
+  const structuralDraft = structureDraft(), structuralItem = selected();
+  if (structuralDraft && structuralItem?.id === structureOpen.id && page !== 'settings') {
+    const scroll = $('detail-pane').querySelector('.detail-scroll');
+    const other = items().find(item => item.id === structuralDraft.mergeWithId);
+    const signature = JSON.stringify(['structure', structureOpen, structuralItem, other, structuralDraft.evidence]);
+    if (signature !== detailSignature) { retainFocus(scroll, () => { scroll.innerHTML = structureFormHTML(structuralItem, structuralDraft); }); detailSignature = signature; }
+    $('detail-pane').querySelector('.confirmation-bar').hidden = true;
+    clearTimeout(undoTimer); undoScheduledFor = null;
+    updateDetailControls(); markRead(structuralItem); return;
+  }
   if (manualOpen && page === 'tasks' && loadedAccount() && manualDraft()) {
     const draft = manualDraft(), signature = `manual/${snapshot.accountId}/${draft.id}`;
     const scroll = $('detail-pane').querySelector('.detail-scroll');
@@ -391,7 +521,7 @@ function renderDetail() {
     updateDetailControls(); return;
   }
   const item = page === 'settings' ? null : selected();
-  const signature = item ? JSON.stringify({ ...item, version: undefined, targetTaskVersion: undefined, unread: undefined }) : `empty/${page}/${Boolean(snapshot)}/${status?.transport}/${status?.qq}`;
+  const signature = item ? JSON.stringify([{ ...item, version: undefined, targetTaskVersion: undefined, unread: undefined }, mergedSourceId, (item.relatedItemIds || []).map(id => items().find(candidate => candidate.id === id)), items().filter(candidate => candidate.state === 'merged' && candidate.mergedIntoId === item.id)]) : `empty/${page}/${Boolean(snapshot)}/${status?.transport}/${status?.qq}`;
   const scroll = $('detail-pane').querySelector('.detail-scroll'), footer = $('detail-pane').querySelector('.confirmation-bar');
   if (signature !== detailSignature) {
     const sameItem = scroll.querySelector('form')?.dataset.id === item?.id;
@@ -404,7 +534,7 @@ function renderDetail() {
         <div class="detail-actions">${actionsHTML(item)}</div>
         ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
         ${item.kind === 'review' && item.state === 'pending' && !item.canAccept ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
-        ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${historyHTML(item)}${sourceHTML(item)}`;
+        ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${relatedHTML(item)}${historyHTML(item)}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
     });
     footer.hidden = !item || item.kind !== 'review' || item.state !== 'pending';
@@ -432,7 +562,18 @@ function updateDetailControls() {
     const options = courseOptions().map(course => `<option value="${html(course)}"></option>`).join('');
     if (courseList.innerHTML !== options) courseList.innerHTML = options;
   }
-  $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && busy.has(item.id)) || (button.id === 'pending-confirm-button' && !item?.canAccept); });
+  $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && (busy.has(item.id) || busy.has(structureBusyKey(snapshot?.accountId, item.id)))) || (button.id === 'pending-confirm-button' && !item?.canAccept); });
+  const structuralForm = $('merge-task-form') || $('split-task-form'), structuralDraft = structureDraft();
+  if (structuralForm && structuralDraft) {
+    const saving = busy.has(structureBusyKey(snapshot.accountId, item.id)) || busy.has(item.id);
+    structuralForm.querySelectorAll('input,select').forEach(element => { element.disabled = saving || Boolean(structuralDraft.unconfirmed); });
+    const submit = structuralForm.querySelector('[type=submit]');
+    submit.textContent = structuralDraft.unconfirmed ? '重试确认保存' : structureOpen.mode === 'merge' ? '确认合并' : '拆出关联事项';
+    structuralForm.querySelector('[data-action=refresh-structure]').hidden = !structuralDraft.refresh;
+    const separate = structuralForm.querySelector('[data-action=keep-separate]');
+    if (separate) separate.disabled = saving || Boolean(structuralDraft.unconfirmed);
+    $('structure-error').textContent = structuralDraft.error || ''; $('structure-error').hidden = !structuralDraft.error;
+  }
   const manualForm = $('manual-task-form');
   if (manualForm) {
     const draft = manualDraft(), saving = busy.has(draft?.id);
@@ -497,10 +638,27 @@ function acceptReview(item) {
   const time = item.action === 'cancel' && item.targetTaskId ? {} : validateTime(item);
   if (time) command('accept-review', item, { ...time, ...(item.targetTaskId ? { targetTaskVersion: item.targetTaskVersion } : {}) });
 }
+function changeStructureField(element) {
+  const draft = structureDraft();
+  if (!draft || draft.unconfirmed || busy.has(structureBusyKey(snapshot.accountId, structureOpen.id))) return;
+  if (element.name === 'mergeWithId') {
+    if (draft.mergeWithId === element.value) return;
+    const item = selected(), other = items().find(candidate => candidate.id === element.value && candidate.kind === 'task' && candidate.state !== 'merged');
+    draft.mergeWithId = element.value; draft.mergeWithVersion = other?.version ?? null;
+    draft.selection = Object.fromEntries(mergeFields.map(([key, , value]) => [key, other && value(item) === value(other) ? item.id : '']));
+    draft.error = ''; detailSignature = ''; render();
+  } else if (mergeFields.some(([key]) => key === element.name)) draft.selection[element.name] = element.value;
+  else if (element.name === 'evidenceIndex') {
+    const index = Number(element.value);
+    draft.evidenceIndexes = element.checked ? [...new Set([...draft.evidenceIndexes, index])] : draft.evidenceIndexes.filter(value => value !== index);
+  } else if (['title', 'course', 'date', 'time', 'timeKind', 'priority', 'state'].includes(element.name)) draft[element.name] = element.value;
+}
+
 document.addEventListener('input', event => {
   const element = event.target;
   if (element.id === 'search') { filters.search = element.value; render(); }
   const form = element.closest('form[data-id]');
+  if (form && ['merge-task-form', 'split-task-form'].includes(form.id)) { changeStructureField(element); return; }
   if (form && ['title', 'course', 'date', 'time', 'timeKind', 'priority'].includes(element.name)) {
     if (form.id === 'manual-task-form' && manualDraft()?.id === form.dataset.id) { if (!manualDraft().unconfirmed) manualDraft()[element.name] = element.value; }
     else { const item = items().find(item => item.id === form.dataset.id); if (item) draftFor(item)[element.name] = element.value; }
@@ -520,6 +678,7 @@ document.addEventListener('change', event => {
     request('set-autostart', { enabled: element.value === 'on' });
   }
   const form = element.closest('form[data-id]');
+  if (form && ['merge-task-form', 'split-task-form'].includes(form.id)) { changeStructureField(element); return; }
   if (form && ['timeKind', 'priority'].includes(element.name)) {
     if (form.id === 'manual-task-form' && manualDraft()?.id === form.dataset.id) { if (!manualDraft().unconfirmed) manualDraft()[element.name] = element.value; }
     else { const item = items().find(item => item.id === form.dataset.id); if (item) draftFor(item)[element.name] = element.value; }
@@ -528,7 +687,9 @@ document.addEventListener('change', event => {
 document.addEventListener('submit', event => {
   event.preventDefault();
   const item = selected();
-  if (event.target.id === 'manual-task-form') createTask();
+  if (event.target.id === 'merge-task-form') saveStructure('merge-tasks');
+  else if (event.target.id === 'split-task-form') saveStructure('split-task');
+  else if (event.target.id === 'manual-task-form') createTask();
   else if (event.target.id === 'time-form' && item) editTask(item);
   else if (event.target.id === 'notice-form' && item) { const time = validateTime(item); if (time) command('convert-notice', item, time); }
   else if (event.target.id === 'review-form') acceptReview(item);
@@ -540,14 +701,17 @@ document.addEventListener('click', event => {
   if (action === 'new-task') {
     if (!loadedAccount()) return;
     if (!manualDraft()) manualDrafts.set(snapshot.accountId, { id: uuid(), title: '', course: '', date: '', time: '', timeKind: 'deadline', priority: 'auto', error: '' });
-    manualOpen = true; detailError = null; render(); $('manual-task-form').elements.title.focus(); return;
+    structureOpen = null; manualOpen = true; detailError = null; render(); $('manual-task-form').elements.title.focus(); return;
   }
   if (action === 'cancel-new-task') { manualDrafts.delete(snapshot.accountId); manualOpen = false; render(); return; }
   if (action === 'nav') {
-    manualOpen = false; page = button.dataset.page; filters.state = page === 'pending' ? 'pending' : 'active'; selectedId = null; detailError = null; render(); return;
+    manualOpen = false; structureOpen = null; mergedSourceId = null; page = button.dataset.page; filters.state = page === 'pending' ? 'pending' : 'active'; selectedId = null; detailError = null; render(); return;
   }
-  if (action === 'select') { manualOpen = false; selectedId = button.dataset.id; detailError = null; render(); return; }
-  if (action === 'refresh' || action === 'refresh-edit') { hostError = ''; request('snapshot', {}); return; }
+  if (action === 'select') { manualOpen = false; structureOpen = null; mergedSourceId = null; selectedId = button.dataset.id; detailError = null; render(); return; }
+  if (action === 'refresh' || action === 'refresh-edit' || action === 'refresh-structure') { hostError = ''; request('snapshot', {}); return; }
+  if (action === 'open-related') { openItem({ accountId: snapshot.accountId, id: button.dataset.id }); return; }
+  if (action === 'view-merged-source') { mergedSourceId = button.dataset.id; render(); return; }
+  if (action === 'close-structure') { structureOpen = null; detailSignature = ''; render(); return; }
   if (action === 'open-suggestion') {
     const suggestion = items().find(item => item.id === button.dataset.id && item.kind === 'review' && item.state === 'pending');
     if (!suggestion || !snapshot) { hostError = '此建议已处理或暂不可用，请刷新后核对。'; render(); return; }
@@ -563,6 +727,8 @@ document.addEventListener('click', event => {
     request('confirm-group', { accountId: snapshot.accountId, id: groupId, operationId: uuid(), version: 0, course, excluded }, groupId); return;
   }
   const item = selected(); if (!item) return;
+  if (action === 'open-merge' || action === 'open-split') { openStructure(item, action === 'open-merge' ? 'merge' : 'split'); return; }
+  if (action === 'keep-separate') { saveStructure('keep-separate'); return; }
   if (action === 'use-suggestion') {
     const draft = draftFor(item); draft.date = item.suggestedDue || ''; draft.time = item.suggestedTime || '';
     const form = $('review-form') || $('time-form');
@@ -576,8 +742,7 @@ document.addEventListener('click', event => {
   else if (action === 'open-target') {
     const target = items().find(candidate => candidate.id === item.targetTaskId && candidate.kind === 'task');
     if (!target) { hostError = '关联任务暂未出现在快照，请刷新后重试。'; render(); return; }
-    page = target.state === 'completed' ? 'completed' : 'tasks'; filters = { search: '', course: '', state: target.state }; selectedId = target.id; detailError = null; hostError = ''; render();
-    document.querySelector('.task-row.selected')?.scrollIntoView({ block: 'nearest' }); return;
+    openItem({ accountId: snapshot.accountId, id: target.id }); return;
   }
   else if (['undo-complete', 'undo-ignore'].includes(action)) {
     if (!canUndo(item)) { detailError = { id: item.id, message: errorLabel('undo_expired') }; updateDetailControls(); return; }

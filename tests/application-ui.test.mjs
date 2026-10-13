@@ -37,7 +37,7 @@ const status = { transport: 'connected', qq: 'online', receiving: 'active', hist
 const mockScript = `(() => {
   const listeners = new Set();
   const clone = value => JSON.parse(JSON.stringify(value));
-  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, startupEnabled: true, messages: [], hold: true, held: [], failNext: null, creationRequests: {} };
+  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, startupEnabled: true, messages: [], hold: true, held: [], failNext: null, creationRequests: {}, structureRequests: {} };
   backend.emit = data => listeners.forEach(listener => listener({data:clone(data)}));
   backend.push = () => backend.emit({type:'state',snapshot:backend.snapshot,status:backend.status,startupEnabled:backend.startupEnabled});
   backend.release = () => { backend.hold=false; for (const command of backend.held.splice(0)) respond(command); };
@@ -49,7 +49,29 @@ const mockScript = `(() => {
       const error=backend.failNext;backend.failNext=null;backend.emit({id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
     }
     const item=backend.snapshot?.items.find(item=>item.id===parameters.id);
-    if(command.operation==='create-task') {
+    if(['merge-tasks','split-task','keep-separate'].includes(command.operation)) {
+      const saved=backend.structureRequests[parameters.operationId];
+      if(saved) {
+        backend.emit({id:command.id,success:saved===JSON.stringify(parameters),error:'operation_conflict',snapshot:backend.snapshot,status:backend.status});return;
+      }
+      const other=backend.snapshot.items.find(candidate=>candidate.id===parameters.mergeWithId);
+      if(!item || item.version!==parameters.version || command.operation!=='split-task' && (!other || other.version!==parameters.mergeWithVersion)) { backend.emit({id:command.id,success:false,error:'version_conflict',snapshot:backend.snapshot,status:backend.status});return; }
+      if(command.operation==='merge-tasks') {
+        const values=clone(item), choices=parameters.mergeSelection;
+        for(const [field,key] of Object.entries({title:'titleTaskId',course:'courseTaskId',state:'stateTaskId'})) item[field]=(choices[key]===item.id ? values : other)[field];
+        item.priority=parameters.priority;
+        const selectedTime=choices.timeTaskId===item.id ? values : other;
+        for(const field of ['due','time','timeKind'])item[field]=selectedTime[field];
+        item.evidence=[...(item.evidence||[]),...(other.evidence||[])];
+        item.relatedItemIds=[...(item.relatedItemIds||[]),...(other.relatedItemIds||[])];
+        other.state='merged';other.mergedIntoId=item.id;other.version++;
+        item.changes=[{label:'已合并',at:new Date().toISOString(),fields:[],evidence:[]},...(item.changes||[])];
+      } else if(command.operation==='split-task') {
+        const newItem={...clone(item),id:parameters.newItemId,title:parameters.title,course:parameters.course,kind:parameters.date ? 'task' : 'review',state:parameters.date ? parameters.state : 'pending',due:parameters.date,time:parameters.time,timeKind:parameters.timeKind,priority:parameters.priority??3,version:1,unread:false,canAccept:!parameters.date,evidence:parameters.evidenceIndexes.map(index=>item.evidence[index]),relatedItemIds:[item.id],changes:[{label:'已拆分',at:new Date().toISOString(),fields:[],evidence:[]}]};
+        backend.snapshot.items.push(newItem);item.relatedItemIds=[...(item.relatedItemIds||[]),newItem.id];
+      }
+      item.version++;backend.structureRequests[parameters.operationId]=JSON.stringify(parameters);
+    } else if(command.operation==='create-task') {
       if(item && backend.creationRequests[parameters.id] !== JSON.stringify(parameters)) { backend.emit({id:command.id,success:false,error:'任务 ID 已被其他事项使用。',snapshot:backend.snapshot,status:backend.status});return; }
       backend.creationRequests[parameters.id]=JSON.stringify(parameters);
       if (!item) backend.snapshot.items.push({...${JSON.stringify(itemDefaults)},id:parameters.id,kind:'task',source:'manual',title:parameters.title,course:parameters.course,group:'手动添加',state:'active',due:parameters.date,time:parameters.time || null,timeKind:parameters.timeKind,priority:parameters.priority ?? 3,version:1,unread:false,evidence:[]});
@@ -78,6 +100,7 @@ const mockScript = `(() => {
       }
     }
     if(backend.snapshot)backend.snapshot.generatedAt=new Date().toISOString();
+    if(backend.failAfterStructureOnce && ['merge-tasks','split-task','keep-separate'].includes(command.operation)){backend.failAfterStructureOnce=false;backend.emit({id:command.id,success:false,error:'本地数据操作失败，原数据已保留。',snapshot:backend.snapshot,status:backend.status});return;}
     backend.emit({id:command.id,success:true,snapshot:backend.snapshot,status:backend.status});
   }
   window.chrome = window.chrome || {};
@@ -808,6 +831,209 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="snapshot").length'), 4, '初始读取、两次冲突刷新及一次手动全局刷新');
       assert.deepEqual(browserErrors, []);
     });
+    await t.test('合并展示五字段差异并要求明确选择，保留任务ID及全部来源历史', async () => {
+      const merged=structuredClone(fixture);
+      merged.items=merged.items.filter(item=>item.kind==='task').map((item,index)=>({...item,id:index?'merge-other':'merge-current',unread:false,version:10,evidence:[{...evidence[0],text:index?'另一来源':'当前来源'}]}));
+      await push(merged);await nav('tasks');await select('merge-current');
+      await click('[data-action="open-merge"]');
+      await change('#merge-task-form [name=mergeWithId]','merge-other');
+      assert.equal(await evaluate('document.querySelectorAll("#merge-task-form .merge-field").length'),5);
+      assert.match(await evaluate('document.querySelector("#merge-task-form").textContent'),/存在差异/);
+      const before=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").length');
+      await click('[data-action="merge-tasks"]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").length'),before);
+      assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/选择.*字段|逐项.*选择/);
+      const selection={titleTaskId:'merge-current',courseTaskId:'merge-other',timeTaskId:'merge-current',priorityTaskId:'merge-other',stateTaskId:'merge-current'};
+      for(const [name,value] of Object.entries(selection)) await change(`#merge-task-form [name=${name}]`,value);
+      await capture('ui-merge-conflicts-dark.png');
+      await click('[data-action="merge-tasks"]');
+      const command=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      assert.deepEqual(command.parameters,{accountId:'12345',id:'merge-current',version:10,operationId:command.parameters.operationId,mergeWithId:'merge-other',mergeWithVersion:10,mergeSelection:selection,priority:0});
+      assert.equal(await evaluate('document.querySelectorAll(".task-row[data-id=merge-other]").length'),0);
+      assert.match(await evaluate('document.querySelector(".source-section").textContent'),/当前来源.*另一来源/s);
+      assert.match(await evaluate('document.querySelector(".merged-sources").textContent'),/考试/);
+      await click('[data-action="view-merged-source"][data-id="merge-other"]');
+      assert.match(await evaluate('document.querySelector(".merged-source-detail").textContent'),/另一来源/);
+      await evaluate('backend.emit({type:"open-item",accountId:"12345",id:"merge-other"})');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'merge-current');
+    });
+    await t.test('拆分逐项选择证据及状态，缺日期进入待确认且关联事项可打开',async()=>{
+      const split=structuredClone(fixture);split.items=[{...split.items[0],id:'split-current',unread:false,version:20,evidence:[{...evidence[0],text:'报告证据'},{...evidence[0],text:'论文证据'}]}];
+      await push(split);await nav('tasks');await select('split-current');await click('[data-action="open-split"]');
+      await change('#split-task-form [name=title]','课程论文');await change('#split-task-form [name=date]','');
+      await evaluate('const boxes=[...document.querySelectorAll("#split-task-form [name=evidenceIndex]")];boxes[0].checked=false;boxes[0].dispatchEvent(new Event("change",{bubbles:true}));');
+      await capture('ui-split-pending-dark.png');await click('[data-action="split-task"]');
+      const command=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');
+      assert.equal(command.parameters.date,null);assert.equal(command.parameters.priority,null);assert.deepEqual(command.parameters.evidenceIndexes,[1]);
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="split-current").state'),'active');
+      assert.equal(await evaluate(`backend.snapshot.items.find(item=>item.id===${JSON.stringify(command.parameters.newItemId)}).state`),'pending');
+      await click(`[data-action="open-related"][data-id="${command.parameters.newItemId}"]`);
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'),'pending');
+      assert.match(await evaluate('document.querySelector(".source-section").textContent'),/论文证据/);
+      await click('[data-action="open-related"][data-id="split-current"]');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'split-current');
+    });
+    await t.test('合并自动P0来源及另一项P3时间时，保留用户所见优先级为显式值',async()=>{
+      const automatic=structuredClone(fixture);automatic.items=automatic.items.filter(item=>item.kind==='task').map((item,index)=>({...item,id:index?'auto-merge-other':'auto-merge-current',unread:false,version:25,due:index?'2030-12-20':'2020-01-01',time:null,timeKind:'deadline',priority:index?3:0,priorityOverride:null}));
+      await push(automatic);await nav('tasks');await select('auto-merge-current');await click('[data-action="open-merge"]');await change('#merge-task-form [name=mergeWithId]','auto-merge-other');
+      const selection={titleTaskId:'auto-merge-current',courseTaskId:'auto-merge-current',timeTaskId:'auto-merge-other',priorityTaskId:'auto-merge-current',stateTaskId:'auto-merge-current'};
+      for(const [name,value] of Object.entries(selection))await change(`#merge-task-form [name=${name}]`,value);
+      await click('[data-action="merge-tasks"]');const command=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      assert.equal(command.parameters.priority,0);assert.equal(command.parameters.mergeSelection.timeTaskId,'auto-merge-other');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="auto-merge-current").due'),'2030-12-20');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="auto-merge-current").priority'),0);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=priority]").value'),'0');
+    });
+    await t.test('保持独立按双方版本保存，完成状态差异不会自动传播',async()=>{
+      const separate=structuredClone(fixture);separate.items=separate.items.filter(item=>item.kind==='task').map((item,index)=>({...item,id:index?'separate-other':'separate-current',state:index?'completed':'active',unread:false,version:30}));
+      await push(separate);await nav('tasks');await select('separate-current');await click('[data-action="open-merge"]');
+      await change('#merge-task-form [name=mergeWithId]','separate-other');
+      assert.equal(await evaluate('document.querySelectorAll("#merge-task-form .merge-field.conflict").length'),5);
+      await click('[data-action="keep-separate"]');
+      const command=await evaluate('backend.messages.filter(message=>message.operation==="keep-separate").at(-1)');
+      assert.deepEqual(command.parameters,{accountId:'12345',id:'separate-current',version:30,operationId:command.parameters.operationId,mergeWithId:'separate-other',mergeWithVersion:30});
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="separate-current").state'),'active');
+      await nav('completed');assert.equal(await evaluate('document.querySelector(".task-row[data-id=separate-other]").dataset.id'),'separate-other');
+      await nav('tasks');await select('separate-current');await click('[data-action="open-merge"]');await change('#merge-task-form [name=mergeWithId]','separate-other');
+      for(const name of ['titleTaskId','courseTaskId','timeTaskId','priorityTaskId','stateTaskId'])await change(`#merge-task-form [name=${name}]`,'separate-current');
+      await click('[data-action="merge-tasks"]');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="separate-other").state'),'merged');
+      await change('#state-filter','all');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),1);
+      await nav('completed');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
+    });
+    await t.test('拆分校验标题、日期、证据和状态，正式项允许空课程并保留原任务',async()=>{
+      const split=structuredClone(fixture);split.items=[{...split.items[0],id:'split-validation',version:40,unread:false}];
+      await push(split);await nav('tasks');await select('split-validation');await click('[data-action="open-split"]');
+      const before=await evaluate('backend.messages.filter(message=>message.operation==="split-task").length');
+      for(const [name,value,message] of [['title',' ',/标题/],['title','字'.repeat(257),/256/],['priority','',/优先级/],['state','',/状态/]]){
+        for(const [field,input] of Object.entries({title:'独立数据表',priority:'auto',state:'active'}))await change(`#split-task-form [name=${field}]`,input);
+        await change(`#split-task-form [name=${name}]`,value);await click('[data-action="split-task"]');
+        assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="split-task").length'),before);
+        assert.match(await evaluate('document.querySelector("#structure-error").textContent'),message);
+      }
+      await change('#split-task-form [name=state]','cancelled');await change('#split-task-form [name=date]','');
+      await evaluate('const box=document.querySelector("#split-task-form [name=evidenceIndex]");box.checked=false;box.dispatchEvent(new Event("change",{bubbles:true}));');
+      await click('[data-action="split-task"]');assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/证据.*日期/);
+      await change('#split-task-form [name=date]','2026-12-28');await change('#split-task-form [name=course]','');await change('#split-task-form [name=time]','18:30');await change('#split-task-form [name=timeKind]','start');await change('#split-task-form [name=priority]','1');
+      await click('[data-action="split-task"]');
+      const command=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');
+      assert.deepEqual(command.parameters,{accountId:'12345',id:'split-validation',version:40,operationId:command.parameters.operationId,newItemId:command.parameters.newItemId,title:'独立数据表',course:'',date:'2026-12-28',time:'18:30',timeKind:'start',priority:1,state:'cancelled',evidenceIndexes:[]});
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="split-validation").state'),'active');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="split-validation").evidence.length'),1);
+      await click(`[data-action="open-related"][data-id="${command.parameters.newItemId}"]`);
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),command.parameters.newItemId);
+      assert.match(await evaluate('document.querySelector(".deadline-box").textContent'),/开始时间.*18:30.*已取消/s);
+      const manual={...structuredClone(fixture),items:[{...fixture.items[0],id:'manual-split',source:'manual',group:'手动添加',unread:false,evidence:[]}]};
+      await push(manual);await nav('tasks');await select('manual-split');await click('[data-action="open-split"]');await change('#split-task-form [name=date]','');await click('[data-action="split-task"]');
+      assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/无原消息证据.*正式日期/);
+    });
+    await t.test('合并冲突保留字段选择与编辑草稿，刷新核对双方最新版本再提交',async()=>{
+      const merging=structuredClone(fixture);merging.items=merging.items.filter(item=>item.kind==='task').map((item,index)=>({...item,id:index?'merge-conflict-other':'merge-conflict-current',unread:false,version:50}));
+      await push(merging);await nav('tasks');await select('merge-conflict-current');await change('#time-form [name=title]','尚未保存的编辑草稿');await click('[data-action="open-merge"]');await change('#merge-task-form [name=mergeWithId]','merge-conflict-other');
+      const selection={titleTaskId:'merge-conflict-current',courseTaskId:'merge-conflict-other',timeTaskId:'merge-conflict-current',priorityTaskId:'merge-conflict-other',stateTaskId:'merge-conflict-current'};
+      for(const [name,value] of Object.entries(selection))await change(`#merge-task-form [name=${name}]`,value);
+      await evaluate('for(const item of backend.snapshot.items)item.version=51;backend.snapshot.items[0].title="后台更新后的标题";backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
+      await click('[data-action="merge-tasks"]');
+      const failed=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      assert.equal(failed.parameters.version,50);assert.equal(failed.parameters.mergeWithVersion,50);
+      assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/草稿已保留.*刷新/);
+      for(const [name,value] of Object.entries(selection))assert.equal(await evaluate(`document.querySelector('#merge-task-form [name=${name}]').value`),value);
+      await click('[data-action="refresh-structure"]');await click('[data-action="merge-tasks"]');
+      const saved=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      assert.equal(saved.parameters.version,51);assert.equal(saved.parameters.mergeWithVersion,51);assert.notEqual(saved.parameters.operationId,failed.parameters.operationId);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'),'尚未保存的编辑草稿');
+    });
+    await t.test('拆分草稿随快照保留焦点筛选，刷新冲突后按原证据身份重新定位索引',async()=>{
+      const split=structuredClone(fixture);split.items=[{...split.items[0],id:'split-conflict',unread:false,version:60,evidence:[{...evidence[0],text:'A证据'},{...evidence[0],text:'B证据'}]}];
+      await push(split);await nav('tasks');await change('#course-filter','物理');await select('split-conflict');await click('[data-action="open-split"]');
+      await change('#split-task-form [name=title]','保留中的拆分草稿');await change('#split-task-form [name=course]','新的拆分课程');
+      await evaluate('(()=>{const box=document.querySelectorAll("#split-task-form [name=evidenceIndex]")[0];box.checked=false;box.dispatchEvent(new Event("change",{bubbles:true}));document.querySelector("#split-task-form [name=title]").focus();document.querySelector("#split-task-form [name=title]").setSelectionRange(1,3);backend.snapshot.items[0].version=61;backend.snapshot.items[0].evidence.reverse();backend.snapshot.generatedAt=new Date().toISOString();backend.push()})()');
+      assert.equal(await evaluate('document.activeElement.name'),'title');assert.equal(await evaluate('document.activeElement.selectionStart'),1);
+      assert.equal(await evaluate('document.querySelector("#course-filter").value'),'物理');
+      await nav('notices');await nav('tasks');await select('split-conflict');await click('[data-action="open-split"]');
+      assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").value'),'保留中的拆分草稿');
+      await click('[data-action="split-task"]');assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/草稿已保留/);
+      const failed=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');assert.equal(failed.parameters.version,60);assert.deepEqual(failed.parameters.evidenceIndexes,[1]);
+      await click('[data-action="refresh-structure"]');
+      assert.equal(await evaluate('document.querySelector("#split-task-form [name=course]").value'),'新的拆分课程');
+      assert.deepEqual(await evaluate('[...document.querySelectorAll("#split-task-form [name=evidenceIndex]:checked")].map(element=>Number(element.value))'),[0]);
+      await click('[data-action="split-task"]');const saved=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');
+      assert.equal(saved.parameters.version,61);assert.deepEqual(saved.parameters.evidenceIndexes,[0]);assert.equal(saved.parameters.newItemId,failed.parameters.newItemId);
+      assert.equal(await evaluate(`backend.snapshot.items.find(item=>item.id===${JSON.stringify(saved.parameters.newItemId)}).evidence[0].text`),'B证据');
+    });
+    await t.test('拆分超时保留稳定操作与新事项ID，重复提交和迟到响应只创建一项',async()=>{
+      const split=structuredClone(fixture);split.items=[{...split.items[0],id:'split-timeout',unread:false,version:70}];
+      await push(split);await nav('tasks');await select('split-timeout');await click('[data-action="open-split"]');await change('#split-task-form [name=title]','超时后的独立分项');
+      await evaluate('window.originalStructureSetTimeout=window.setTimeout;window.setTimeout=(handler,ms,...args)=>{const id=window.originalStructureSetTimeout(handler,ms,...args);if(ms===15000)window.structureTimeout={handler,id};return id;};backend.hold=true');
+      try{
+        await click('[data-action="split-task"]');const first=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');
+        const before=await evaluate('backend.messages.length');await evaluate('document.querySelector("#split-task-form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))');assert.equal(await evaluate('backend.messages.length'),before);
+        await evaluate('clearTimeout(window.structureTimeout.id);window.structureTimeout.handler()');
+        assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/尚未确认.*草稿已保留/);assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").disabled'),true);
+        await change('#split-task-form [name=title]','不能重写未确认操作');await click('[data-action="split-task"]');
+        const retry=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');assert.deepEqual(retry.parameters,first.parameters);
+        await evaluate('backend.release()');assert.equal(await evaluate(`backend.snapshot.items.filter(item=>item.id===${JSON.stringify(first.parameters.newItemId)}).length`),1);
+        await evaluate(`backend.emit({id:${JSON.stringify(first.id)},success:true,snapshot:${JSON.stringify({...split,generatedAt:'2099-01-01T00:00:00Z'})}})`);
+        assert.equal(await evaluate('document.querySelectorAll(".related-items button").length'),1,'重复应答不覆盖已确认快照');
+      }finally{await evaluate('window.setTimeout=window.originalStructureSetTimeout;backend.release()');}
+    });
+    await t.test('拆分或合并已写入后错误应答仍锁原请求，重试不创建第二项或修改字段',async()=>{
+      const splitting=structuredClone(fixture);splitting.items=[{...splitting.items[0],id:'committed-split',unread:false,version:75}];
+      await push(splitting);await nav('tasks');await select('committed-split');await click('[data-action="open-split"]');await change('#split-task-form [name=title]','已写入的分项');
+      await evaluate('backend.failAfterStructureOnce=true');await click('[data-action="split-task"]');
+      const split=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');
+      assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").disabled'),true);assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/尚未确认/);
+      await change('#split-task-form [name=title]','不能修改已写入分项');await click('[data-action="split-task"]');
+      assert.deepEqual(await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1).parameters'),split.parameters);
+      assert.equal(await evaluate(`backend.snapshot.items.filter(item=>item.id===${JSON.stringify(split.parameters.newItemId)}).length`),1);
+      const merging=structuredClone(fixture);merging.items=merging.items.filter(item=>item.kind==='task').map((item,index)=>({...item,id:index?'committed-other':'committed-current',unread:false,version:76}));
+      await push(merging);await nav('tasks');await select('committed-current');await click('[data-action="open-merge"]');await change('#merge-task-form [name=mergeWithId]','committed-other');
+      for(const name of ['titleTaskId','courseTaskId','timeTaskId','priorityTaskId','stateTaskId'])await change(`#merge-task-form [name=${name}]`,'committed-current');
+      await evaluate('backend.failAfterStructureOnce=true');await click('[data-action="merge-tasks"]');const merge=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
+      assert.equal(merge.parameters.priority,3);
+      assert.equal(await evaluate('document.querySelector("#merge-task-form [name=titleTaskId]").disabled'),true);assert.match(await evaluate('document.querySelector("#structure-error").textContent'),/尚未确认/);
+      await evaluate('backend.snapshot.items.find(item=>item.id==="committed-current").priority=0;backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
+      await click('[data-action="merge-tasks"]');assert.deepEqual(await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1).parameters'),merge.parameters);
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'committed-current');
+    });
+    await t.test('迟到结构保存不切走另一任务，不清其编辑草稿及冲突提示',async()=>{
+      const split=structuredClone(fixture);split.items=split.items.filter(item=>item.kind==='task').map((item,index)=>({...item,id:index?'late-edit':'late-split',unread:false,version:80}));
+      await push(split);await nav('tasks');await select('late-split');await click('[data-action="open-split"]');await change('#split-task-form [name=title]','迟到的分项');await evaluate('backend.hold=true');await click('[data-action="split-task"]');
+      await nav('tasks');await select('late-edit');await change('#time-form [name=title]','另一任务的编辑草稿');await click('[data-action="edit-task"]');
+      await evaluate('const edit=backend.held.find(message=>message.operation==="edit-task");backend.held=backend.held.filter(message=>message!==edit);backend.emit({id:edit.id,success:false,error:"version_conflict",snapshot:backend.snapshot});document.querySelector("#time-form [name=title]").focus();document.querySelector("#time-form [name=title]").setSelectionRange(1,3);backend.release()');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'late-edit');assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'),'另一任务的编辑草稿');
+      assert.equal(await evaluate('document.activeElement.name'),'title');assert.equal(await evaluate('document.activeElement.selectionStart'),1);assert.match(await evaluate('document.querySelector("#detail-error").textContent'),/草稿已保留/);
+    });
+    await t.test('合并拆分草稿按账号隔离，旧账号迟到响应不覆盖同ID的新账号草稿',async()=>{
+      const accountA={...structuredClone(fixture),items:[{...fixture.items[0],id:'account-split',unread:false,version:90}]};
+      const accountB={...structuredClone(accountA),accountId:'67890'};
+      await push(accountA);await nav('tasks');await select('account-split');await click('[data-action="open-split"]');await change('#split-task-form [name=title]','账号A拆分');
+      await push(accountB);await nav('tasks');await select('account-split');await click('[data-action="open-split"]');await change('#split-task-form [name=title]','账号B拆分');
+      await push(accountA);await nav('tasks');await select('account-split');await click('[data-action="open-split"]');assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").value'),'账号A拆分');
+      await evaluate('backend.hold=true');await click('[data-action="split-task"]');const first=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');
+      await push(accountB);await nav('tasks');await select('account-split');await click('[data-action="open-split"]');
+      await evaluate(`backend.held=backend.held.filter(message=>message.id!==${JSON.stringify(first.id)});backend.emit({id:${JSON.stringify(first.id)},success:true,snapshot:${JSON.stringify({...accountA,generatedAt:'2099-01-01T00:00:00Z'})}});backend.release()`);
+      assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").value'),'账号B拆分');assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").disabled'),false);
+      await click('[data-action="split-task"]');const saved=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');assert.equal(saved.parameters.accountId,'67890');assert.notEqual(saved.parameters.newItemId,first.parameters.newItemId);
+    });
+    await t.test('已接受拆分建议的关联入口跳转正式任务，接受记录不混入待确认列表',async()=>{
+      const accepted=structuredClone(fixture);accepted.items=[{...fixture.items[0],id:'accepted-parent',unread:false,relatedItemIds:['accepted-child']},{...fixture.items[2],id:'accepted-child',state:'accepted',targetTaskId:'accepted-task',unread:false},{...fixture.items[0],id:'accepted-task',unread:false,relatedItemIds:['accepted-parent']}];
+      await push(accepted);await nav('tasks');await select('accepted-parent');await click('[data-action="open-related"][data-id="accepted-child"]');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'),'accepted-task');
+      await nav('pending');await change('#state-filter','all');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
+    });
+    await t.test('迟到冲突刷新绑定发起账号，同ID另一账号的拆分草稿不被确认版本',async()=>{
+      const accountA={...structuredClone(fixture),items:[{...fixture.items[0],id:'refresh-account',unread:false,version:100}]};
+      const accountB={...structuredClone(accountA),accountId:'67890'};
+      await push(accountA);await nav('tasks');await select('refresh-account');await click('[data-action="open-split"]');await change('#split-task-form [name=title]','A账号刷新草稿');
+      await evaluate('backend.snapshot.items[0].version=101;backend.snapshot.generatedAt=new Date().toISOString();backend.push()');await click('[data-action="split-task"]');await evaluate('backend.hold=true');await click('[data-action="refresh-structure"]');
+      const refresh=await evaluate('backend.messages.filter(message=>message.operation==="snapshot").at(-1)');
+      await push(accountB);await nav('tasks');await select('refresh-account');await click('[data-action="open-split"]');await change('#split-task-form [name=title]','B账号刷新草稿');
+      await evaluate(`backend.held=backend.held.filter(message=>message.id!==${JSON.stringify(refresh.id)});backend.emit({id:${JSON.stringify(refresh.id)},success:true,snapshot:${JSON.stringify({...accountA,generatedAt:'2099-01-01T00:00:00Z'})}});backend.release()`);
+      assert.equal(await evaluate('document.querySelector("#split-task-form [name=title]").value'),'B账号刷新草稿');
+      await click('[data-action="split-task"]');const saved=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');assert.equal(saved.parameters.accountId,'67890');assert.equal(saved.parameters.version,100);
+    });
+    assert.deepEqual(browserErrors, []);
   } finally {
     socket?.close(); browser.kill();
     await new Promise(resolve => { if (browser.exitCode !== null) resolve(); else { const timer = setTimeout(resolve, 3000); browser.once('exit', () => { clearTimeout(timer); resolve(); }); } });

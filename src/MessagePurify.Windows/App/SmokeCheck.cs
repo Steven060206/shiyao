@@ -204,6 +204,9 @@ internal static class SmokeCheck
         FindButton(desktop.TaskWindow, "complete:" + manual.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
         await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == manual.Id).State == "completed");
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2);
+        await CheckTaskStructureAsync(window, workspace, runtime, desktop, dataRoot, task.Id, acceptedTask.Id);
+        desktop.Capture(cardsCapture);
+        var final = workspace.Snapshot(DateTimeOffset.UtcNow);
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
@@ -211,8 +214,142 @@ internal static class SmokeCheck
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",
-                "manual-task-create", "manual-task-reopen", "manual-task-desktop", "manual-task-complete" },
-            taskCount = 3, activeTaskCount = 2, capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
+                "manual-task-create", "manual-task-reopen", "manual-task-desktop", "manual-task-complete",
+                "merge-task-conflicts", "merge-task-selection", "merge-task-evidence-history", "merge-task-old-id",
+                "merge-task-desktop", "split-task-create", "split-task-evidence", "split-task-related-navigation",
+                "split-task-pending", "task-structure-reopen", "task-structure-two-cards" },
+            taskCount = final.Items.Count(item => item.Kind == "task" && item.State != "merged"),
+            activeTaskCount = final.Items.Count(item => item.Kind == "task" && item.State == "active"),
+            mergedTaskCount = final.Items.Count(item => item.State == "merged"),
+            pendingCount = final.Items.Count(item => item.Kind == "review" && item.State == "pending"),
+            capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
+    }
+
+    private static async Task CheckTaskStructureAsync(AppWindow window, AccountWorkspace workspace,
+        AppRuntime runtime, DesktopCardHost desktop, string dataRoot, string keptId, string sourceId)
+    {
+        // Use the real page, including state differences, while the manual smoke task stays completed.
+        await window.OpenItemAsync(workspace.AccountId, sourceId);
+        await WaitAsync(window, "document.querySelector('[data-action=complete]') !== null");
+        await EvaluateAsync(window, "document.querySelector('[data-action=complete]').click()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == sourceId).State == "completed");
+        var before = workspace.Snapshot(DateTimeOffset.UtcNow);
+        var kept = before.Items.Single(item => item.Id == keptId);
+        var source = before.Items.Single(item => item.Id == sourceId);
+        await window.OpenItemAsync(workspace.AccountId, keptId);
+        await WaitAsync(window, "document.querySelector('[data-action=open-merge]') !== null");
+        await EvaluateAsync(window, "document.querySelector('[data-action=open-merge]').click()");
+        await WaitAsync(window, "document.querySelector('#merge-task-form [name=mergeWithId]') !== null");
+        await SetFormFieldsAsync(window, "merge-task-form", new { mergeWithId = sourceId });
+        await WaitAsync(window, "document.querySelectorAll('#merge-task-form .merge-field.conflict').length >= 4 && document.querySelector('#merge-task-form').textContent.includes('存在差异')");
+        await SetFormFieldsAsync(window, "merge-task-form", new { titleTaskId = keptId, courseTaskId = sourceId,
+            timeTaskId = sourceId, priorityTaskId = sourceId, stateTaskId = keptId });
+        await EvaluateAsync(window, "document.querySelector('#merge-task-form').requestSubmit()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == sourceId).State == "merged");
+        var mergedSnapshot = workspace.Snapshot(DateTimeOffset.UtcNow);
+        var merged = mergedSnapshot.Items.Single(item => item.Id == keptId);
+        var old = mergedSnapshot.Items.Single(item => item.Id == sourceId);
+        if (merged.Title != kept.Title || merged.Course != source.Course || merged.Due != source.Due
+            || merged.Time != source.Time || merged.TimeKind != source.TimeKind || merged.Priority != source.Priority
+            || merged.State != "active" || old.MergedIntoId != keptId || !(merged.RelatedItemIds ?? []).Contains(sourceId))
+            throw new InvalidOperationException("合并未按显式选择保留字段、状态或原 ID 关联。");
+        var evidence = kept.Evidence.Concat(source.Evidence).Distinct().ToArray();
+        if (merged.Evidence.Count != evidence.Length || evidence.Any(item => !merged.Evidence.Contains(item))
+            || merged.Changes?.Any(change => change.Label.Contains("合并", StringComparison.Ordinal)) != true
+            || merged.Changes.Any(change => change.Label == "确认新要求") != true
+            || merged.Changes.Any(change => change.Label == "修改任务") != true)
+            throw new InvalidOperationException("合并丢失原始证据、来源历史或本次合并记录。");
+        await WaitAsync(window, "document.querySelector('.change-history')?.textContent.includes('合并') && document.querySelector('.change-history').textContent.includes('确认新要求')");
+        await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=completed]').click()");
+        await WaitAsync(window, "document.querySelectorAll('.task-row').length === 1");
+        if (await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(sourceId) + "]') === null") != "true")
+            throw new InvalidOperationException("被合并的旧任务仍重复出现在已完成列表中。");
+        await window.OpenItemAsync(workspace.AccountId, sourceId);
+        await WaitAsync(window, "document.querySelector('.task-row.selected')?.dataset.id === " + JsonSerializer.Serialize(keptId));
+        if (await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(sourceId) + "]') === null") != "true")
+            throw new InvalidOperationException("被合并的旧任务仍重复出现在列表中。");
+        runtime.Refresh();
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 1 && desktop.Snapshot.Tasks[0].Id == keptId);
+
+        var splitTitle = "拆出的实验数据任务";
+        var splitDate = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).AddDays(6).ToString("yyyy-MM-dd");
+        await OpenSplitFormAsync(window);
+        await SetFormFieldsAsync(window, "split-task-form", new { title = splitTitle, course = "数学拆分",
+            date = splitDate, time = "20:15", timeKind = "start", priority = "1", state = "active" });
+        await SelectSplitEvidenceAsync(window, 0);
+        await EvaluateAsync(window, "document.querySelector('#split-task-form').requestSubmit()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Any(item => item.Kind == "task" && item.Title == splitTitle));
+        var split = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Title == splitTitle);
+        var parent = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == keptId);
+        if (split.State != "active" || split.Course != "数学拆分" || split.Due != splitDate || split.Time != "20:15"
+            || split.TimeKind != "start" || split.Priority != 1 || split.Evidence.Count != 1
+            || split.Evidence[0] != merged.Evidence[0] || parent.Evidence.Count != merged.Evidence.Count
+            || !(split.RelatedItemIds ?? []).Contains(keptId) || !(parent.RelatedItemIds ?? []).Contains(split.Id))
+            throw new InvalidOperationException("正式拆分没有保留填写值、选中证据和父任务关联。");
+        await window.OpenItemAsync(workspace.AccountId, keptId);
+        await OpenRelatedAsync(window, split.Id);
+        await WaitAsync(window, "document.querySelector('.detail-title')?.textContent === " + JsonSerializer.Serialize(splitTitle));
+        await OpenRelatedAsync(window, keptId);
+
+        var pendingTitle = "日期待核对的报告分项";
+        await OpenSplitFormAsync(window);
+        await SetFormFieldsAsync(window, "split-task-form", new { title = pendingTitle, course = "数学",
+            date = "", time = "", timeKind = "deadline", priority = "auto", state = "active" });
+        await SelectSplitEvidenceAsync(window, merged.Evidence.Count - 1);
+        await EvaluateAsync(window, "document.querySelector('#split-task-form').requestSubmit()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Any(item => item.Kind == "review" && item.Title == pendingTitle));
+        var pending = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Title == pendingTitle);
+        if (pending.State != "pending" || pending.Due is not null || pending.Time is not null
+            || pending.Evidence.Count != 1 || pending.Evidence[0] != merged.Evidence[^1]
+            || !(pending.RelatedItemIds ?? []).Contains(keptId))
+            throw new InvalidOperationException("无正式日期的拆分没有进入待确认或丢失选中证据。");
+        await window.OpenItemAsync(workspace.AccountId, keptId);
+        await OpenRelatedAsync(window, pending.Id);
+        await WaitAsync(window, "document.querySelector('#review-form [name=date]')?.value === '' && document.querySelector('.detail-title')?.textContent === " + JsonSerializer.Serialize(pendingTitle));
+        await OpenRelatedAsync(window, keptId);
+        var reopened = new AccountWorkspace(dataRoot, workspace.AccountId).Snapshot(DateTimeOffset.UtcNow);
+        var reopenedParent = reopened.Items.Single(item => item.Id == keptId);
+        if (reopened.Items.Single(item => item.Id == sourceId).MergedIntoId != keptId
+            || reopened.Items.Single(item => item.Id == sourceId).State != "merged"
+            || reopenedParent.Evidence.Count != merged.Evidence.Count
+            || !(reopenedParent.RelatedItemIds ?? []).Contains(split.Id)
+            || !(reopenedParent.RelatedItemIds ?? []).Contains(pending.Id)
+            || reopened.Items.Single(item => item.Id == split.Id).Due != splitDate
+            || reopened.Items.Single(item => item.Id == pending.Id).State != "pending")
+            throw new InvalidDataException("重开工作区丢失合并、拆分任务、待确认或关联。");
+        runtime.Refresh();
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2 && desktop.Snapshot.Tasks.Any(item => item.Id == split.Id)
+            && desktop.Snapshot.Pending.Count == 1 && desktop.Snapshot.Pending[0].Id == pending.Id
+            && desktop.TaskWindow.IsVisible && desktop.PendingWindow.IsVisible);
+        FindButton(desktop.PendingWindow, "open:" + pending.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(window, "document.querySelector('.task-row.selected')?.dataset.id === " + JsonSerializer.Serialize(pending.Id));
+        await OpenRelatedAsync(window, keptId);
+    }
+
+    private static Task SetFormFieldsAsync(AppWindow window, string formId, object fields) => EvaluateAsync(window,
+        "Object.entries(" + JsonSerializer.Serialize(fields) + ").forEach(([name,value])=>{const control=document.querySelector('#"
+        + formId + " [name='+name+']');control.value=value;control.dispatchEvent(new Event('input',{bubbles:true}));"
+        + "control.dispatchEvent(new Event('change',{bubbles:true}));})");
+
+    private static Task SelectSplitEvidenceAsync(AppWindow window, int index) => EvaluateAsync(window,
+        "document.querySelectorAll('#split-task-form [name=evidenceIndex]').forEach(control=>{control.checked=control.value==='"
+        + index + "';control.dispatchEvent(new Event('change',{bubbles:true}));})");
+
+    private static async Task OpenSplitFormAsync(AppWindow window)
+    {
+        await WaitAsync(window, "document.querySelector('[data-action=open-split]') !== null");
+        await EvaluateAsync(window, "document.querySelector('[data-action=open-split]').click()");
+        await WaitAsync(window, "document.querySelector('#split-task-form') !== null");
+    }
+
+    private static async Task OpenRelatedAsync(AppWindow window, string id)
+    {
+        var selector = "[data-action=open-related][data-id=" + JsonSerializer.Serialize(id) + "]";
+        await WaitAsync(window, "document.querySelector(" + JsonSerializer.Serialize(selector) + ") !== null");
+        await EvaluateAsync(window, "document.querySelector(" + JsonSerializer.Serialize(selector) + ").click()");
+        await WaitAsync(window, "document.querySelector('.task-row.selected')?.dataset.id === " + JsonSerializer.Serialize(id));
     }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)
@@ -256,7 +393,7 @@ internal static class SmokeCheck
             if (await EvaluateAsync(window, expression) == "true") return;
             await Task.Delay(100);
         }
-        throw new TimeoutException("本地页面检查超时。");
+        throw new TimeoutException("本地页面检查超时：" + expression);
     }
     private static async Task WaitAsync(Func<bool> condition)
     {

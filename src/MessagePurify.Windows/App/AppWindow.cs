@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
 using MessagePurify.Infrastructure.Application;
+using MessagePurify.Infrastructure.Tasks;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
 
@@ -141,7 +142,12 @@ public sealed class AppWindow : Window
                     p.TryGetProperty("targetTaskVersion", out var target) && target.ValueKind != JsonValueKind.Null ? target.GetInt64() : null,
                     Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean(),
                     Title: Optional(p, "title"),
-                    Priority: p.TryGetProperty("priority", out var priority) && priority.ValueKind != JsonValueKind.Null ? priority.GetInt32() : null);
+                    Priority: p.TryGetProperty("priority", out var priority) && priority.ValueKind != JsonValueKind.Null ? priority.GetInt32() : null,
+                    MergeWithId: Optional(p, "mergeWithId"),
+                    MergeWithVersion: p.TryGetProperty("mergeWithVersion", out var mergeVersion) ? mergeVersion.GetInt64() : null,
+                    MergeSelection: p.TryGetProperty("mergeSelection", out var selection) ? selection.Deserialize<TaskMergeSelection>(JsonOptions) : null,
+                    NewItemId: Optional(p, "newItemId"), State: Optional(p, "state"),
+                    EvidenceIndexes: p.TryGetProperty("evidenceIndexes", out var indexes) ? indexes.Deserialize<int[]>() : null);
                 await Task.Run(() => workspace.Execute(command, DateTimeOffset.UtcNow));
                 runtime.Refresh();
             }
@@ -149,7 +155,8 @@ public sealed class AppWindow : Window
         catch (ArgumentException exception) { error = exception.Message; }
         catch (InvalidOperationException exception)
         {
-            error = request!.Operation == "edit-task" && exception.Message == "记录已变化，请重新读取后再操作。"
+            error = request!.Operation is "edit-task" or "merge-tasks" or "keep-separate" or "split-task"
+                && exception.Message == "记录已变化，请重新读取后再操作。"
                 ? "version_conflict" : "事项或连接已变化，请核对最新内容后重试。";
         }
         catch (Exception) { error = "本地数据操作失败，原数据已保留。"; }

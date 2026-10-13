@@ -28,21 +28,35 @@ public sealed partial class AccountTaskStore
                 ?? throw new InvalidDataException("任务操作缺少结果快照。");
             if (after.AccountId != AccountId || after.Id != reader.GetString(2))
                 throw new InvalidDataException("任务操作快照归属不一致。");
-            TaskItem? before = null;
-            if (!reader.IsDBNull(4))
-            {
-                using var beforeDocument = JsonDocument.Parse(reader.GetString(4));
-                before = TaskFromAudit(beforeDocument.RootElement);
-            }
-            // 重复创建或无状态变化的幂等请求仍保留原审计，但不重复展示。
-            if (before is null && !created.Add(after.Id) || before?.Version == after.Version) continue;
-            created.Add(after.Id);
+            using var beforeDocument = reader.IsDBNull(4) ? null : JsonDocument.Parse(reader.GetString(4));
             RuleAction? action = CandidateAction(request.RootElement);
             if (afterDocument.RootElement.TryGetProperty("Review", out var review))
                 action = CandidateAction(review) ?? action;
-            history.Add(new(reader.GetString(0), request.RootElement.GetProperty("Kind").GetString()!,
-                DateTimeOffset.Parse(reader.GetString(3), CultureInfo.InvariantCulture), before, after, action,
-                after.Evidence.Except(before?.Evidence ?? []).ToArray()));
+            AddEntry(beforeDocument is null ? null : TaskFromAudit(beforeDocument.RootElement), after);
+            // 双事项操作和拆分使用同一原子审计，分别呈现每项的历史。
+            foreach (var member in new[] { "MergedTask", "SplitTask", "SeparateTask" })
+            {
+                if (!afterDocument.RootElement.TryGetProperty(member, out var memberAfter) ||
+                    memberAfter.ValueKind == JsonValueKind.Null) continue;
+                var relatedAfter = memberAfter.Deserialize<TaskItem>()
+                    ?? throw new InvalidDataException("结构操作缺少事项结果。");
+                TaskItem? relatedBefore = null;
+                if (beforeDocument is not null && beforeDocument.RootElement.TryGetProperty(member, out var memberBefore))
+                    relatedBefore = memberBefore.Deserialize<TaskItem>();
+                AddEntry(relatedBefore, relatedAfter);
+            }
+
+            void AddEntry(TaskItem? before, TaskItem current)
+            {
+                if (current.AccountId != AccountId)
+                    throw new InvalidDataException("结构操作事项账号归属不一致。");
+                // 重复创建或无状态变化的幂等请求仍保留原审计，但不重复展示。
+                if (before is null && !created.Add(current.Id) || before?.Version == current.Version) return;
+                created.Add(current.Id);
+                history.Add(new(reader.GetString(0), request.RootElement.GetProperty("Kind").GetString()!,
+                    DateTimeOffset.Parse(reader.GetString(3), CultureInfo.InvariantCulture), before, current, action,
+                    current.Evidence.Except(before?.Evidence ?? []).ToArray()));
+            }
         }
         return history;
     }
@@ -55,6 +69,7 @@ public sealed partial class AccountTaskStore
 
     private static RuleAction? CandidateAction(JsonElement root)
     {
+        if (root.ValueKind != JsonValueKind.Object) return null;
         if (root.TryGetProperty("Action", out var directAction) && directAction.ValueKind == JsonValueKind.String)
             return directAction.Deserialize<RuleAction>();
         if (!root.TryGetProperty("Candidate", out var candidate) || candidate.ValueKind != JsonValueKind.Object

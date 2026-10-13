@@ -26,6 +26,9 @@ internal static class TaskChangeProjection
         Field("时间类型", before is null ? null : TimeKindLabel(before.Time.Kind), TimeKindLabel(after.Time.Kind));
         Field("优先级", before is null ? null : Priority(before), Priority(after));
         Field("状态", before is null ? null : State(before.State), State(after.State));
+        if (entry.Kind is "merge-tasks" or "split-task" or "keep-separate")
+            fields.Add(new("事项关系", "原事项关系", entry.Kind switch
+            { "merge-tasks" => "合并并保留原证据", "split-task" => "拆出独立事项", _ => "保持独立" }));
         if (fields.Count == 0 && entry.Evidence.Count == 0) return null;
         var newRequirement = before is not null && entry.Action == RuleAction.NewRequirement && entry.Evidence.Count > 0;
         var important = before is null || fields.Count > 0 || newRequirement;
@@ -35,6 +38,9 @@ internal static class TaskChangeProjection
             "create-task" => "手动添加任务",
             "convert-notice" => "从通知加入任务",
             "edit-task" => "修改任务",
+            "merge-tasks" => "合并重复事项",
+            "split-task" => "拆开错误合并",
+            "keep-separate" => "保持独立",
             "accept-time" => "修改正式时间",
             "complete" => "完成任务",
             "undo-complete" => "撤销完成",
@@ -57,6 +63,8 @@ internal static class TaskChangeProjection
         {
             RuleAction.NewRequirement => "新要求", RuleAction.Postpone => "已延期", RuleAction.Cancel => "已取消",
             _ when entry.Kind == "edit-task" => "已修改",
+            _ when entry.Kind == "merge-tasks" => "已合并",
+            _ when entry.Kind == "split-task" => "已拆分",
             _ when before.Time != after.Time => "时间变更",
             _ when before.State != after.State => State(after.State),
             _ => "已修改"

@@ -38,7 +38,11 @@ public sealed partial class AccountTaskStore
             "task", (connection, transaction) =>
             {
                 var existing = FindBySource<TaskItem>(connection, transaction, "tasks", sourceKey);
-                if (existing is not null) return new(existing, existing.Id);
+                if (existing is not null)
+                {
+                    var current = Required<TaskItem>(connection, transaction, "tasks", ResolveTaskId(connection, transaction, existing.Id));
+                    return new(current, current.Id);
+                }
                 if (Read<TaskItem>(connection, transaction, "tasks", id) is not null)
                     throw new InvalidOperationException("通知转换任务 ID 已被其他事项使用。");
                 var task = new TaskItem(id, AccountId, candidate.Title,
@@ -65,7 +69,11 @@ public sealed partial class AccountTaskStore
         {
             ValidateId(id);
             var duplicate = FindBySource<TaskItem>(connection, transaction, "tasks", Canonical(candidate));
-            if (duplicate is not null) return new(duplicate, duplicate.Id);
+            if (duplicate is not null)
+            {
+                var current = Required<TaskItem>(connection, transaction, "tasks", ResolveTaskId(connection, transaction, duplicate.Id));
+                return new(current, current.Id);
+            }
             if (Read<TaskItem>(connection, transaction, "tasks", id) is not null)
                 throw new InvalidOperationException("事项 ID 已被其他候选使用。");
             var task = NewTask(id, candidate, candidate.Time!, false, now);
@@ -100,8 +108,9 @@ public sealed partial class AccountTaskStore
 
     public TaskItem? FindTask(string id) => Find<TaskItem>("tasks", id);
     public PendingReview? FindReview(string id) => Find<PendingReview>("reviews", id);
-    public IReadOnlyList<TaskItem> ListTasks(TaskState? state = null) =>
-        List<TaskItem>("tasks").Where(item => state is null || item.State == state).ToArray();
+    public IReadOnlyList<TaskItem> ListTasks(TaskState? state = null, bool includeMerged = false) =>
+        List<TaskItem>("tasks").Where(item => (includeMerged || item.MergedIntoId is null) &&
+            (state is null || item.State == state)).ToArray();
     public IReadOnlyList<PendingReview> ListReviews(ReviewState? state = null) =>
         List<PendingReview>("reviews").Where(item => state is null || item.State == state).ToArray();
 
@@ -235,36 +244,44 @@ public sealed partial class AccountTaskStore
             ValidateCandidate(candidate);
             if (candidate.Action == RuleAction.Inform)
                 throw new ArgumentException("普通通知不能通过事项入口接受。", nameof(reviewId));
-            var previous = Read<TaskItem>(connection, transaction, "tasks", taskId);
+            var currentTaskId = candidate.TargetTaskId is null ? taskId : ResolveTaskId(connection, transaction, taskId);
+            var previous = Read<TaskItem>(connection, transaction, "tasks", currentTaskId);
             TaskItem task;
             if (candidate.TargetTaskId is null)
             {
                 if (previous is not null || expectedTaskVersion is not null)
                     throw new InvalidOperationException("新候选不能覆盖已有事项。");
-                if (candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement)
+                if (review.SplitParentTaskId is null && candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement)
                     throw new ArgumentException("关联变更缺少目标事项。", nameof(reviewId));
                 var time = confirmedTime ?? candidate.Time;
                 ValidateTime(time);
                 task = NewTask(taskId, candidate, time!, confirmedTime is not null, now);
+                if (review.SplitParentTaskId is { } splitParent)
+                    task = WithChosenState(task, review.SplitState ?? TaskState.Active, now) with
+                    {
+                        RelatedItemIds = [ResolveTaskId(connection, transaction, splitParent)],
+                        PriorityOverride = candidate.Priority
+                    };
                 Insert(connection, transaction, "tasks", taskId, task, Canonical(candidate));
             }
             else
             {
-                if (candidate.TargetTaskId != taskId || expectedTaskVersion is null)
+                if (ResolveTaskId(connection, transaction, candidate.TargetTaskId) != currentTaskId || expectedTaskVersion is null)
                     throw new ArgumentException("关联建议须指定同一事项及其当前版本。", nameof(taskId));
                 if (previous is null) throw new InvalidOperationException("关联建议的目标事项不存在。");
+                EnsureCurrent(previous);
                 CheckVersion(previous.Version, expectedTaskVersion.Value);
                 task = AcceptLinked(previous, candidate, confirmedTime, now);
-                Update(connection, transaction, "tasks", taskId, task);
+                Update(connection, transaction, "tasks", currentTaskId, task);
             }
             AddEvidence(connection, transaction, task);
             var accepted = review with
             {
-                State = ReviewState.Accepted, AcceptedTaskId = taskId, UndoExpiresAt = null,
+                State = ReviewState.Accepted, AcceptedTaskId = currentTaskId, UndoExpiresAt = null,
                 UndoOperationId = null, Version = review.Version + 1
             };
             Update(connection, transaction, "reviews", reviewId, accepted);
-            return new(task, taskId, new { Review = review, Task = previous }, new { Review = accepted, Task = task });
+            return new(task, currentTaskId, new { Review = review, Task = previous }, new { Review = accepted, Task = task });
         }, now);
 
         RuleAction reviewAction(string id)
@@ -335,6 +352,10 @@ public sealed partial class AccountTaskStore
             return (null, "变更的行动、来源、关联或正式时间仍需确认");
         var previous = Read<TaskItem>(connection, transaction, "tasks", candidate.TargetTaskId);
         if (previous is null) return (null, "关联目标事项已不存在，需要确认");
+        if (previous.MergedIntoId is not null)
+            previous = Required<TaskItem>(connection, transaction, "tasks", ResolveTaskId(connection, transaction, previous.Id));
+        if (HasSplitRelations(connection, transaction, previous))
+            return (null, "原事项已由用户拆分，变更涉及的具体事项需要确认");
         if (candidate.Action == RuleAction.NewRequirement && previous.State is TaskState.Archived or TaskState.Cancelled)
             return (null, "已归档或已取消事项的新要求必须由用户确认");
         if (candidate.Action is RuleAction.Postpone or RuleAction.NewRequirement)
@@ -369,6 +390,7 @@ public sealed partial class AccountTaskStore
             (connection, transaction) =>
             {
                 var before = Required<TaskItem>(connection, transaction, "tasks", id);
+                EnsureCurrent(before);
                 CheckVersion(before.Version, expectedVersion);
                 var after = change(before);
                 if (after.Version != before.Version) Update(connection, transaction, "tasks", id, after);
@@ -394,9 +416,10 @@ public sealed partial class AccountTaskStore
     private sealed record Mutation<T>(T Current, string Id, object? Before = null, object? After = null);
 
     private T Write<T>(string operationId, object request, string resultKind,
-        Func<SqliteConnection, SqliteTransaction, Mutation<T>> mutate, DateTimeOffset now) where T : class
+        Func<SqliteConnection, SqliteTransaction, Mutation<T>> mutate, DateTimeOffset now,
+        Func<SqliteConnection, SqliteTransaction, string, JsonElement, T>? replayCurrent = null) where T : class
         => InTransaction((connection, transaction) =>
-            WriteInTransaction(connection, transaction, operationId, request, resultKind, mutate, now));
+            WriteInTransaction(connection, transaction, operationId, request, resultKind, mutate, now, replayCurrent));
 
     private T InTransaction<T>(Func<SqliteConnection, SqliteTransaction, T> mutate)
     {
@@ -410,12 +433,13 @@ public sealed partial class AccountTaskStore
 
     private static T WriteInTransaction<T>(SqliteConnection connection, SqliteTransaction transaction,
         string operationId, object request, string resultKind,
-        Func<SqliteConnection, SqliteTransaction, Mutation<T>> mutate, DateTimeOffset now) where T : class
+        Func<SqliteConnection, SqliteTransaction, Mutation<T>> mutate, DateTimeOffset now,
+        Func<SqliteConnection, SqliteTransaction, string, JsonElement, T>? replayCurrent = null) where T : class
     {
         ValidateId(operationId);
         var requestJson = JsonSerializer.Serialize(request);
         using (var replay = Command(connection, transaction,
-            "SELECT request_json, result_kind, result_id FROM operations WHERE operation_id = $id;", ("$id", operationId)))
+            "SELECT request_json, result_kind, result_id, after_json FROM operations WHERE operation_id = $id;", ("$id", operationId)))
         using (var reader = replay.ExecuteReader())
         {
             if (reader.Read())
@@ -423,7 +447,10 @@ public sealed partial class AccountTaskStore
                 if (reader.GetString(0) != requestJson || reader.GetString(1) != resultKind)
                     throw new InvalidOperationException("操作 ID 已用于不同的请求。");
                 var resultId = reader.GetString(2);
+                using var replayAudit = JsonDocument.Parse(reader.GetString(3));
                 reader.Close();
+                if (replayCurrent is not null) return replayCurrent(connection, transaction, resultId, replayAudit.RootElement);
+                if (typeof(T) == typeof(TaskItem)) resultId = ResolveTaskId(connection, transaction, resultId);
                 var current = Required<T>(connection, transaction, resultKind == "task" ? "tasks" : "reviews", resultId);
                 return current;
             }

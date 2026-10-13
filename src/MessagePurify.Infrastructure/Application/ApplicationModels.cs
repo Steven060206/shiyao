@@ -1,4 +1,5 @@
 using MessagePurify.Infrastructure.Reminders;
+using MessagePurify.Infrastructure.Tasks;
 
 namespace MessagePurify.Infrastructure.Application;
 
@@ -7,7 +8,9 @@ public sealed record WorkspaceCommand(string AccountId, string Operation, string
     string? TimeKind = null, string? UndoOperationId = null, long? TargetTaskVersion = null,
     string? Course = null, bool Excluded = false, string? ReminderMode = null,
     double? ReminderHours = null, int? ReminderDays = null, string? ReminderClock = null,
-    long? ReminderVersion = null, string? Title = null, int? Priority = null);
+    long? ReminderVersion = null, string? Title = null, int? Priority = null,
+    string? MergeWithId = null, long? MergeWithVersion = null, TaskMergeSelection? MergeSelection = null,
+    string? NewItemId = null, string? State = null, IReadOnlyList<int>? EvidenceIndexes = null);
 
 public sealed record ApplicationSnapshot(string AccountId, IReadOnlyList<ApplicationItem> Items,
     IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt,
@@ -20,7 +23,8 @@ public sealed record ApplicationItem(string Id, string Kind, string Title, strin
     string? SuggestedTime, IReadOnlyList<ApplicationEvidence> Evidence, bool Unread,
     string Action, bool CanAccept, string? ChangeLabel = null,
     IReadOnlyList<ApplicationChange>? Changes = null,
-    IReadOnlyList<ApplicationPendingChange>? PendingChanges = null, string Source = "qq");
+    IReadOnlyList<ApplicationPendingChange>? PendingChanges = null, string Source = "qq",
+    string? MergedIntoId = null, IReadOnlyList<string>? RelatedItemIds = null);
 
 public sealed record ApplicationChange(string Label, DateTimeOffset At, long Version,
     IReadOnlyList<ApplicationFieldChange> Fields, IReadOnlyList<ApplicationEvidence> Evidence);

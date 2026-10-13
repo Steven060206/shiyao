@@ -12,12 +12,14 @@ public static class AppBridgeProtocol
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
-        "reject", "accept-review", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart"
+        "reject", "accept-review", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart",
+        "merge-tasks", "keep-separate", "split-task"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {
         "accountId", "id", "operationId", "version", "date", "time", "timeKind",
-        "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled", "title", "priority"
+        "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled", "title", "priority",
+        "mergeWithId", "mergeWithVersion", "mergeSelection", "newItemId", "state", "evidenceIndexes"
     };
 
     public static bool IsTrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -59,10 +61,42 @@ public static class AppBridgeProtocol
                     || number < (operation is "confirm-group" or "create-task" ? 0 : 1)
                     || operation == "create-task" && number != 0) return false;
             }
-            if (operation is "edit-task" or "create-task")
+            if (operation is "merge-tasks" or "keep-separate")
+            {
+                if (!Text(parameters, "mergeWithId", 1024, out var otherId)
+                    || otherId == parameters.GetProperty("id").GetString()
+                    || !parameters.TryGetProperty("mergeWithVersion", out var otherVersion)
+                    || !otherVersion.TryGetInt64(out var otherNumber) || otherNumber < 1) return false;
+                if (operation == "merge-tasks")
+                {
+                    if (!parameters.TryGetProperty("priority", out var chosenPriority)
+                        || !chosenPriority.TryGetInt32(out var chosenNumber) || chosenNumber is < 0 or > 3) return false;
+                    if (!parameters.TryGetProperty("mergeSelection", out var selection) || !UniqueObject(selection)
+                        || selection.EnumerateObject().Count() != 5) return false;
+                    foreach (var name in new[] { "titleTaskId", "courseTaskId", "timeTaskId", "priorityTaskId", "stateTaskId" })
+                        if (!Text(selection, name, 1024, out var selectedId)
+                            || selectedId != otherId && selectedId != parameters.GetProperty("id").GetString()) return false;
+                }
+                else if (parameters.TryGetProperty("mergeSelection", out _)) return false;
+                if (parameters.EnumerateObject().Any(p => p.Name is "newItemId" or "state" or "evidenceIndexes")) return false;
+            }
+            else if (parameters.EnumerateObject().Any(p => p.Name is "mergeWithId" or "mergeWithVersion" or "mergeSelection")) return false;
+            if (operation == "split-task")
+            {
+                if (!Text(parameters, "newItemId", 1024, out var childId) || childId == parameters.GetProperty("id").GetString()
+                    || !Text(parameters, "state", 16, out var state) || state is not ("active" or "completed" or "archived" or "cancelled")
+                    || !parameters.TryGetProperty("evidenceIndexes", out var indexes) || indexes.ValueKind != JsonValueKind.Array
+                    || indexes.GetArrayLength() > 1024) return false;
+                var seen = new HashSet<int>();
+                foreach (var index in indexes.EnumerateArray())
+                    if (!index.TryGetInt32(out var indexNumber) || indexNumber < 0 || !seen.Add(indexNumber)) return false;
+            }
+            else if (parameters.EnumerateObject().Any(p => p.Name is "newItemId" or "state" or "evidenceIndexes")) return false;
+            if (operation is "edit-task" or "create-task" or "split-task")
             {
                 if (!Text(parameters, "title", 256, out var title) || title.Any(char.IsControl)
-                    || !Text(parameters, "date", 10, out _) || !Text(parameters, "timeKind", 8, out _)
+                    || operation != "split-task" && !Text(parameters, "date", 10, out _)
+                    || !Text(parameters, "timeKind", 8, out _)
                     || !parameters.TryGetProperty("course", out var course)
                     || course.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)
                     || course.ValueKind == JsonValueKind.String && course.GetString()!.Any(char.IsControl)) return false;
@@ -73,7 +107,7 @@ public static class AppBridgeProtocol
                 if (hasPriority && (operation == "edit-task" || priority.ValueKind != JsonValueKind.Null)
                     && (!priority.TryGetInt32(out var priorityNumber) || priorityNumber is < 0 or > 3)) return false;
             }
-            else if (parameters.EnumerateObject().Any(p => p.Name is "title" or "priority")) return false;
+            else if (parameters.EnumerateObject().Any(p => p.Name == "title" || p.Name == "priority" && operation != "merge-tasks")) return false;
             foreach (var property in parameters.EnumerateObject())
             {
                 if (property.Name is "date" or "time" or "timeKind" or "undoOperationId" or "course")
