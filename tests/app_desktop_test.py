@@ -30,7 +30,9 @@ def main():
         report_path = Path(folder) / "native-smoke.json"
         process = subprocess.Popen([str(args.executable.resolve(strict=True)), "--smoke-test", "--hold-seconds", "3", "--report", str(report_path)])
         try:
-            deadline = time.monotonic() + 40
+            # The full Native Smoke includes backup/restore and desktop recovery;
+            # allow enough time for those checks to finish before reading the report.
+            deadline = time.monotonic() + 90
             while not report_path.exists() and process.poll() is None and time.monotonic() < deadline:
                 time.sleep(0.05)
             report = json.loads(report_path.read_text(encoding="utf-8"))
