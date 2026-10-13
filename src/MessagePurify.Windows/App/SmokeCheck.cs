@@ -178,14 +178,41 @@ internal static class SmokeCheck
         if (savedLayout != resized) throw new InvalidOperationException("正式卡片布局没有持久化。");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
         await WaitAsync(window, "document.querySelectorAll('.task-row').length === 2");
+        // Create from the actual page and bridge, retaining date-only precision and an honest manual source.
+        await EvaluateAsync(window, "document.querySelector('[data-action=new-task]').click()");
+        await WaitAsync(window, "document.querySelector('#manual-task-form') !== null");
+        var manualDate = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).AddDays(4).ToString("yyyy-MM-dd");
+        await EvaluateAsync(window, "(() => {const form=document.querySelector('#manual-task-form');"
+            + "for(const [name,value] of Object.entries({title:'口头布置的补充报告',course:'口头事项',date:"
+            + JsonSerializer.Serialize(manualDate) + "})) {const input=form.elements.namedItem(name);input.value=value;"
+            + "input.dispatchEvent(new Event('input',{bubbles:true}));}form.requestSubmit();})()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Any(item => item.Source == "manual"));
+        var manual = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Source == "manual");
+        if (manual.Title != "口头布置的补充报告" || manual.Course != "口头事项" || manual.Due != manualDate
+            || manual.Time is not null || manual.TimeKind != "deadline" || manual.Group != "手动添加"
+            || manual.Evidence.Count != 0 || !manual.Changes!.Any(change => change.Label == "手动添加任务"))
+            throw new InvalidOperationException("手动新增丢失填写值、日期精度、来源或操作记录。");
+        await WaitAsync(window, "document.querySelector('.detail-title')?.textContent === '口头布置的补充报告' && document.querySelector('#detail-pane').textContent.includes('手动添加')");
+        var manualReopened = new AccountWorkspace(dataRoot, workspace.AccountId).Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == manual.Id);
+        if (manualReopened.Source != "manual" || manualReopened.Due != manual.Due || manualReopened.Time is not null
+            || manualReopened.Evidence.Count != 0 || manualReopened.State != "active")
+            throw new InvalidDataException("手动任务重开未保留正式值或来源。");
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Any(item => item.Id == manual.Id && item.Source == "manual") == true);
+        await WaitAsync(() => Descendants(desktop.TaskWindow).OfType<System.Windows.Controls.TextBlock>()
+            .Any(text => text.Text.Contains("口头事项 · 手动添加", StringComparison.Ordinal)));
+        FindButton(desktop.TaskWindow, "complete:" + manual.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == manual.Id).State == "completed");
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2);
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
             checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
-                "change-history", "change-read", "desktop-new-requirement", "desktop-change-read" },
-            taskCount = 2, capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
+                "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",
+                "manual-task-create", "manual-task-reopen", "manual-task-desktop", "manual-task-complete" },
+            taskCount = 3, activeTaskCount = 2, capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
     }
 
     private static IEnumerable<DependencyObject> Descendants(DependencyObject root)

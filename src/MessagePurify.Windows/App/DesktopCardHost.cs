@@ -354,7 +354,7 @@ public sealed class DesktopCardHost : IDisposable
                     body.Children.Add(new TextBlock { Text = item.ChangeLabel, Foreground = accent,
                         FontSize = 11, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
                         Margin = new(0, 6, 0, 0) });
-                body.Children.Add(new TextBlock { Text = item.Course ?? item.Group, Foreground = muted,
+                body.Children.Add(new TextBlock { Text = item.Source == "manual" ? (item.Course ?? "未分类") + " · 手动添加" : item.Course ?? item.Group, Foreground = muted,
                     TextTrimming = TextTrimming.CharacterEllipsis, Margin = new(0, 6, 0, 4) });
                 var label = isPending ? "核对原文，补齐待确认信息" :
                     $"P{item.Priority ?? 3}  ·  {(past ? item.TimeKind == "start" ? "开始时间已过" : "已逾期" : item.TimeKind == "start" ? "开始" : "截止")}  {item.Due}{(item.Time is null ? " · 仅有日期" : " " + item.Time)}";

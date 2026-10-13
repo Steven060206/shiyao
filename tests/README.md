@@ -2,13 +2,35 @@
 
 ## 当前范围决定（2026-10-12）
 
-OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立项目，本阶段不以 OCR 完成为门槛。额外的本机数据安全增强同样后置；测试仍必须保持 QQ/NapCat 只读，软件不得向 QQ 群聊或私聊发送消息。普通通知转任务、六字段完整编辑及可读变更记录/卡片变化标记已由工作区、桥协议、正式页面和 Native Smoke 专项覆盖；下一阶段完成手动新增、合并拆分、备份恢复和桌面卡片恢复。
+OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立项目，本阶段不以 OCR 完成为门槛。额外的本机数据安全增强同样后置；测试仍必须保持 QQ/NapCat 只读，软件不得向 QQ 群聊或私聊发送消息。普通通知转任务、六字段完整编辑及可读变更记录/卡片变化标记已由工作区、桥协议、正式页面和 Native Smoke 专项覆盖；手动新增已完成并通过自动/Native 合成验证，下一阶段完成合并拆分、备份恢复和桌面卡片恢复。
 
 ## 本轮完整编辑实现与验证（2026-10-13）
 
 完整编辑覆盖标题、课程、正式日期、钟点、时间类型和优先级。测试覆盖版本化 `edit-task`、操作幂等、原始证据与前后审计、手动时间保护、旧 JSON 优先级兼容、版本冲突保留全部草稿、刷新响应按起始账号/任务绑定，以及编辑或清空课程后同账号同群原证据引用仍可关联（仅标题匹配仍要求课程一致，跨群/跨账号/歧义拒绝）。最新 Release 回归：Core **306/306**、Infrastructure **463/463**、Windows **206/206**；Node 全量 **95/95**（含正式页面 **39/39**），均退出 0。自包含发布 `.tools/published/app-change-history-final/` 无警告错误；`MessagePurify.exe --smoke-test --report .tools/desktop-validation/change-history-native-final.json` 退出 0，报告 `success=true`、`synthetic=true`，21 项检查通过，覆盖编辑、变更历史、待确认变更、卡片标签、重开及版本冲突。真实 QQ 编辑场景统一后置；默认正式入口及正在运行版本未替换，测试未发送 QQ 或 Windows 通知。
 
-## 本轮可读变更记录与卡片标记（2026-10-13）
+## 本轮手动新增任务（2026-10-13）
+
+手动新增已接入账号 SQLite、工作区、桥、正式任务页和桌面卡片。标题、课程、正式日期必填，钟点可选；默认自动分级，选 P0～P3 时持久化手动覆盖。来源“手动添加”独立保存，旧 JSON 无来源时按 QQ 呈现，不构造消息或证据。测试覆盖来源与日期精度、幂等重试、冲突拒绝、账号隔离、自动优先级随时钟改变、显式后果及否定、完成/撤销/编辑/归档、旧 JSON 和未关联群变更。
+
+实际 Core Release 306/306、Infrastructure Release 501/501（ManualTaskTests 38/38）、Windows Release 236/236（桥/桌面专项 60/60）、正式页面 45/45，均退出 0。页面覆盖失败草稿保留、重试任务/操作 ID、重复提交拦截、快照与课程更新保留焦点、账号切换及迟到响应。自包含发布 `.tools/published/app-manual-task/` 无警告错误；Native 合成 25 项报告 `.tools/desktop-validation/manual-task-native.json` success=true、synthetic=true、进程退出 0，覆盖从真实 WebView2 页面新增、来源历史、重开、卡片刷新及完成。默认入口及正在运行版本未替换，统一真实验收后置，QQ 继续只读。
+
+审查问题均有 RED→GREEN 页面回归：保存结果不明确时锁定原请求、重复确认保持操作 ID 和自动优先级；可靠失败可继续改草稿，旧失败快照不能解锁；离开新增表单后迟到成功保留当前页面、焦点和另一任务的版本冲突提示。新增表单截图 `.tools/desktop-validation/manual-task-form-dark.png` 已生成并查看，1200×800 下表单控件和提交按钮可见。
+
+最终 `node --test tests/*.test.mjs` 102/102（页面 45/45、文档 38/38），退出 0；`git diff --check` 通过。最终发布产物再次运行 Native 合成 25 项，进程退出 0、报告 success=true。
+
+本项命令：
+
+```powershell
+./.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release
+./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release
+./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release
+node --test tests/application-ui.test.mjs
+./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-manual-task
+# 通过 Start-Process -WindowStyle Hidden -PassThru 启动并等待
+.tools/published/app-manual-task/MessagePurify.exe --smoke-test --report .tools/desktop-validation/manual-task-native.json
+```
+
+## 上一段可读变更记录与卡片标记（2026-10-13）
 
 测试覆盖从 `operations` 审计还原中文字段前后值、北京时间、原消息证据和顺序；延期/取消/新要求/编辑产生重要变化标签，催交补充仅追加证据；待确认变更保留正式日期并可打开建议；`mark-read` 按任务版本工作，旧版本不能清除后来变化。正式页面专项覆盖详情转义、历史显示、日期精度、待确认建议定位和新变化保留；Native Smoke 覆盖重开、卡片标签、变化读取及滚动条存在时仍精确触发缩放手柄。报告为 `.tools/desktop-validation/change-history-native-final.json`，success=true、synthetic=true、21 项通过。
 

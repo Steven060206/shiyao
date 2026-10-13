@@ -20,7 +20,7 @@ public sealed record ApplicationItem(string Id, string Kind, string Title, strin
     string? SuggestedTime, IReadOnlyList<ApplicationEvidence> Evidence, bool Unread,
     string Action, bool CanAccept, string? ChangeLabel = null,
     IReadOnlyList<ApplicationChange>? Changes = null,
-    IReadOnlyList<ApplicationPendingChange>? PendingChanges = null);
+    IReadOnlyList<ApplicationPendingChange>? PendingChanges = null, string Source = "qq");
 
 public sealed record ApplicationChange(string Label, DateTimeOffset At, long Version,
     IReadOnlyList<ApplicationFieldChange> Fields, IReadOnlyList<ApplicationEvidence> Evidence);

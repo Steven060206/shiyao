@@ -14,7 +14,7 @@ public static class DesktopCardProjection
         string? layoutError, DateTimeOffset now) => JsonSerializer.Serialize(new { theme, operationError,
             snapshot.AccountId, snapshot.ConnectionText, layoutError,
             Tasks = snapshot.Tasks.Select(i => new { i.Id, i.Version, i.Priority, i.Unread, i.ChangeLabel, i.Title, i.Due, i.Time,
-                i.TimeKind, i.Course, i.Group, Past = IsPast(i, now) }),
+                i.TimeKind, i.Course, i.Group, i.Source, Past = IsPast(i, now) }),
             Pending = snapshot.Pending.Select(i => new { i.Id, i.Version, i.Unread, i.ChangeLabel, i.Title }) });
 
     internal static bool IsPast(ApplicationItem item, DateTimeOffset now)

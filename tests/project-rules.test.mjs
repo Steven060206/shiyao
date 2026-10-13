@@ -43,8 +43,29 @@ test('OCR 后置且 QQ 只读边界保持为硬约束', () => {
   }
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /普通通知转任务已实现.*完整编辑已接入.*通过自动回归及 Native 合成验证/s);
-  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*下一项为手动新增.*合并拆分.*备份恢复.*桌面卡片恢复/s);
+  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*下一项为合并拆分.*备份恢复.*桌面卡片恢复/s);
   assert.doesNotMatch(requirements.split('## 4. 图片辅助')[0], /下一项实现图片下载与 OCR 队列/);
+});
+
+test('手动新增记录本地来源、日期精度、草稿与真实验收边界', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /手动新增.*已(?:实现|完成|接入)/s, file);
+    assert.match(content, /手动添加/, file);
+    assert.match(content, /(?:钟点|时间).*可(?:选|不填)|可选钟点/, file);
+    assert.match(content, /(?:失败|快照).*草稿/s, file);
+    assert.match(content, /25 项.*Native|Native.*25 项/, file);
+    assert.match(content, /统一真实验收后置|真实.*统一.*后置/s, file);
+  }
+  assert.match(read('docs/HANDOFF.md'), /旧 JSON 缺省为 `qq`/);
+  assert.match(read('docs/HANDOFF.md'), /重试确认保存.*确认前锁定/);
+  assert.match(read('src/MessagePurify.Windows/App/README.md'), /迟到的成功不会打断当前编辑或清除版本冲突提示/);
+  assert.match(read('docs/requirements.md'), /不伪造 QQ 原消息/);
+  for (const artifact of ['src/MessagePurify.Infrastructure/Tasks/TaskManualCreation.cs',
+    'tests/MessagePurify.Infrastructure.Tests/ManualTaskTests.cs', 'tests/MessagePurify.Windows.Tests/ManualTaskBridgeTests.cs',
+    'docs/superpowers/plans/2026-10-13-manual-task.md']) {
+    assert.ok(fs.statSync(path.join(root, artifact)).isFile(), artifact);
+  }
 });
 
 test('完整编辑六字段及自动/Native 验证证据已同步', () => {

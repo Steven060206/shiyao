@@ -7,6 +7,25 @@ public sealed class DesktopCardTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 12, 10, 0, 0, TimeSpan.FromHours(8));
 
+    [Fact]
+    public void ManualTasksUseTheSameCardRulesAndKeepTheirSource()
+    {
+        var task = Item("manual-task", due: "2026-10-13", time: null) with
+        {
+            Source = "manual", Course = "口头事项", Group = "手动添加", Evidence = []
+        };
+        var cards = DesktopCardProjection.Build(Snapshot(task), Connected());
+        Assert.Same(task, Assert.Single(cards.Tasks));
+        Assert.Equal("manual", cards.Tasks[0].Source);
+        Assert.Empty(cards.Tasks[0].Evidence);
+        Assert.False(DesktopCardProjection.IsPast(task, Now));
+        Assert.True(DesktopCardProjection.IsPast(task, Now.AddDays(2)));
+        Assert.Empty(DesktopCardProjection.Build(Snapshot(task with { State = "completed" }), Connected()).Tasks);
+        Assert.NotEqual(DesktopCardProjection.RenderSignature(cards, "dark", null, null, Now),
+            DesktopCardProjection.RenderSignature(DesktopCardProjection.Build(Snapshot(task with { Source = "qq" }), Connected()),
+                "dark", null, null, Now));
+    }
+
     [Theory]
     [InlineData("task", "active")]
     [InlineData("review", "pending")]

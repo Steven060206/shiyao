@@ -11,7 +11,7 @@ const pageUrl = pathToFileURL(path.join(workspace, 'src/MessagePurify.Windows/Ap
 const browserPath = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 const evidence = [{ groupId: '100', groupName: '课程群', senderId: '200', sentAt: '2026-10-12T09:00:00+08:00', text: '请提交报告。\n' + '原消息正文 '.repeat(180), imageCount: 1 }];
-const itemDefaults = { due: null, time: null, timeKind: 'deadline', priority: null, targetTaskId: null, targetTaskVersion: null, undoOperationId: null, undoExpiresAt: null, reviewReasons: [], suggestedDue: null, suggestedTime: null, action: 'submit', canAccept: false };
+const itemDefaults = { source: 'qq', due: null, time: null, timeKind: 'deadline', priority: null, targetTaskId: null, targetTaskVersion: null, undoOperationId: null, undoExpiresAt: null, reviewReasons: [], suggestedDue: null, suggestedTime: null, action: 'submit', canAccept: false };
 const fixture = {
   accountId: '12345', generatedAt: '2026-10-12T10:00:00+08:00',
   items: [
@@ -37,7 +37,7 @@ const status = { transport: 'connected', qq: 'online', receiving: 'active', hist
 const mockScript = `(() => {
   const listeners = new Set();
   const clone = value => JSON.parse(JSON.stringify(value));
-  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, startupEnabled: true, messages: [], hold: true, held: [], failNext: null };
+  const backend = window.backend = { snapshot: ${JSON.stringify(fixture)}, status: ${JSON.stringify(status)}, startupEnabled: true, messages: [], hold: true, held: [], failNext: null, creationRequests: {} };
   backend.emit = data => listeners.forEach(listener => listener({data:clone(data)}));
   backend.push = () => backend.emit({type:'state',snapshot:backend.snapshot,status:backend.status,startupEnabled:backend.startupEnabled});
   backend.release = () => { backend.hold=false; for (const command of backend.held.splice(0)) respond(command); };
@@ -49,7 +49,12 @@ const mockScript = `(() => {
       const error=backend.failNext;backend.failNext=null;backend.emit({id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
     }
     const item=backend.snapshot?.items.find(item=>item.id===parameters.id);
-    if(command.operation==='confirm-group') {
+    if(command.operation==='create-task') {
+      if(item && backend.creationRequests[parameters.id] !== JSON.stringify(parameters)) { backend.emit({id:command.id,success:false,error:'任务 ID 已被其他事项使用。',snapshot:backend.snapshot,status:backend.status});return; }
+      backend.creationRequests[parameters.id]=JSON.stringify(parameters);
+      if (!item) backend.snapshot.items.push({...${JSON.stringify(itemDefaults)},id:parameters.id,kind:'task',source:'manual',title:parameters.title,course:parameters.course,group:'手动添加',state:'active',due:parameters.date,time:parameters.time || null,timeKind:parameters.timeKind,priority:parameters.priority ?? 3,version:1,unread:false,evidence:[]});
+      if(backend.failAfterCreateOnce) { backend.failAfterCreateOnce=false;backend.emit({id:command.id,success:false,error:'command_timeout',snapshot:backend.snapshot,status:backend.status});return; }
+    } else if(command.operation==='confirm-group') {
       const group=backend.snapshot.groups.find(group=>group.groupId===parameters.id);group.course=parameters.course || null;group.excluded=parameters.excluded;
     } else if(command.operation !== 'snapshot') {
       if(!item || item.version !== parameters.version) { backend.emit({id:command.id,success:false,error:'version_conflict',snapshot:backend.snapshot,status:backend.status});return; }
@@ -298,6 +303,121 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(command.parameters.date, '2026-12-30'); assert.equal(command.parameters.time, '');
       await select('start1'); assert.match(await body(), /开始时间已过/);
       assert.doesNotMatch(await evaluate('document.querySelector("#detail-pane").textContent'), /已逾期/);
+    });
+    await t.test('手动新增要求标题、课程、正式日期，日期独立保存并打开手动来源详情', async () => {
+      await push(fixture); await nav('tasks'); await click('[data-action="new-task"]');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=priority]").value'), 'auto');
+      assert.deepEqual(await evaluate('[...document.querySelectorAll("#task-course-options option")].map(option=>option.value)'), await evaluate('[...document.querySelector("#course-filter").options].map(option=>option.value).filter(Boolean)'));
+      const before = await evaluate('backend.messages.filter(message=>message.operation==="create-task").length');
+      for (const [name, value, message] of [['title', '   ', /标题/], ['course', ' ', /课程/], ['date', '', /正式日期/], ['date', '2026-02-30', /日期/]]) {
+        await change('#manual-task-form [name=title]', '口头报告'); await change('#manual-task-form [name=course]', '物理'); await change('#manual-task-form [name=date]', '2026-12-22');
+        await change(`#manual-task-form [name=${name}]`, value); await click('[data-action="create-task"]');
+        assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="create-task").length'), before);
+        assert.match(await evaluate('document.querySelector("#manual-task-error").textContent'), message);
+      }
+      await change('#manual-task-form [name=title]', '  口头报告  '); await change('#manual-task-form [name=course]', '  自定义课程  '); await change('#manual-task-form [name=date]', '2026-12-22');
+      await capture('manual-task-form-dark.png');
+      await click('[data-action="create-task"]');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+      assert.deepEqual(command.parameters, {accountId:'12345',id:command.parameters.id,operationId:command.parameters.operationId,version:0,title:'口头报告',course:'自定义课程',date:'2026-12-22',time:null,timeKind:'deadline',priority:null});
+      assert.ok(command.parameters.id); assert.ok(command.parameters.operationId);
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), command.parameters.id);
+      assert.match(await evaluate('document.querySelector(".task-row.selected").textContent'), /自定义课程.*手动添加/s);
+      assert.match(await evaluate('document.querySelector(".source-section").textContent'), /手动添加/);
+      assert.doesNotMatch(await evaluate('document.querySelector(".source-section").textContent'), /原始消息|发送者|QQ|暂无.*原消息/);
+      assert.equal(await evaluate('document.querySelector("#detail-pane .message")'), null);
+      assert.match(await evaluate('document.querySelector(".deadline-box").textContent'), /2026-12-22.*仅有日期/);
+      assert.ok(await evaluate('[...document.querySelector("#course-filter").options].some(option=>option.value==="自定义课程")'));
+      await click('[data-action="complete"]'); await nav('completed'); await select(command.parameters.id); await click('[data-action="undo-complete"]');
+      assert.equal(await evaluate(`backend.snapshot.items.find(item=>item.id===${JSON.stringify(command.parameters.id)}).state`), 'active');
+    });
+    await t.test('手动新增失败保留草稿，重试沿用任务和操作 ID 并阻止重复提交', async () => {
+      await push(fixture); await nav('tasks'); await click('[data-action="new-task"]');
+      const fields = {title:'重试新增',course:'数学',date:'2026-12-23',time:'08:30',timeKind:'start',priority:'1'};
+      for (const [name, value] of Object.entries(fields)) await change(`#manual-task-form [name=${name}]`, value);
+      await evaluate('backend.failAfterCreateOnce=true'); await click('[data-action="create-task"]');
+      const first = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+      assert.match(await evaluate('document.querySelector("#manual-task-error").textContent'), /草稿.*保留/);
+      for (const [name, value] of Object.entries(fields)) assert.equal(await evaluate(`document.querySelector('#manual-task-form [name=${name}]').value`), value);
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").disabled'), true, '保存结果未确认时先重试，确认后再编辑');
+      assert.equal(await evaluate('document.querySelector("[data-action=create-task]").disabled'), false);
+      await evaluate('backend.hold=true'); await click('[data-action="create-task"]');
+      assert.equal(await evaluate('document.querySelector("[data-action=create-task]").disabled'), true);
+      await evaluate('document.querySelector("#manual-task-form").dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}))');
+      const retries = await evaluate(`backend.messages.filter(message=>message.operation==="create-task" && message.parameters.id===${JSON.stringify(first.parameters.id)})`);
+      assert.equal(retries.length, 2); assert.deepEqual(retries[1].parameters, first.parameters);
+      await evaluate('backend.release()');
+      assert.equal(await evaluate(`backend.snapshot.items.filter(item=>item.id===${JSON.stringify(first.parameters.id)}).length`), 1);
+      assert.match(await evaluate('document.querySelector(".deadline-box").textContent'), /开始时间.*2026-12-23 08:30/s);
+      assert.equal(await evaluate(`backend.snapshot.items.find(item=>item.id===${JSON.stringify(first.parameters.id)}).priority`), 1);
+    });
+    await t.test('新增本地超时先用原请求确认，确定未保存的失败允许修改草稿', async () => {
+      await push(fixture); await nav('tasks'); await click('[data-action="new-task"]');
+      for (const [name, value] of Object.entries({title:'超时新增',course:'物理',date:'2026-12-23'})) await change(`#manual-task-form [name=${name}]`, value);
+      await evaluate('window.originalManualSetTimeout=window.setTimeout;window.setTimeout=(handler,ms,...args)=>{const id=window.originalManualSetTimeout(handler,ms,...args);if(ms===15000)window.manualTimeout={handler,id};return id;};backend.hold=true');
+      try {
+        await click('[data-action="create-task"]');
+        const first = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+        await evaluate(`(()=>{const emit=backend.emit;backend.emit=message=>{if(message.id!==${JSON.stringify(first.id)})emit(message);};backend.release();queueMicrotask(()=>{backend.emit=emit;clearTimeout(window.manualTimeout.id);window.manualTimeout.handler();});})()`);
+        await waitFor('document.querySelector("#manual-task-error").textContent.includes("尚未确认")');
+        assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").disabled'), true);
+        await change('#manual-task-form [name=title]', '不应重写未确认请求');
+        await evaluate('backend.push();backend.hold=true'); await click('[data-action="create-task"]');
+        const staleFailure = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+        await evaluate(`backend.held=backend.held.filter(message=>message.id!==${JSON.stringify(staleFailure.id)});backend.emit({id:${JSON.stringify(staleFailure.id)},success:false,error:'command_timeout',snapshot:${JSON.stringify({...fixture,generatedAt:'2000-01-01T00:00:00Z'})},status:backend.status});backend.release()`);
+        assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").disabled'), true, '旧失败快照不能解锁已保存的请求');
+        await click('[data-action="create-task"]');
+        const retry = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+        assert.deepEqual(retry.parameters, first.parameters);
+        assert.equal(await evaluate(`backend.snapshot.items.find(item=>item.id===${JSON.stringify(first.parameters.id)}).title`), '超时新增');
+        assert.equal(await evaluate(`backend.snapshot.items.filter(item=>item.id===${JSON.stringify(first.parameters.id)}).length`), 1);
+      } finally { await evaluate('window.setTimeout=window.originalManualSetTimeout;backend.release()'); }
+      await click('[data-action="new-task"]');
+      for (const [name, value] of Object.entries({title:'未保存草稿',course:'数学',date:'2026-12-24'})) await change(`#manual-task-form [name=${name}]`, value);
+      await evaluate('backend.failNext="本地数据操作失败，原数据已保留。"'); await click('[data-action="create-task"]');
+      const failed = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").disabled'), false);
+      await change('#manual-task-form [name=title]', '修改后新增'); await click('[data-action="create-task"]');
+      const changed = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+      assert.equal(changed.parameters.id, failed.parameters.id); assert.notEqual(changed.parameters.operationId, failed.parameters.operationId);
+      assert.equal(await evaluate(`backend.snapshot.items.find(item=>item.id===${JSON.stringify(changed.parameters.id)}).title`), '修改后新增');
+    });
+    await t.test('保存中离开新增表单，迟到的成功响应保留当前页面、任务草稿和焦点', async () => {
+      await push(fixture); await nav('tasks'); await click('[data-action="new-task"]');
+      for (const [name, value] of Object.entries({title:'延迟保存',course:'物理',date:'2026-12-23'})) await change(`#manual-task-form [name=${name}]`, value);
+      await evaluate('backend.hold=true'); await click('[data-action="create-task"]');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+      await nav('tasks'); await select('task1'); await change('#time-form [name=title]', '当前编辑草稿');
+      await click('[data-action="edit-task"]');
+      const edit = await evaluate('backend.messages.filter(message=>message.operation==="edit-task").at(-1)');
+      await evaluate(`backend.held=backend.held.filter(message=>message.id!==${JSON.stringify(edit.id)});backend.emit({id:${JSON.stringify(edit.id)},success:false,error:'version_conflict',snapshot:backend.snapshot,status:backend.status})`);
+      await evaluate('document.querySelector("#time-form [name=title]").focus();document.querySelector("#time-form [name=title]").setSelectionRange(1,3);backend.release()');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'task1');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'), '当前编辑草稿');
+      assert.equal(await evaluate('document.activeElement.name'), 'title');
+      assert.equal(await evaluate('document.activeElement.selectionStart'), 1);
+      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /事项已有变化.*草稿已保留/);
+      assert.equal(await evaluate('document.querySelector("[data-action=refresh-edit]").hidden'), false);
+      assert.equal(await evaluate(`backend.snapshot.items.filter(item=>item.id===${JSON.stringify(command.parameters.id)}).length`), 1);
+      await click('[data-action="new-task"]');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").value'), '');
+      await click('[data-action="cancel-new-task"]');
+    });
+    await t.test('新增草稿在快照、课程选项更新和页面切换期间保持字段、焦点及筛选', async () => {
+      await push(fixture); await nav('tasks'); await change('#course-filter', '物理'); await click('[data-action="new-task"]');
+      await change('#manual-task-form [name=title]', '尚未提交的标题'); await change('#manual-task-form [name=course]', '尚未提交的新课程'); await change('#manual-task-form [name=date]', '2026-12-24');
+      await evaluate('document.querySelector("#manual-task-form [name=title]").focus();document.querySelector("#manual-task-form [name=title]").setSelectionRange(2,4);backend.snapshot.items.push({...backend.snapshot.items[0],id:"new-course-option",course:"历史"});backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
+      assert.equal(await evaluate('document.activeElement.name'), 'title'); assert.equal(await evaluate('document.activeElement.selectionStart'), 2);
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=course]").value'), '尚未提交的新课程');
+      assert.ok(await evaluate('[...document.querySelectorAll("#task-course-options option")].some(option=>option.value==="历史")'));
+      assert.equal(await evaluate('document.querySelector("#course-filter").value'), '物理');
+      await nav('notices'); await nav('tasks'); await click('[data-action="new-task"]');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").value'), '尚未提交的标题');
+      await click('[data-action="cancel-new-task"]');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form")'), null);
+      await click('[data-action="new-task"]');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").value'), '');
+      await click('[data-action="cancel-new-task"]'); await change('#course-filter', '');
     });
     await t.test('任务完整编辑六字段通过版本化命令保存，课程选择复用筛选选项', async () => {
       const editing = structuredClone(fixture); editing.items.push({ ...editing.items[0], id: 'edit1', unread: false });
@@ -656,6 +776,26 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await push(malicious); await nav('pending'); await select('review1');
       assert.match(await body(), /<script>window.compromised=true<\/script>/);
       assert.equal(await evaluate('!!window.compromised || !!document.querySelector("img,iframe")'), false);
+    });
+    await t.test('新增草稿按账号隔离，旧账号的迟到保存响应不切换当前账号或覆盖新草稿', async () => {
+      await push(fixture); await nav('tasks'); await click('[data-action="new-task"]');
+      for (const [name,value] of Object.entries({title:'账号 A 的草稿',course:'数学',date:'2026-12-25'})) await change(`#manual-task-form [name=${name}]`,value);
+      const accountB = {...structuredClone(fixture),accountId:'67890'};
+      await push(accountB); await nav('tasks'); await click('[data-action="new-task"]');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").value'), '');
+      await change('#manual-task-form [name=title]', '账号 B 的草稿');
+      await push(fixture); await nav('tasks'); await click('[data-action="new-task"]');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").value'), '账号 A 的草稿');
+      await evaluate('backend.hold=true'); await click('[data-action="create-task"]');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+      await push(accountB); await nav('tasks'); await click('[data-action="new-task"]');
+      await evaluate(`backend.held=backend.held.filter(message=>message.id!==${JSON.stringify(command.id)});backend.emit({id:${JSON.stringify(command.id)},success:true,snapshot:${JSON.stringify({...fixture,generatedAt:'2099-01-01T00:00:00Z'})},status:backend.status});backend.release()`);
+      assert.equal(await evaluate('backend.snapshot.accountId'), '67890');
+      assert.equal(await evaluate('document.querySelector("#manual-task-form [name=title]").value'), '账号 B 的草稿');
+      await change('#manual-task-form [name=course]', '物理'); await change('#manual-task-form [name=date]', '2026-12-26'); await click('[data-action="create-task"]');
+      const accountBCommand = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
+      assert.equal(accountBCommand.parameters.accountId, '67890'); assert.notEqual(accountBCommand.parameters.id, command.parameters.id);
+      await push(fixture); await nav('tasks');
     });
     await t.test('主题与减少动画可存偏好，空快照没有演示事项', async () => {
       await nav('settings'); await change('#theme-setting', 'light'); await change('#motion-setting', 'reduce');

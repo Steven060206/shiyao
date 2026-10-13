@@ -32,6 +32,7 @@ internal static class TaskChangeProjection
         var label = entry.Kind switch
         {
             "create" => "建立任务",
+            "create-task" => "手动添加任务",
             "convert-notice" => "从通知加入任务",
             "edit-task" => "修改任务",
             "accept-time" => "修改正式时间",

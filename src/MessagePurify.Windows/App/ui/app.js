@@ -31,11 +31,14 @@ let snapshot = null, status = null, startupEnabled = true, page = 'tasks', selec
 let desktop = { state: 'waiting', error: null }, pendingOpenItem = null;
 let filters = { search: '', course: '', state: 'active' }, detailSignature = '', settingsSignature = '', lastFilterPage = null;
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
-const requests = new Map(), busy = new Set(), drafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
+let manualOpen = false;
+const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
 const bridge = window.chrome?.webview;
 const uuid = () => crypto.randomUUID();
 const items = () => snapshot?.items || [];
 const selected = () => items().find(item => item.id === selectedId);
+const loadedAccount = () => typeof snapshot?.accountId === 'string' && Boolean(snapshot.accountId.trim());
+const manualDraft = () => manualDrafts.get(snapshot?.accountId);
 const linkedWithoutDate = item => Boolean(item.targetTaskId && ['cancel', 'remind'].includes(item.action));
 const localDate = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const past = item => Boolean(item.due && (item.time ? new Date(`${item.due}T${item.time}:00+08:00`).getTime() < Date.now() : item.due < localDate()));
@@ -84,16 +87,20 @@ function request(operation, parameters, itemId = null) {
   const timer = setTimeout(() => {
     const pending = requests.get(id); if (!pending) return;
     requests.delete(id); if (pending.itemId) busy.delete(pending.itemId);
-    if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: errorLabel('command_timeout') };
+    if (pending.operation === 'create-task') {
+      const draft = manualDrafts.get(pending.accountId);
+      if (draft?.id === pending.itemId) { draft.unconfirmed = true; draft.error = '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。'; }
+    } else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: errorLabel('command_timeout') };
     else hostError = errorLabel('command_timeout');
     render();
   }, 15000);
   const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId } : null;
-  requests.set(id, { operation, itemId, timer, refreshTarget });
+  requests.set(id, { operation, itemId, timer, refreshTarget, accountId: parameters.accountId });
   try { bridge.postMessage({ id, operation, parameters }); }
   catch {
     clearTimeout(timer); requests.delete(id); if (itemId) busy.delete(itemId);
-    hostError = errorLabel('bridge_unavailable');
+    if (operation === 'create-task' && manualDraft()?.id === itemId) manualDraft().error = errorLabel('bridge_unavailable');
+    else hostError = errorLabel('bridge_unavailable');
   }
   updateDetailControls(); renderStatus();
 }
@@ -120,6 +127,7 @@ function openItem(message) {
   }
   const item = items().find(item => item.id === message.id && ['task', 'review'].includes(item.kind));
   if (!item) { hostError = '未找到此事项，请刷新后重试。'; render(); return; }
+  manualOpen = false;
   page = item.kind === 'review' ? 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
   filters = { search: '', course: '', state: item.state };
   selectedId = item.id; detailError = null; hostError = '';
@@ -143,14 +151,31 @@ function receive(message) {
       render();
       return;
     }
+    if (pending.operation === 'create-task') {
+      const draft = manualDrafts.get(pending.accountId);
+      pending.openCreation = manualOpen && page === 'tasks' && pending.accountId === snapshot?.accountId && draft?.id === pending.itemId;
+      if (draft?.id === pending.itemId) {
+        if (message.success) manualDrafts.delete(pending.accountId);
+        else {
+          const freshFailure = message.snapshot?.accountId === pending.accountId && Array.isArray(message.snapshot.items)
+            && Date.parse(message.snapshot.generatedAt) >= Date.parse(snapshot?.generatedAt || message.snapshot.generatedAt);
+          draft.unconfirmed = !freshFailure || message.snapshot.items.some(item => item.id === pending.itemId);
+          draft.error = draft.unconfirmed ? '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。' : errorLabel(message.error);
+        }
+      }
+      if (pending.accountId !== snapshot?.accountId) { render(); return; }
+    }
     if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
+      else if (pending.operation === 'create-task') { /* Keep the account's manual draft for retry. */ }
       else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: pending.operation === 'edit-task' && message.error === 'version_conflict' ? '事项已有变化，编辑草稿已保留。请刷新并核对最新内容后再保存。' : errorLabel(message.error), refreshEdit: pending.operation === 'edit-task' && message.error === 'version_conflict' };
       else hostError = errorLabel(message.error);
     } else if (pending.operation !== 'mark-read') {
-      hostError = '';
-      if (pending.operation !== 'snapshot') detailError = null;
-      if (pending.itemId) {
+      if (pending.operation !== 'create-task' || pending.openCreation) {
+        hostError = '';
+        if (pending.operation !== 'snapshot') detailError = null;
+      }
+      if (pending.itemId && pending.operation !== 'create-task') {
         drafts.delete(pending.itemId);
         if (pending.operation === 'confirm-group') groupDrafts.delete(pending.itemId);
         toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'edit-task': '任务修改已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
@@ -167,6 +192,7 @@ function receive(message) {
     if (!older) {
       if (snapshot && snapshot.accountId !== incoming.accountId) {
         drafts.clear(); groupDrafts.clear(); readAttempts.clear(); selectedId = null; initialized = false;
+        manualOpen = false; detailError = null;
       }
       snapshot = incoming;
       if (!initialized) {
@@ -174,6 +200,10 @@ function receive(message) {
         filters.state = page === 'pending' ? 'pending' : 'active'; initialized = true;
       }
     }
+  }
+  if (pending?.operation === 'create-task' && message.success && pending.accountId === snapshot?.accountId) {
+    if (pending.openCreation) { manualOpen = false; page = 'tasks'; filters = { search: '', course: '', state: 'active' }; selectedId = pending.itemId; }
+    toast('手动任务已添加');
   }
   if (pending?.operation === 'snapshot' && message.success && pending.refreshTarget && pending.refreshTarget.accountId === snapshot?.accountId) {
     const item = items().find(item => item.id === pending.refreshTarget.id), draft = item && drafts.get(item.id);
@@ -266,6 +296,8 @@ function renderList() {
   $('page-title').textContent = pages[page]; $('breadcrumb').textContent = pages[page]; $('page-subline').textContent = descriptions[page];
   $('date-stamp').textContent = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
   const isSettings = page === 'settings';
+  const createButton = document.querySelector('[data-action="new-task"]');
+  createButton.hidden = page !== 'tasks'; createButton.disabled = !loadedAccount() || Boolean(manualOpen);
   $('filters').hidden = isSettings; $('list-summary').hidden = isSettings; $('rows').hidden = isSettings; $('settings-panel').hidden = !isSettings;
   if (isSettings) { renderSettings(); return; }
   renderFilters();
@@ -274,7 +306,7 @@ function renderList() {
   $('list-summary').innerHTML = `<span>${visible.length} 项${snapshot ? '' : ' · 等待本地应用'}</span><b>${pages[page]}</b>`;
   $('rows').innerHTML = visible.length ? visible.map(item => `<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
     <div class="row-top"><h2>${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}${item.changeLabel ? `<span class="change-badge">${html(item.changeLabel)}</span>` : ''}</h2><span class="tag ${item.kind === 'review' ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${item.kind === 'review' ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
-    <div class="row-meta"><span>${html(item.course || item.group || '来源待核对')}</span><span>${item.kind === 'task' ? html(dateLabel(item)) : html(states[item.state])}</span></div>
+    <div class="row-meta"><span>${html(item.course || item.group || '来源待核对')}${item.source === 'manual' ? '<span class="manual-source">手动添加</span>' : ''}</span><span>${item.kind === 'task' ? html(dateLabel(item)) : html(states[item.state])}</span></div>
     ${item.kind === 'review' && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}</button>`).join('') : emptyMessage();
 }
 function draftFor(item) {
@@ -299,10 +331,21 @@ function formHTML(item) {
     ${item.suggestedDue ? `<div class="change-box">建议日期：${html(item.suggestedDue)}${item.suggestedTime ? ' ' + html(item.suggestedTime) : ''}<p>建议尚未成为正式时间，核对后可填入表单。</p><button type="button" class="button small" data-action="use-suggestion">填入建议日期</button></div>` : ''}
     ${item.kind === 'task' ? '<button type="submit" class="button" data-action="edit-task">保存修改</button>' : notice ? '<button type="submit" class="button primary" data-action="convert-notice">加入任务</button>' : ''}</form>`;
 }
+function manualFormHTML(draft) {
+  return `<p class="eyebrow">手动添加</p><h2 class="detail-title">新增任务</h2><p class="hint">补录口头布置或未识别出的事项。</p><form class="form" id="manual-task-form" data-id="${html(draft.id)}" novalidate>
+    <label class="field">标题（必填）<input name="title" type="text" maxlength="256" value="${html(draft.title)}" required></label>
+    <label class="field">课程或分类（必填，可填写新名称）<input name="course" type="text" maxlength="256" value="${html(draft.course)}" list="task-course-options" required><datalist id="task-course-options">${courseOptions().map(course => `<option value="${html(course)}"></option>`).join('')}</datalist></label>
+    <label class="field">正式日期（必填）<input name="date" type="date" value="${html(draft.date)}" required></label>
+    <div class="form-grid"><label class="field">时间（可不填）<input name="time" type="time" value="${html(draft.time)}"></label><label class="field">时间类型<select name="timeKind"><option value="deadline" ${draft.timeKind !== 'start' ? 'selected' : ''}>截止时间</option><option value="start" ${draft.timeKind === 'start' ? 'selected' : ''}>开始时间</option></select></label></div>
+    <p class="hint">只知道日期时请留空时间，不会补写具体钟点。</p>
+    <label class="field">优先级<select name="priority"><option value="auto" ${draft.priority === 'auto' ? 'selected' : ''}>自动（按日期调整）</option>${[0, 1, 2, 3].map(priority => `<option value="${priority}" ${String(priority) === draft.priority ? 'selected' : ''}>P${priority}</option>`).join('')}</select></label>
+    <p class="error" id="manual-task-error" role="alert" hidden></p><div class="detail-actions"><button type="submit" class="button primary" data-action="create-task">添加任务</button><button type="button" class="button" data-action="cancel-new-task">取消</button></div></form>`;
+}
 function evidenceHTML(evidence) {
   return evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('');
 }
 function sourceHTML(item) {
+  if (item.source === 'manual') return '<section class="source-section"><h3 class="section-label">任务来源</h3><p class="hint">手动添加，使用任务的优先级和完成规则。</p></section>';
   return '<section class="source-section"><h3 class="section-label">原始消息</h3>' + (item.evidence?.length ? evidenceHTML(item.evidence) : '<p class="hint">暂无可显示的原消息正文。</p>') + '</section>';
 }
 function historyHTML(item) {
@@ -339,6 +382,14 @@ function retainFocus(container, replace) {
   }
 }
 function renderDetail() {
+  if (manualOpen && page === 'tasks' && loadedAccount() && manualDraft()) {
+    const draft = manualDraft(), signature = `manual/${snapshot.accountId}/${draft.id}`;
+    const scroll = $('detail-pane').querySelector('.detail-scroll');
+    if (signature !== detailSignature) { scroll.innerHTML = manualFormHTML(draft); scroll.scrollTop = 0; detailSignature = signature; }
+    $('detail-pane').querySelector('.confirmation-bar').hidden = true;
+    clearTimeout(undoTimer); undoScheduledFor = null;
+    updateDetailControls(); return;
+  }
   const item = page === 'settings' ? null : selected();
   const signature = item ? JSON.stringify({ ...item, version: undefined, targetTaskVersion: undefined, unread: undefined }) : `empty/${page}/${Boolean(snapshot)}/${status?.transport}/${status?.qq}`;
   const scroll = $('detail-pane').querySelector('.detail-scroll'), footer = $('detail-pane').querySelector('.confirmation-bar');
@@ -382,6 +433,14 @@ function updateDetailControls() {
     if (courseList.innerHTML !== options) courseList.innerHTML = options;
   }
   $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && busy.has(item.id)) || (button.id === 'pending-confirm-button' && !item?.canAccept); });
+  const manualForm = $('manual-task-form');
+  if (manualForm) {
+    const draft = manualDraft(), saving = busy.has(draft?.id);
+    manualForm.querySelectorAll('button').forEach(element => { element.disabled = saving; });
+    manualForm.querySelectorAll('input,select').forEach(element => { element.disabled = saving || Boolean(draft?.unconfirmed); });
+    manualForm.querySelector('[data-action="create-task"]').textContent = draft?.unconfirmed ? '重试确认保存' : '添加任务';
+    $('manual-task-error').textContent = draft?.error || ''; $('manual-task-error').hidden = !draft?.error;
+  }
   document.querySelectorAll('.group-setting button').forEach(button => { button.disabled = busy.has(button.closest('[data-group-id]').dataset.groupId); });
 }
 function renderSettings() {
@@ -420,6 +479,19 @@ function editTask(item) {
   const time = validateTime(item);
   if (time) command('edit-task', item, { ...time, title, course, priority: Number(draft.priority), version: draft.version });
 }
+function createTask() {
+  const draft = manualDraft();
+  if (!loadedAccount() || !manualOpen || !draft || busy.has(draft.id)) return;
+  if (draft.unconfirmed) { request('create-task', { ...JSON.parse(draft.payloadSignature), operationId: draft.operationId }, draft.id); return; }
+  const title = draft.title.trim(), course = draft.course.trim();
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(draft.date) && Number(draft.date.slice(0, 4)) > 0 && !Number.isNaN(Date.parse(draft.date + 'T00:00:00Z')) && new Date(draft.date + 'T00:00:00Z').toISOString().slice(0, 10) === draft.date;
+  draft.error = !title ? '请填写任务标题。' : !course ? '请填写课程或分类。' : draft.title.length > 256 || draft.course.length > 256 ? '标题和课程不能超过 256 个字符。' : /[\u0000-\u001f\u007f]/.test(draft.title + draft.course) ? '标题和课程不能包含控制字符。' : !draft.date ? '请补齐正式日期。' : !validDate ? '请填写有效日期。' : draft.time && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(draft.time) ? '请填写有效时间。' : !['deadline', 'start'].includes(draft.timeKind) ? '请选择截止时间或开始时间。' : draft.priority !== 'auto' && !/^[0-3]$/.test(draft.priority) ? '请选择自动或 P0 至 P3 的优先级。' : '';
+  if (draft.error) { updateDetailControls(); return; }
+  const payload = { accountId: snapshot.accountId, id: draft.id, version: 0, title, course, date: draft.date, time: draft.time || null, timeKind: draft.timeKind, priority: draft.priority === 'auto' ? null : Number(draft.priority) };
+  const signature = JSON.stringify(payload);
+  if (signature !== draft.payloadSignature) { draft.operationId = uuid(); draft.payloadSignature = signature; }
+  request('create-task', { ...payload, operationId: draft.operationId }, draft.id);
+}
 function acceptReview(item) {
   if (!item?.canAccept || item.state !== 'pending') return;
   const time = item.action === 'cancel' && item.targetTaskId ? {} : validateTime(item);
@@ -430,8 +502,8 @@ document.addEventListener('input', event => {
   if (element.id === 'search') { filters.search = element.value; render(); }
   const form = element.closest('form[data-id]');
   if (form && ['title', 'course', 'date', 'time', 'timeKind', 'priority'].includes(element.name)) {
-    const item = items().find(item => item.id === form.dataset.id);
-    if (item) draftFor(item)[element.name] = element.value;
+    if (form.id === 'manual-task-form' && manualDraft()?.id === form.dataset.id) { if (!manualDraft().unconfirmed) manualDraft()[element.name] = element.value; }
+    else { const item = items().find(item => item.id === form.dataset.id); if (item) draftFor(item)[element.name] = element.value; }
   }
   const group = element.closest('[data-group-id]');
   if (group && element.name === 'course') groupDrafts.set(group.dataset.groupId, element.value);
@@ -448,12 +520,16 @@ document.addEventListener('change', event => {
     request('set-autostart', { enabled: element.value === 'on' });
   }
   const form = element.closest('form[data-id]');
-  if (form && element.name === 'timeKind') { const item = items().find(item => item.id === form.dataset.id); if (item) draftFor(item).timeKind = element.value; }
+  if (form && ['timeKind', 'priority'].includes(element.name)) {
+    if (form.id === 'manual-task-form' && manualDraft()?.id === form.dataset.id) { if (!manualDraft().unconfirmed) manualDraft()[element.name] = element.value; }
+    else { const item = items().find(item => item.id === form.dataset.id); if (item) draftFor(item)[element.name] = element.value; }
+  }
 });
 document.addEventListener('submit', event => {
   event.preventDefault();
   const item = selected();
-  if (event.target.id === 'time-form' && item) editTask(item);
+  if (event.target.id === 'manual-task-form') createTask();
+  else if (event.target.id === 'time-form' && item) editTask(item);
   else if (event.target.id === 'notice-form' && item) { const time = validateTime(item); if (time) command('convert-notice', item, time); }
   else if (event.target.id === 'review-form') acceptReview(item);
 });
@@ -461,10 +537,16 @@ document.addEventListener('click', event => {
   const button = event.target.closest('button[data-action]');
   if (!button || button.disabled) return;
   const action = button.dataset.action;
-  if (action === 'nav') {
-    page = button.dataset.page; filters.state = page === 'pending' ? 'pending' : 'active'; selectedId = null; detailError = null; render(); return;
+  if (action === 'new-task') {
+    if (!loadedAccount()) return;
+    if (!manualDraft()) manualDrafts.set(snapshot.accountId, { id: uuid(), title: '', course: '', date: '', time: '', timeKind: 'deadline', priority: 'auto', error: '' });
+    manualOpen = true; detailError = null; render(); $('manual-task-form').elements.title.focus(); return;
   }
-  if (action === 'select') { selectedId = button.dataset.id; detailError = null; render(); return; }
+  if (action === 'cancel-new-task') { manualDrafts.delete(snapshot.accountId); manualOpen = false; render(); return; }
+  if (action === 'nav') {
+    manualOpen = false; page = button.dataset.page; filters.state = page === 'pending' ? 'pending' : 'active'; selectedId = null; detailError = null; render(); return;
+  }
+  if (action === 'select') { manualOpen = false; selectedId = button.dataset.id; detailError = null; render(); return; }
   if (action === 'refresh' || action === 'refresh-edit') { hostError = ''; request('snapshot', {}); return; }
   if (action === 'open-suggestion') {
     const suggestion = items().find(item => item.id === button.dataset.id && item.kind === 'review' && item.state === 'pending');

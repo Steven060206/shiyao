@@ -144,7 +144,7 @@ public sealed class AccountWorkspace
                     unreadVersion: important?.Entry.After.Version ?? task.Version,
                     changeLabel: important?.Badge, changes: changes.Reverse().Select(change => new ApplicationChange(
                         change.Label, change.Entry.At, change.Entry.After.Version, change.Fields, Evidence(change.Entry.Evidence))).ToArray(),
-                    pendingChanges: pending));
+                    pendingChanges: pending, source: task.Source));
             }
             foreach (var review in reviews.Where(review => review.State is ReviewState.Pending or ReviewState.Ignored))
             {
@@ -184,22 +184,22 @@ public sealed class AccountWorkspace
         DateTimeOffset? undoExpires = null, IReadOnlyList<string>? reasons = null,
         TaskTime? suggested = null, bool canAccept = false, int? priorityOverride = null,
         long? unreadVersion = null, string? changeLabel = null, IReadOnlyList<ApplicationChange>? changes = null,
-        IReadOnlyList<ApplicationPendingChange>? pendingChanges = null)
+        IReadOnlyList<ApplicationPendingChange>? pendingChanges = null, string source = "qq")
     {
         var sources = evidenceKeys.Distinct().Select(key => (Key: key, Stored: messages.Find(key))).ToArray();
         var evidence = Evidence(evidenceKeys);
         var unread = !settings.ReadVersions.TryGetValue(ReadKey(kind, id), out var readVersion)
             || readVersion < (unreadVersion ?? version);
         // 每个候选的完整行动正文保留后果及否定；P0 数值饱和也不丢失明确后果。
-        var clearConsequence = sources.Any(source =>
-            source.Stored?.Extraction?.Candidates.Any(candidate => (candidate.Title == title || candidate.TargetTaskId == id) &&
+        var clearConsequence = source == "manual" && PriorityCalculator.HasClearConsequence(title) || sources.Any(messageSource =>
+            messageSource.Stored?.Extraction?.Candidates.Any(candidate => (candidate.Title == title || candidate.TargetTaskId == id) &&
                 PriorityCalculator.HasClearConsequence(candidate.Title)) == true);
-        return new(id, kind, title, course, string.Join("、", evidence.Select(item => item.GroupName).Distinct()),
+        return new(id, kind, title, course, source == "manual" ? "手动添加" : string.Join("、", evidence.Select(item => item.GroupName).Distinct()),
             state, FormatDate(time), FormatTime(time), (time?.Kind ?? suggested?.Kind ?? Core.TimeKind.Deadline)
                 .ToString().ToLowerInvariant(), priorityOverride ?? (time is null ? null : PriorityCalculator.Calculate(time, now, clearConsequence)),
             version, target, targetVersion, undoId, undoExpires, reasons ?? [], FormatDate(suggested),
             FormatTime(suggested), evidence, unread, action.ToString().ToLowerInvariant(), canAccept,
-            pendingChanges?.Count > 0 ? "待确认变更" : unread ? changeLabel : null, changes, pendingChanges);
+            pendingChanges?.Count > 0 ? "待确认变更" : unread ? changeLabel : null, changes, pendingChanges, source);
     }
 
     private ApplicationEvidence[] Evidence(IReadOnlyList<MessageKey> keys) => keys.Distinct().Select(key =>
@@ -221,6 +221,14 @@ public sealed class AccountWorkspace
             ArgumentException.ThrowIfNullOrWhiteSpace(command.OperationId);
             switch (command.Operation)
             {
+                case "create-task":
+                    if (command.Version != 0) throw new ArgumentException("新增任务版本须为 0。", nameof(command));
+                    ArgumentException.ThrowIfNullOrWhiteSpace(command.Title);
+                    ArgumentException.ThrowIfNullOrWhiteSpace(command.Course);
+                    ArgumentException.ThrowIfNullOrWhiteSpace(command.TimeKind);
+                    tasks.CreateManualTask(command.Id, command.Title, command.Course,
+                        ReadTime(command, null) ?? throw new ArgumentException("新增任务前须填写正式日期。"),
+                        command.Priority, command.OperationId, now); break;
                 case "complete": tasks.Complete(command.Id, command.OperationId, command.Version, now); break;
                 case "undo-complete":
                     ArgumentException.ThrowIfNullOrWhiteSpace(command.UndoOperationId);

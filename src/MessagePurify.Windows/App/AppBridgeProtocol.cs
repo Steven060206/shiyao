@@ -12,7 +12,7 @@ public static class AppBridgeProtocol
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
-        "reject", "accept-review", "accept-time", "edit-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart"
+        "reject", "accept-review", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {
@@ -56,17 +56,22 @@ public static class AppBridgeProtocol
                 if (!Text(parameters, "accountId", 64, out var account) || account.Any(c => c is < '0' or > '9')
                     || !Text(parameters, "id", 1024, out _) || !Text(parameters, "operationId", 128, out _)
                     || !parameters.TryGetProperty("version", out var version) || !version.TryGetInt64(out var number)
-                    || number < (operation == "confirm-group" ? 0 : 1)) return false;
+                    || number < (operation is "confirm-group" or "create-task" ? 0 : 1)
+                    || operation == "create-task" && number != 0) return false;
             }
-            if (operation == "edit-task")
+            if (operation is "edit-task" or "create-task")
             {
                 if (!Text(parameters, "title", 256, out var title) || title.Any(char.IsControl)
                     || !Text(parameters, "date", 10, out _) || !Text(parameters, "timeKind", 8, out _)
                     || !parameters.TryGetProperty("course", out var course)
                     || course.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)
-                    || course.ValueKind == JsonValueKind.String && course.GetString()!.Any(char.IsControl)
-                    || !parameters.TryGetProperty("priority", out var priority) || !priority.TryGetInt32(out var priorityNumber)
-                    || priorityNumber is < 0 or > 3) return false;
+                    || course.ValueKind == JsonValueKind.String && course.GetString()!.Any(char.IsControl)) return false;
+                if (operation == "create-task" && (!Text(parameters, "course", 256, out _)
+                    || parameters.GetProperty("timeKind").GetString() is not ("deadline" or "start"))) return false;
+                var hasPriority = parameters.TryGetProperty("priority", out var priority);
+                if (operation == "edit-task" && !hasPriority) return false;
+                if (hasPriority && (operation == "edit-task" || priority.ValueKind != JsonValueKind.Null)
+                    && (!priority.TryGetInt32(out var priorityNumber) || priorityNumber is < 0 or > 3)) return false;
             }
             else if (parameters.EnumerateObject().Any(p => p.Name is "title" or "priority")) return false;
             foreach (var property in parameters.EnumerateObject())

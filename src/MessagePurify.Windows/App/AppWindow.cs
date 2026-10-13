@@ -141,7 +141,7 @@ public sealed class AppWindow : Window
                     p.TryGetProperty("targetTaskVersion", out var target) && target.ValueKind != JsonValueKind.Null ? target.GetInt64() : null,
                     Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean(),
                     Title: Optional(p, "title"),
-                    Priority: p.TryGetProperty("priority", out var priority) ? priority.GetInt32() : null);
+                    Priority: p.TryGetProperty("priority", out var priority) && priority.ValueKind != JsonValueKind.Null ? priority.GetInt32() : null);
                 await Task.Run(() => workspace.Execute(command, DateTimeOffset.UtcNow));
                 runtime.Refresh();
             }

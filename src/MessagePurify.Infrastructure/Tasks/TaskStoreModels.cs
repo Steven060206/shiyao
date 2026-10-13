@@ -10,7 +10,7 @@ public sealed record TaskItem(string Id, string AccountId, string Title,
     IReadOnlyList<MessageKey> Evidence, DateTimeOffset CreatedAt,
     DateTimeOffset? CompletedAt, DateTimeOffset? CancelledAt,
     DateTimeOffset? ArchivedAt, DateTimeOffset? UndoExpiresAt = null,
-    string? UndoOperationId = null, int? PriorityOverride = null);
+    string? UndoOperationId = null, int? PriorityOverride = null, string Source = "qq");
 
 public sealed record PendingReview(string Id, string AccountId,
     RuleCandidate Candidate, ReviewState State, DateTimeOffset CreatedAt,
