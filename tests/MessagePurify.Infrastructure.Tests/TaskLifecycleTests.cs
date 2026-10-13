@@ -624,6 +624,101 @@ public sealed class TaskLifecycleTests : IDisposable
     }
 
     [Fact]
+    public void EditTask_UpdatesAllEditableFieldsProtectsTimeAndKeepsAuditSnapshot()
+    {
+        var store = Store();
+        var task = store.CreateTask("task-1", TaskCandidate(), "create-1", Now);
+        var editedTime = FormalTime() with { Date = new(2026, 10, 20), Time = new(18, 30) };
+
+        var edited = store.EditTask(task.Id, "edit-1", task.Version,
+            "修订后的实验报告", "线性代数", editedTime, 0, Now.AddMinutes(1));
+
+        Assert.Equal("修订后的实验报告", edited.Title);
+        Assert.Equal("线性代数", edited.Course);
+        Assert.Equal(editedTime, edited.Time);
+        Assert.Equal(0, edited.PriorityOverride);
+        Assert.True(edited.TimeProtected);
+        Assert.Equal(task.TimeVersion + 1, edited.TimeVersion);
+        Assert.Equal(task.Version + 1, edited.Version);
+        AssertTask(edited, Assert.IsType<TaskItem>(store.FindTask(task.Id)));
+
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT before_json, after_json FROM operations WHERE operation_id = 'edit-1';";
+        using var reader = command.ExecuteReader();
+        Assert.True(reader.Read());
+        AssertTask(task, JsonSerializer.Deserialize<TaskItem>(reader.GetString(0))!);
+        AssertTask(edited, JsonSerializer.Deserialize<TaskItem>(reader.GetString(1))!);
+    }
+
+    [Fact]
+    public void EditTask_RejectsStaleVersionAndReplaysSameOperationId()
+    {
+        var store = Store();
+        var task = store.CreateTask("task-1", TaskCandidate(), "create-1", Now);
+        var editedTime = FormalTime() with { Date = new(2026, 10, 20) };
+        var edited = store.EditTask(task.Id, "edit-1", task.Version,
+            "修订后的实验报告", null, editedTime, 1, Now.AddMinutes(1));
+
+        AssertTask(edited, store.EditTask(task.Id, "edit-1", task.Version,
+            "修订后的实验报告", null, editedTime, 1, Now.AddMinutes(2)));
+        Assert.Throws<InvalidOperationException>(() => store.EditTask(task.Id, "edit-stale", task.Version,
+            "再次修改", null, editedTime, 2, Now.AddMinutes(3)));
+        Assert.Throws<InvalidOperationException>(() => store.EditTask(task.Id, "edit-1", task.Version,
+            "不同请求", null, editedTime, 1, Now.AddMinutes(4)));
+    }
+
+    [Fact]
+    public void EditTask_SameTimeStillConfirmsProtectionWithoutIncrementingTimeVersion()
+    {
+        var store = Store();
+        var task = store.CreateTask("task-1", TaskCandidate(), "create-1", Now);
+
+        var edited = store.EditTask(task.Id, "edit-1", task.Version,
+            task.Title, task.Course, task.Time, task.Priority, Now.AddMinutes(1));
+
+        Assert.True(edited.TimeProtected);
+        Assert.Equal(task.TimeVersion, edited.TimeVersion);
+        Assert.Equal(task.Version + 1, edited.Version);
+    }
+
+    [Theory]
+    [InlineData("", 1)]
+    [InlineData("   ", 1)]
+    [InlineData("标题\n内容", 1)]
+    [InlineData("有效标题", null)]
+    [InlineData("有效标题", -1)]
+    [InlineData("有效标题", 4)]
+    public void EditTask_InvalidTitleOrPriorityCannotWriteOrConsumeOperationId(string title, int? priority)
+    {
+        var store = Store();
+        var task = store.CreateTask("task-1", TaskCandidate(), "create-1", Now);
+        Assert.ThrowsAny<ArgumentException>(() => store.EditTask(task.Id, "edit-1", task.Version,
+            title, null, task.Time, priority, Now));
+        AssertTask(task, Assert.IsType<TaskItem>(store.FindTask(task.Id)));
+        Assert.Null(Scalar("SELECT operation_id FROM operations WHERE operation_id = 'edit-1';"));
+    }
+
+    [Fact]
+    public void EditTask_TitleLengthAndCourseClearingUseNormalizedStoredValues()
+    {
+        var store = Store();
+        var task = store.CreateTask("task-1", TaskCandidate(), "create-1", Now);
+        Assert.Throws<ArgumentException>(() => store.EditTask(task.Id, "edit-1", task.Version,
+            new string('a', 257), null, task.Time, 1, Now));
+        var edited = store.EditTask(task.Id, "edit-1", task.Version,
+            "  修订标题  ", "  ", task.Time, 1, Now);
+        Assert.Equal("修订标题", edited.Title);
+        Assert.Null(edited.Course);
+        Assert.Equal(task.Evidence, edited.Evidence);
+        Assert.Equal(task.Action, edited.Action);
+        Assert.Throws<ArgumentException>(() => store.EditTask(task.Id, "edit-2", edited.Version,
+            "有效标题", new string('a', 257), edited.Time, 1, Now));
+        Assert.Throws<ArgumentException>(() => store.EditTask(task.Id, "edit-2", edited.Version,
+            "有效标题", "课程\t名称", edited.Time, 1, Now));
+    }
+
+    [Fact]
     public void AcceptReviewOperationId_ChangedTaskTargetOrTimeIsRejected()
     {
         var review = Store().SavePending("review-1", PendingCandidate(), "pending-1", Now);

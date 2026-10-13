@@ -301,6 +301,38 @@ public class RuleExtractionTests
         Assert.Equal(new DateOnly(2026, 10, 11), candidate.Time!.Date);
     }
 
+    [Theory]
+    [InlineData("手动课程", "取消")]
+    [InlineData(null, "取消")]
+    [InlineData("手动课程", "提醒提交")]
+    [InlineData(null, "提醒提交")]
+    public void ExactSameGroupQuoteIdentifiesTaskAfterTitleAndCourseAreEdited(string? course, string text)
+    {
+        var task = Task() with { Title = "我的任务名称", Course = course! };
+        var message = Message(text) with
+        {
+            Segments = [new(SegmentKind.Quote, "原通知", Original), new(SegmentKind.Text, text)]
+        };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context(tasks: [task])).Candidates);
+        Assert.Equal("report", candidate.TargetTaskId);
+        Assert.Equal(RuleDisposition.Change, candidate.Disposition);
+        Assert.Equal("高等数学", candidate.Course);
+    }
+
+    [Fact]
+    public void QuotedEvidenceSharedByTasksWithEditedCoursesStillRequiresUniqueTarget()
+    {
+        var first = Task() with { Title = "第一个手动名称", Course = "手动课程" };
+        var second = Task(id: "other") with { Title = "第二个手动名称", Course = null! };
+        var message = Message("取消") with
+        {
+            Segments = [new(SegmentKind.Quote, "原通知", Original), new(SegmentKind.Text, "取消")]
+        };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context(tasks: [first, second])).Candidates);
+        Assert.Null(candidate.TargetTaskId);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+    }
+
     [Fact]
     public void OriginalConfirmedPublisherWithExactQuoteCanContinueOutsideTrustedList()
     {
@@ -335,7 +367,7 @@ public class RuleExtractionTests
     public void ForeignQuoteCannotBorrowPublisherTrustFromMixedTaskEvidence(string account, string group)
     {
         var foreign = new MessageKey(account, group, "foreign");
-        var task = Task() with { Evidence = [Original, foreign] };
+        var task = Task() with { Evidence = [Original, foreign], Course = "手动课程" };
         var message = Message("取消") with
         {
             Segments = [new(SegmentKind.Quote, "异群或异账号通知", foreign), new(SegmentKind.Text, "取消")]

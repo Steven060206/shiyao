@@ -88,7 +88,8 @@ function request(operation, parameters, itemId = null) {
     else hostError = errorLabel('command_timeout');
     render();
   }, 15000);
-  requests.set(id, { operation, itemId, timer });
+  const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId } : null;
+  requests.set(id, { operation, itemId, timer, refreshTarget });
   try { bridge.postMessage({ id, operation, parameters }); }
   catch {
     clearTimeout(timer); requests.delete(id); if (itemId) busy.delete(itemId);
@@ -144,14 +145,15 @@ function receive(message) {
     }
     if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
-      else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: errorLabel(message.error) };
+      else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: pending.operation === 'edit-task' && message.error === 'version_conflict' ? '事项已有变化，编辑草稿已保留。请刷新并核对最新内容后再保存。' : errorLabel(message.error), refreshEdit: pending.operation === 'edit-task' && message.error === 'version_conflict' };
       else hostError = errorLabel(message.error);
     } else if (pending.operation !== 'mark-read') {
-      hostError = ''; detailError = null;
+      hostError = '';
+      if (pending.operation !== 'snapshot') detailError = null;
       if (pending.itemId) {
         drafts.delete(pending.itemId);
         if (pending.operation === 'confirm-group') groupDrafts.delete(pending.itemId);
-        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
+        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'edit-task': '任务修改已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
       }
     }
   } else if (message.type !== 'state') return;
@@ -172,6 +174,11 @@ function receive(message) {
         filters.state = page === 'pending' ? 'pending' : 'active'; initialized = true;
       }
     }
+  }
+  if (pending?.operation === 'snapshot' && message.success && pending.refreshTarget && pending.refreshTarget.accountId === snapshot?.accountId) {
+    const item = items().find(item => item.id === pending.refreshTarget.id), draft = item && drafts.get(item.id);
+    if (item?.kind === 'task' && draft) draft.version = item.version;
+    if (detailError?.id === item?.id) detailError = null;
   }
   if (pendingOpenItem && snapshot) { openItem(pendingOpenItem); return; }
   render();
@@ -233,13 +240,16 @@ function renderFilters() {
     if (!options.includes(filters.state)) filters.state = options[0];
     lastFilterPage = page;
   }
-  const courses = [...new Set([...items().map(item => item.course), ...(snapshot?.groups || []).map(group => group.course)].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
+  const courses = courseOptions();
   if (filters.course && !courses.includes(filters.course)) courses.push(filters.course);
   const courseHTML = '<option value="">全部课程</option>' + courses.map(course => `<option value="${html(course)}">${html(course)}</option>`).join('');
   if ($('course-filter').innerHTML !== courseHTML) $('course-filter').innerHTML = courseHTML;
   $('course-filter').value = filters.course; $('state-filter').value = filters.state;
   if ($('search').value !== filters.search) $('search').value = filters.search;
   $('state-filter').hidden = page === 'completed';
+}
+function courseOptions() {
+  return [...new Set([...items().map(item => item.course), ...(snapshot?.groups || []).map(group => group.course)].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
 }
 function initialMessage() {
   if (status?.qq === 'offline') return ['等待 QQ 登录', 'QQ 当前离线，请确认电脑上的 QQ 已登录。'];
@@ -269,6 +279,7 @@ function renderList() {
 }
 function draftFor(item) {
   if (!drafts.has(item.id)) drafts.set(item.id, {
+    title: item.title || '', course: item.course || '', priority: String(item.priority ?? 3), version: item.version,
     date: item.action === 'remind' && item.targetTaskId ? '' : item.due || '',
     time: item.action === 'remind' && item.targetTaskId ? '' : item.time || '',
     timeKind: item.timeKind || 'deadline'
@@ -280,11 +291,13 @@ function formHTML(item) {
   const notice = item.kind === 'notice';
   const formId = item.kind === 'review' ? 'review-form' : notice ? 'notice-form' : 'time-form';
   return `<form class="form" id="${formId}" data-id="${html(item.id)}" novalidate>
-    <label class="field">${notice ? '正式日期（必填）' : linkedWithoutDate(item) ? '日期（可留空，保留原任务时间）' : '正式日期'}<input type="date" name="date" value="${html(draft.date)}"${notice ? ' required' : ''}></label>
+    ${item.kind === 'task' ? `<label class="field">标题（必填）<input type="text" name="title" value="${html(draft.title)}" maxlength="256" required></label><label class="field">课程或分类（可清除或填写新名称）<input type="text" name="course" value="${html(draft.course)}" maxlength="256" list="task-course-options"><datalist id="task-course-options">${courseOptions().map(course => `<option value="${html(course)}"></option>`).join('')}</datalist></label>` : ''}
+    <label class="field">${notice || item.kind === 'task' ? '正式日期（必填）' : linkedWithoutDate(item) ? '日期（可留空，保留原任务时间）' : '正式日期'}<input type="date" name="date" value="${html(draft.date)}"${notice || item.kind === 'task' ? ' required' : ''}></label>
     <div class="form-grid"><label class="field">时间（可不填）<input type="time" name="time" value="${html(draft.time)}"></label><label class="field">时间类型<select name="timeKind"><option value="deadline" ${draft.timeKind !== 'start' ? 'selected' : ''}>截止时间</option><option value="start" ${draft.timeKind === 'start' ? 'selected' : ''}>开始时间</option></select></label></div>
     <p class="hint">只知道日期时请留空时间，不会补写具体钟点。</p>
+    ${item.kind === 'task' ? `<label class="field">优先级<select name="priority" required>${[0, 1, 2, 3].map(priority => `<option value="${priority}" ${String(priority) === draft.priority ? 'selected' : ''}>P${priority}</option>`).join('')}</select></label>` : ''}
     ${item.suggestedDue ? `<div class="change-box">建议日期：${html(item.suggestedDue)}${item.suggestedTime ? ' ' + html(item.suggestedTime) : ''}<p>建议尚未成为正式时间，核对后可填入表单。</p><button type="button" class="button small" data-action="use-suggestion">填入建议日期</button></div>` : ''}
-    ${item.kind === 'task' ? '<button type="submit" class="button" data-action="accept-time">保存正式时间</button>' : notice ? '<button type="submit" class="button primary" data-action="convert-notice">加入任务</button>' : ''}</form>`;
+    ${item.kind === 'task' ? '<button type="submit" class="button" data-action="edit-task">保存修改</button>' : notice ? '<button type="submit" class="button primary" data-action="convert-notice">加入任务</button>' : ''}</form>`;
 }
 function sourceHTML(item) {
   return '<h3 class="section-label">原始消息</h3>' + (item.evidence?.length ? item.evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('') : '<p class="hint">暂无可显示的原消息正文。</p>');
@@ -326,13 +339,13 @@ function renderDetail() {
         ${item.kind === 'task' ? `<div class="deadline-box ${item.state === 'active' && past(item) && item.timeKind !== 'start' ? 'overdue' : ''}"><small>${timeLabel(item)}</small><b>${html(dateLabel(item))}</b><small>${item.state !== 'active' ? html(states[item.state]) : past(item) ? item.timeKind === 'start' ? '开始时间已过' : '已逾期，仍保留待处理' : '按正式日期和时间精度保存'}</small></div>` : ''}
         ${item.kind === 'review' && item.reviewReasons?.length ? `<div class="change-box">需要核对<p>${html(item.reviewReasons.join(' · '))}</p></div>` : ''}
         <div class="detail-actions">${actionsHTML(item)}</div>
-        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">调整正式时间</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
+        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
         ${item.kind === 'review' && item.state === 'pending' && !item.canAccept ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
         ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
     });
     footer.hidden = !item || item.kind !== 'review' || item.state !== 'pending';
-    footer.innerHTML = item ? `<p class="error" id="detail-error" role="alert" hidden></p>${!footer.hidden ? `<p id="pending-confirm-help">${item.action === 'cancel' ? '确认后取消关联任务。' : item.targetTaskId ? '确认后更新关联任务；已有正式记录仍保留。' : '补齐正式日期后加入任务，保留原消息来源。'}</p><button class="button primary" id="pending-confirm-button" data-action="accept-review" ${!item.canAccept ? 'disabled' : ''}>${item.action === 'cancel' ? '确认取消关联任务' : item.targetTaskId ? '确认并更新任务' : '确认并加入任务'}</button>` : ''}` : '';
+    footer.innerHTML = item ? `<p class="error" id="detail-error" role="alert" hidden></p>${item.kind === 'task' ? '<button class="button" data-action="refresh-edit" hidden>刷新并核对最新内容</button>' : ''}${!footer.hidden ? `<p id="pending-confirm-help">${item.action === 'cancel' ? '确认后取消关联任务。' : item.targetTaskId ? '确认后更新关联任务；已有正式记录仍保留。' : '补齐正式日期后加入任务，保留原消息来源。'}</p><button class="button primary" id="pending-confirm-button" data-action="accept-review" ${!item.canAccept ? 'disabled' : ''}>${item.action === 'cancel' ? '确认取消关联任务' : item.targetTaskId ? '确认并更新任务' : '确认并加入任务'}</button>` : ''}` : '';
     if (item && footer.hidden) { footer.hidden = false; footer.classList.add('error-only'); }
     else footer.classList.remove('error-only');
     detailSignature = signature;
@@ -349,6 +362,13 @@ function updateDetailControls() {
   const item = selected();
   const error = $('detail-error');
   if (error) { const message = detailError?.id === item?.id ? detailError.message : ''; error.textContent = message; error.hidden = !message; if ($('detail-pane').querySelector('.confirmation-bar').classList.contains('error-only')) $('detail-pane').querySelector('.confirmation-bar').hidden = !message; }
+  const refresh = $('detail-pane').querySelector('[data-action="refresh-edit"]');
+  if (refresh) refresh.hidden = !(detailError?.id === item?.id && detailError.refreshEdit);
+  const courseList = $('task-course-options');
+  if (courseList) {
+    const options = courseOptions().map(course => `<option value="${html(course)}"></option>`).join('');
+    if (courseList.innerHTML !== options) courseList.innerHTML = options;
+  }
   $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && busy.has(item.id)) || (button.id === 'pending-confirm-button' && !item?.canAccept); });
   document.querySelectorAll('.group-setting button').forEach(button => { button.disabled = busy.has(button.closest('[data-group-id]').dataset.groupId); });
 }
@@ -380,6 +400,14 @@ function validateTime(item) {
   if (message) { detailError = { id: item.id, message }; updateDetailControls(); return null; }
   return draft.date ? { date: draft.date, time: draft.time || '', timeKind: draft.timeKind } : {};
 }
+function editTask(item) {
+  const draft = draftFor(item);
+  const title = draft.title.trim(), course = draft.course.trim();
+  const message = !title ? '请填写任务标题。' : draft.title.length > 256 ? '任务标题不能超过 256 个字符。' : draft.course.length > 256 ? '课程或分类不能超过 256 个字符。' : /[\u0000-\u001f\u007f]/.test(draft.title + draft.course) ? '标题和课程不能包含控制字符。' : !/^[0-3]$/.test(draft.priority) ? '请选择 P0 至 P3 的优先级。' : !['deadline', 'start'].includes(draft.timeKind) ? '请选择截止时间或开始时间。' : '';
+  if (message) { detailError = { id: item.id, message }; updateDetailControls(); return; }
+  const time = validateTime(item);
+  if (time) command('edit-task', item, { ...time, title, course, priority: Number(draft.priority), version: draft.version });
+}
 function acceptReview(item) {
   if (!item?.canAccept || item.state !== 'pending') return;
   const time = item.action === 'cancel' && item.targetTaskId ? {} : validateTime(item);
@@ -389,7 +417,7 @@ document.addEventListener('input', event => {
   const element = event.target;
   if (element.id === 'search') { filters.search = element.value; render(); }
   const form = element.closest('form[data-id]');
-  if (form && ['date', 'time', 'timeKind'].includes(element.name)) {
+  if (form && ['title', 'course', 'date', 'time', 'timeKind', 'priority'].includes(element.name)) {
     const item = items().find(item => item.id === form.dataset.id);
     if (item) draftFor(item)[element.name] = element.value;
   }
@@ -413,7 +441,7 @@ document.addEventListener('change', event => {
 document.addEventListener('submit', event => {
   event.preventDefault();
   const item = selected();
-  if (event.target.id === 'time-form' && item) { const time = validateTime(item); if (time) command('accept-time', item, time); }
+  if (event.target.id === 'time-form' && item) editTask(item);
   else if (event.target.id === 'notice-form' && item) { const time = validateTime(item); if (time) command('convert-notice', item, time); }
   else if (event.target.id === 'review-form') acceptReview(item);
 });
@@ -425,7 +453,7 @@ document.addEventListener('click', event => {
     page = button.dataset.page; filters.state = page === 'pending' ? 'pending' : 'active'; selectedId = null; detailError = null; render(); return;
   }
   if (action === 'select') { selectedId = button.dataset.id; detailError = null; render(); return; }
-  if (action === 'refresh') { hostError = ''; request('snapshot', {}); return; }
+  if (action === 'refresh' || action === 'refresh-edit') { hostError = ''; request('snapshot', {}); return; }
   if (action === 'confirm-group' || action === 'exclude-group') {
     const groupId = button.closest('[data-group-id]').dataset.groupId;
     const group = snapshot?.groups.find(group => group.groupId === groupId);
@@ -444,7 +472,7 @@ document.addEventListener('click', event => {
   }
   if (action === 'accept-review') {
     acceptReview(item);
-  } else if (action === 'accept-time') { /* The form submit handler validates and sends this command. */ }
+  } else if (action === 'edit-task') { /* The form submit handler validates and sends this command. */ }
   else if (action === 'convert-notice') { /* The form submit handler validates and sends this command. */ }
   else if (action === 'open-target') {
     const target = items().find(candidate => candidate.id === item.targetTaskId && candidate.kind === 'task');

@@ -127,7 +127,7 @@ public sealed class AccountWorkspace
             foreach (var task in taskList)
                 items.Add(Item(task.Id, "task", task.Title, task.Course, task.State.ToString().ToLowerInvariant(),
                     task.Time, task.Version, task.Evidence, task.Action, now,
-                    undoId: task.UndoOperationId, undoExpires: task.UndoExpiresAt));
+                    undoId: task.UndoOperationId, undoExpires: task.UndoExpiresAt, priorityOverride: task.PriorityOverride));
             foreach (var review in tasks.ListReviews().Where(review => review.State is ReviewState.Pending or ReviewState.Ignored))
             {
                 var candidate = review.Candidate;
@@ -164,7 +164,7 @@ public sealed class AccountWorkspace
         TaskTime? time, long version, IReadOnlyList<MessageKey> evidenceKeys, RuleAction action,
         DateTimeOffset now, string? target = null, long? targetVersion = null, string? undoId = null,
         DateTimeOffset? undoExpires = null, IReadOnlyList<string>? reasons = null,
-        TaskTime? suggested = null, bool canAccept = false)
+        TaskTime? suggested = null, bool canAccept = false, int? priorityOverride = null)
     {
         var sources = evidenceKeys.Distinct().Select(key => (Key: key, Stored: messages.Find(key))).ToArray();
         var evidence = sources.Select(source =>
@@ -181,7 +181,7 @@ public sealed class AccountWorkspace
                 PriorityCalculator.HasClearConsequence(candidate.Title)) == true);
         return new(id, kind, title, course, string.Join("、", evidence.Select(item => item.GroupName).Distinct()),
             state, FormatDate(time), FormatTime(time), (time?.Kind ?? suggested?.Kind ?? Core.TimeKind.Deadline)
-                .ToString().ToLowerInvariant(), time is null ? null : PriorityCalculator.Calculate(time, now, clearConsequence),
+                .ToString().ToLowerInvariant(), priorityOverride ?? (time is null ? null : PriorityCalculator.Calculate(time, now, clearConsequence)),
             version, target, targetVersion, undoId, undoExpires, reasons ?? [], FormatDate(suggested),
             FormatTime(suggested), evidence, !settings.ReadVersions.TryGetValue(ReadKey(kind, id), out var readVersion)
                 || readVersion < version, action.ToString().ToLowerInvariant(), canAccept);
@@ -211,6 +211,12 @@ public sealed class AccountWorkspace
                 case "accept-time":
                     tasks.AcceptTime(command.Id, command.OperationId, command.Version,
                         ReadTime(command, tasks.FindTask(command.Id)?.Time.Kind) ?? throw new ArgumentException("须确认正式日期。"), now); break;
+                case "edit-task":
+                    ArgumentException.ThrowIfNullOrWhiteSpace(command.Title);
+                    ArgumentException.ThrowIfNullOrWhiteSpace(command.TimeKind);
+                    tasks.EditTask(command.Id, command.OperationId, command.Version, command.Title, command.Course,
+                        ReadTime(command, null) ?? throw new ArgumentException("保存任务前须填写正式日期。"),
+                        command.Priority, now); break;
                 case "convert-notice": ConvertNotice(command, now); break;
                 case "accept-review":
                     var review = tasks.FindReview(command.Id) ?? throw new KeyNotFoundException("待确认事项不存在。");

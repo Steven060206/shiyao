@@ -59,6 +59,7 @@ const mockScript = `(() => {
         if(transitions[command.operation])item.state=transitions[command.operation];
         if(command.operation==='complete' || command.operation==='ignore') { item.undoOperationId=parameters.operationId;item.undoExpiresAt=new Date(Date.now()+3600000).toISOString(); }
         if(command.operation==='accept-time'){item.due=parameters.date;item.time=parameters.time || null;item.timeKind=parameters.timeKind;}
+        if(command.operation==='edit-task'){item.title=parameters.title;item.course=parameters.course || null;item.due=parameters.date;item.time=parameters.time || null;item.timeKind=parameters.timeKind;item.priority=parameters.priority;}
         if(command.operation==='accept-review') {
           if(item.action==='cancel')backend.snapshot.items.find(target=>target.id===item.targetTaskId).state='cancelled';
           item.kind='task';item.state='active';item.due=parameters.date || null;item.time=parameters.time || null;item.timeKind=parameters.timeKind || 'deadline';
@@ -292,11 +293,97 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
     await t.test('任务日期编辑保留日期精度，开始时间过后标签正确', async () => {
       await change('#state-filter', 'active'); await select('task1');
       await change('[name=date]', '2026-12-30'); await change('[name=time]', '');
-      await click('[data-action="accept-time"]');
-      const command = await evaluate('backend.messages.filter(message=>message.operation==="accept-time").at(-1)');
+      await click('[data-action="edit-task"]');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="edit-task").at(-1)');
       assert.equal(command.parameters.date, '2026-12-30'); assert.equal(command.parameters.time, '');
       await select('start1'); assert.match(await body(), /开始时间已过/);
       assert.doesNotMatch(await evaluate('document.querySelector("#detail-pane").textContent'), /已逾期/);
+    });
+    await t.test('任务完整编辑六字段通过版本化命令保存，课程选择复用筛选选项', async () => {
+      const editing = structuredClone(fixture); editing.items.push({ ...editing.items[0], id: 'edit1', unread: false });
+      await push(editing); await nav('tasks'); await select('edit1');
+      assert.deepEqual(await evaluate('[...document.querySelector("#time-form").elements].filter(element=>element.name).map(element=>element.name)'), ['title', 'course', 'date', 'time', 'timeKind', 'priority']);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'), '实验报告');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=course]").value'), '物理');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=priority]").value'), '3');
+      assert.deepEqual(await evaluate('[...document.querySelectorAll("#task-course-options option")].map(option=>option.value)'), await evaluate('[...document.querySelector("#course-filter").options].map(option=>option.value).filter(Boolean)'));
+      await change('#time-form [name=title]', '  实验报告修订版  '); await change('#time-form [name=course]', '数学');
+      await change('#time-form [name=date]', '2026-12-31'); await change('#time-form [name=time]', '18:30');
+      await change('#time-form [name=timeKind]', 'start'); await change('#time-form [name=priority]', '1');
+      await click('[data-action="edit-task"]');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="edit-task").at(-1)');
+      assert.deepEqual(command.parameters, { accountId: '12345', id: 'edit1', operationId: command.parameters.operationId, version: 1, title: '实验报告修订版', course: '数学', date: '2026-12-31', time: '18:30', timeKind: 'start', priority: 1 });
+      assert.equal(await evaluate('document.querySelector(".detail-title").textContent'), '实验报告修订版');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'), '实验报告修订版');
+      await evaluate('document.querySelector("#time-form").scrollIntoView({block:"start"})');
+      await capture('ui-full-edit-task-dark.png');
+    });
+    await t.test('完整编辑拒绝空标题、超长标题、缺日期及无效优先级，可清除课程和钟点', async () => {
+      await select('edit1');
+      const before = await evaluate('backend.messages.filter(message=>message.operation==="edit-task").length');
+      for (const [name, value, message] of [['title', '   ', /标题/], ['title', '字'.repeat(257), /256/], ['date', '', /正式日期/], ['priority', '', /优先级/]]) {
+        await change('#time-form [name=title]', '实验报告修订版'); await change('#time-form [name=date]', '2026-12-31'); await change('#time-form [name=priority]', '1');
+        await change(`#time-form [name=${name}]`, value); await click('[data-action="edit-task"]');
+        assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="edit-task").length'), before);
+        assert.match(await evaluate('document.querySelector("#detail-error").textContent'), message);
+      }
+      await change('#time-form [name=priority]', '2'); await change('#time-form [name=course]', ''); await change('#time-form [name=time]', '');
+      await change('#course-filter', '数学'); await click('[data-action="edit-task"]');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="edit-task").at(-1)');
+      assert.equal(command.parameters.course, ''); assert.equal(command.parameters.time, '');
+      assert.equal(await evaluate('document.querySelector("#course-filter").value'), '数学');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="edit1").course'), null);
+      await change('#course-filter', '');
+    });
+    await t.test('并发任务更新保留全部编辑草稿，旧版本拒绝后刷新核对才能保存新版', async () => {
+      await select('edit1');
+      const fields = { title: '我的标题草稿', course: '新课程', date: '2026-12-29', time: '19:00', timeKind: 'deadline', priority: '0' };
+      for (const [name, value] of Object.entries(fields)) await change(`#time-form [name=${name}]`, value);
+      const oldVersion = await evaluate('backend.snapshot.items.find(item=>item.id==="edit1").version');
+      await evaluate('Object.assign(backend.snapshot.items.find(item=>item.id==="edit1"),{title:"刚更新的任务标题",course:"其他课程",due:"2027-01-01",time:"10:00",timeKind:"start",priority:3,version:99});backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
+      assert.equal(await evaluate('document.querySelector(".detail-title").textContent'), '刚更新的任务标题');
+      for (const [name, value] of Object.entries(fields)) assert.equal(await evaluate(`document.querySelector('#time-form [name=${name}]').value`), value);
+      await click('[data-action="edit-task"]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="edit-task").at(-1).parameters.version'), oldVersion);
+      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /草稿.*保留.*刷新.*核对/);
+      for (const [name, value] of Object.entries(fields)) assert.equal(await evaluate(`document.querySelector('#time-form [name=${name}]').value`), value);
+      await click('[data-action="refresh-edit"]');
+      for (const [name, value] of Object.entries(fields)) assert.equal(await evaluate(`document.querySelector('#time-form [name=${name}]').value`), value);
+      await click('[data-action="edit-task"]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="edit-task").at(-1).parameters.version'), 99);
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="edit1").title'), fields.title);
+      assert.equal(await evaluate('document.querySelector("#course-filter").value'), '');
+    });
+    await t.test('任务刷新响应延迟时只核对发起任务，切换后的另一任务仍保留旧版本保护', async () => {
+      const editing = structuredClone(fixture);
+      editing.items.push({ ...editing.items[0], id: 'edit-a', unread: false }, { ...editing.items[0], id: 'edit-b', unread: false });
+      await push(editing); await nav('tasks'); await select('edit-a'); await change('#time-form [name=title]', 'A 的草稿');
+      await select('edit-b'); await change('#time-form [name=title]', 'B 的草稿');
+      await evaluate('for(const id of ["edit-a","edit-b"])Object.assign(backend.snapshot.items.find(item=>item.id===id),{title:id+"的新标题",version:2});backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
+      await select('edit-a'); await click('[data-action="edit-task"]');
+      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /草稿.*保留/);
+      await evaluate('backend.hold=true'); await click('[data-action="refresh-edit"]');
+      await select('edit-b'); await evaluate('backend.release()'); await click('[data-action="edit-task"]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="edit-task" && message.parameters.id==="edit-b").at(-1).parameters.version'), 1);
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="edit-b").title'), 'edit-b的新标题');
+      await select('edit-a');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'), 'A 的草稿');
+      await click('[data-action="edit-task"]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="edit-task" && message.parameters.id==="edit-a").at(-1).parameters.version'), 2);
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="edit-a").title'), 'A 的草稿');
+    });
+    await t.test('另一个任务的迟到刷新响应保留当前任务的冲突提示和全部草稿', async () => {
+      await select('edit-a'); await evaluate('backend.hold=true'); await click('[data-action="refresh"]');
+      await select('edit-b'); await click('[data-action="edit-task"]');
+      await evaluate('(()=>{const command=backend.held.find(command=>command.operation==="edit-task");backend.held=backend.held.filter(candidate=>candidate!==command);backend.emit({id:command.id,success:false,error:"version_conflict",snapshot:backend.snapshot,status:backend.status});})()');
+      const error = await evaluate('document.querySelector("#detail-error").textContent');
+      assert.match(error, /草稿.*保留.*刷新.*核对/);
+      await evaluate('backend.release()');
+      assert.equal(await evaluate('document.querySelector("#detail-error").textContent'), error);
+      assert.equal(await evaluate('document.querySelector("#detail-error").hidden'), false);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'), 'B 的草稿');
+      await click('[data-action="edit-task"]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="edit-task" && message.parameters.id==="edit-b").at(-1).parameters.version'), 1);
     });
     await push(fixture);
     await t.test('正式详情只保留日期与卡片渠道，不显示时钟提醒设置或旧待确认提示', async () => {
@@ -359,7 +446,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.activeElement.name'), 'date');
       assert.equal(await evaluate('document.querySelector("#toast").hidden'), true);
       assert.equal(await evaluate('backend.snapshot.items[0].due'), '2026-12-20');
-      await evaluate('backend.failNext="version_conflict"'); await click('[data-action="accept-time"]');
+      await evaluate('backend.failNext="version_conflict"'); await click('[data-action="edit-task"]');
       const error = await evaluate('document.querySelector("#detail-error").textContent');
       const before = await evaluate('backend.messages.filter(message=>message.operation==="set-appearance").length');
       await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }, { name: 'prefers-reduced-motion', value: 'no-preference' }] });
@@ -508,7 +595,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.deepEqual(await evaluate('Object.keys(localStorage)'), ['message-purify-preferences']);
       await push({ accountId: '12345', generatedAt: new Date().toISOString(), items: [], groups: [], reminders: [] }); await nav('tasks');
       assert.equal(await evaluate('document.querySelectorAll(".task-row").length'), 0); assert.match(await body(), /暂无待办/);
-      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="snapshot").length'), 1);
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="snapshot").length'), 4, '初始读取、两次冲突刷新及一次手动全局刷新');
       assert.deepEqual(browserErrors, []);
     });
   } finally {

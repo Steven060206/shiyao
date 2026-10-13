@@ -7,7 +7,7 @@ public sealed record WorkspaceCommand(string AccountId, string Operation, string
     string? TimeKind = null, string? UndoOperationId = null, long? TargetTaskVersion = null,
     string? Course = null, bool Excluded = false, string? ReminderMode = null,
     double? ReminderHours = null, int? ReminderDays = null, string? ReminderClock = null,
-    long? ReminderVersion = null);
+    long? ReminderVersion = null, string? Title = null, int? Priority = null);
 
 public sealed record ApplicationSnapshot(string AccountId, IReadOnlyList<ApplicationItem> Items,
     IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt,

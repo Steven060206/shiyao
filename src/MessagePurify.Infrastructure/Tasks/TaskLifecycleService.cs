@@ -169,6 +169,27 @@ public sealed class AccountTaskStore
             task => Apply(task, TaskTransitions.AcceptTime(Snapshot(task), time)));
     }
 
+    public TaskItem EditTask(string id, string operationId, long expectedVersion,
+        string title, string? course, TaskTime time, int? priority, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+        if (title.Length > 256 || title.Any(char.IsControl))
+            throw new ArgumentException("标题须在 256 字以内且不含控制字符。", nameof(title));
+        if (course is not null && (course.Length > 256 || course.Any(char.IsControl)))
+            throw new ArgumentException("课程须在 256 字以内且不含控制字符。", nameof(course));
+        if (priority is null or < 0 or > 3)
+            throw new ArgumentException("须提供 0 到 3 的优先级。", nameof(priority));
+        ValidateTime(time);
+        title = title.Trim();
+        course = string.IsNullOrWhiteSpace(course) ? null : course.Trim();
+        return ChangeTask(id, operationId, expectedVersion, now, "edit-task",
+            new { Title = title, Course = course, Time = time, Priority = priority }, task =>
+                Apply(task, TaskTransitions.AcceptTime(Snapshot(task), time)) with
+                {
+                    Title = title, Course = course, PriorityOverride = priority, Version = task.Version + 1
+                });
+    }
+
     public PendingReview IgnoreReview(string id, string operationId, long expectedVersion, DateTimeOffset now) =>
         ChangeReview(id, operationId, expectedVersion, now, "ignore", null, review =>
             review.State != ReviewState.Pending ? review : review with

@@ -162,7 +162,8 @@ public sealed class AccountCandidateRouter
         {
             var task = JsonSerializer.Deserialize<TaskItem>(reader.GetString(0))
                 ?? throw new InvalidDataException("事项记录为空。");
-            if (task.AccountId == context.AccountId && task.Course == context.ConfirmedCourse &&
+            // 手动修改展示课程后，原群对原消息的明确引用仍可关联；名称匹配在规则层核对课程。
+            if (task.AccountId == context.AccountId &&
                 task.Evidence.Any(key => key.AccountId == context.AccountId && key.GroupId == context.GroupId))
                 known.Add(new(task.Id, task.Title, task.Course!, task.Time, task.State, task.Evidence));
         }

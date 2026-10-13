@@ -12,12 +12,12 @@ public static class AppBridgeProtocol
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
-        "reject", "accept-review", "accept-time", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart"
+        "reject", "accept-review", "accept-time", "edit-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {
         "accountId", "id", "operationId", "version", "date", "time", "timeKind",
-        "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled"
+        "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled", "title", "priority"
     };
 
     public static bool IsTrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -58,6 +58,17 @@ public static class AppBridgeProtocol
                     || !parameters.TryGetProperty("version", out var version) || !version.TryGetInt64(out var number)
                     || number < (operation == "confirm-group" ? 0 : 1)) return false;
             }
+            if (operation == "edit-task")
+            {
+                if (!Text(parameters, "title", 256, out var title) || title.Any(char.IsControl)
+                    || !Text(parameters, "date", 10, out _) || !Text(parameters, "timeKind", 8, out _)
+                    || !parameters.TryGetProperty("course", out var course)
+                    || course.ValueKind is not (JsonValueKind.String or JsonValueKind.Null)
+                    || course.ValueKind == JsonValueKind.String && course.GetString()!.Any(char.IsControl)
+                    || !parameters.TryGetProperty("priority", out var priority) || !priority.TryGetInt32(out var priorityNumber)
+                    || priorityNumber is < 0 or > 3) return false;
+            }
+            else if (parameters.EnumerateObject().Any(p => p.Name is "title" or "priority")) return false;
             foreach (var property in parameters.EnumerateObject())
             {
                 if (property.Name is "date" or "time" or "timeKind" or "undoOperationId" or "course")

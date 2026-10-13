@@ -4,6 +4,7 @@ using MessagePurify.Infrastructure.NapCat;
 using MessagePurify.Infrastructure.Storage;
 using MessagePurify.Infrastructure.Tasks;
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 
 namespace MessagePurify.Infrastructure.Tests;
 
@@ -199,6 +200,69 @@ public sealed class AccountWorkspaceTests : IDisposable
         Assert.Equal("start", changed.TimeKind);
         Assert.Equal(3, changed.Priority);
         Assert.Equal(0, Assert.Single(workspace.Snapshot(Now.AddDays(8)).Items).Priority);
+    }
+
+    [Fact]
+    public void EditTask_UpdatesCompleteFormAndPersistsManualPriorityAcrossClockAndTimeChanges()
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        workspace.Execute(Command("edit-task", task, "edit-1") with
+        {
+            Title = " 修订后的统计作业 ", Course = " 统计学 ", Date = "2026-10-20",
+            Time = "18:30", TimeKind = "start", Priority = 3
+        }, Now);
+
+        var edited = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal("修订后的统计作业", edited.Title);
+        Assert.Equal("统计学", edited.Course);
+        Assert.Equal("2026-10-20", edited.Due);
+        Assert.Equal("18:30", edited.Time);
+        Assert.Equal("start", edited.TimeKind);
+        Assert.Equal(3, edited.Priority);
+        Assert.Equal(task.Version + 1, edited.Version);
+        Assert.Equal(task.Evidence, edited.Evidence);
+        Assert.Equal(3, Assert.Single(Workspace().Snapshot(Now.AddDays(30)).Items).Priority);
+
+        workspace.Execute(Command("accept-time", edited) with { Date = "2026-10-12", TimeKind = "deadline" }, Now);
+        Assert.Equal(3, Assert.Single(workspace.Snapshot(Now).Items).Priority);
+    }
+
+    [Fact]
+    public void EditTask_ClearCourseAndClockKeepsEvidenceAndRejectsStaleVersion()
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        var edit = Command("edit-task", task, "edit-1") with
+        {
+            Title = "重新命名的任务", Course = "", Date = "2026-10-20", TimeKind = "deadline", Priority = 1
+        };
+        workspace.Execute(edit, Now);
+        workspace.Execute(edit, Now.AddMinutes(1));
+        var changed = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Null(changed.Course);
+        Assert.Null(changed.Time);
+        Assert.Equal(task.Version + 1, changed.Version);
+        Assert.Throws<InvalidOperationException>(() => workspace.Execute(edit with { OperationId = "stale-edit" }, Now));
+    }
+
+    [Theory]
+    [InlineData(null, "2026-10-20", "deadline", 0)]
+    [InlineData("任务", null, "deadline", 0)]
+    [InlineData("任务", "2026-10-20", null, 0)]
+    [InlineData("任务", "2026-10-20", "deadline", null)]
+    [InlineData("任务", "2026-10-20", "deadline", -1)]
+    [InlineData("任务", "2026-10-20", "deadline", 4)]
+    public void EditTask_RequiresTitleDateTimeKindAndBoundedPriority(string? title, string? date,
+        string? timeKind, int? priority)
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        Assert.ThrowsAny<ArgumentException>(() => workspace.Execute(Command("edit-task", task) with
+        {
+            Title = title, Date = date, TimeKind = timeKind, Priority = priority
+        }, Now));
+        Assert.Equal(task.Version, Assert.Single(workspace.Snapshot(Now).Items).Version);
     }
 
     [Theory]
@@ -445,6 +509,29 @@ public sealed class AccountWorkspaceTests : IDisposable
         workspace.Ingest(Message(text: "10月20日18点提交统计作业，逾期不收"), Pinned(), MessageOrigin.Realtime, "live", Now);
         Assert.Equal(2, Assert.Single(workspace.Snapshot(Now).Items).Priority);
         Assert.Equal(0, Assert.Single(workspace.Snapshot(Now.AddDays(5)).Items).Priority);
+    }
+
+    [Fact]
+    public void Priority_LegacyTaskJsonWithoutOverrideStillLoadsAndUsesCurrentClock()
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+            { DataSource = Tasks().DatabasePath, Pooling = false }.ToString()))
+        {
+            connection.Open();
+            using var document = JsonDocument.Parse(JsonSerializer.Serialize(Tasks().FindTask(task.Id)));
+            var legacy = document.RootElement.EnumerateObject().Where(property => property.Name != "PriorityOverride")
+                .ToDictionary(property => property.Name, property => property.Value);
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE tasks SET record_json = $json WHERE id = $id;";
+            command.Parameters.AddWithValue("$json", JsonSerializer.Serialize(legacy));
+            command.Parameters.AddWithValue("$id", task.Id);
+            Assert.Equal(1, command.ExecuteNonQuery());
+        }
+        Assert.Null(Tasks().FindTask(task.Id)!.PriorityOverride);
+        Assert.Equal(task.Priority, Assert.Single(Workspace().Snapshot(Now).Items).Priority);
+        Assert.Equal(0, Assert.Single(Workspace().Snapshot(Now.AddDays(30)).Items).Priority);
     }
 
     [Fact]

@@ -139,13 +139,19 @@ public sealed class AppWindow : Window
                     p.GetProperty("id").GetString()!, p.GetProperty("operationId").GetString()!, p.GetProperty("version").GetInt64(),
                     Optional(p, "date"), Optional(p, "time"), Optional(p, "timeKind"), Optional(p, "undoOperationId"),
                     p.TryGetProperty("targetTaskVersion", out var target) && target.ValueKind != JsonValueKind.Null ? target.GetInt64() : null,
-                    Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean());
+                    Optional(p, "course"), p.TryGetProperty("excluded", out var excluded) && excluded.GetBoolean(),
+                    Title: Optional(p, "title"),
+                    Priority: p.TryGetProperty("priority", out var priority) ? priority.GetInt32() : null);
                 await Task.Run(() => workspace.Execute(command, DateTimeOffset.UtcNow));
                 runtime.Refresh();
             }
         }
         catch (ArgumentException exception) { error = exception.Message; }
-        catch (InvalidOperationException) { error = "事项或连接已变化，请核对最新内容后重试。"; }
+        catch (InvalidOperationException exception)
+        {
+            error = request!.Operation == "edit-task" && exception.Message == "记录已变化，请重新读取后再操作。"
+                ? "version_conflict" : "事项或连接已变化，请核对最新内容后重试。";
+        }
         catch (Exception) { error = "本地数据操作失败，原数据已保留。"; }
         await PublishAsync(request!.Id, error);
     }

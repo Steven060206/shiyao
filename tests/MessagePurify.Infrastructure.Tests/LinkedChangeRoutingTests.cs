@@ -124,6 +124,61 @@ public sealed class LinkedChangeRoutingTests : IDisposable
     }
 
     [Fact]
+    public void EditedTask_AutomaticNewRequirementKeepsManualTitleCourseAndPriority()
+    {
+        var original = CreateOriginal();
+        var edited = Tasks().EditTask(original.Id, "edit-1", original.Version,
+            "我的报告标题", "手动课程", original.Time, 3, Now.AddMinutes(1));
+        var context = Context();
+        var change = Change("new-requirement", RuleAction.NewRequirement, original.Evidence[0], SentAt.AddMinutes(1)) with
+        {
+            Segments = [new(SegmentKind.Text, "统计作业新增要求：10月13日18点补交实验数据"),
+                new(SegmentKind.Quote, "原通知", original.Evidence[0])]
+        };
+        Enqueue(change, context);
+
+        Assert.Equal(1, Router().ProcessAndRoutePending(context, Pinned()));
+
+        var current = Tasks().FindTask(original.Id)!;
+        Assert.Equal(edited.Title, current.Title);
+        Assert.Equal(edited.Course, current.Course);
+        Assert.Equal(3, current.PriorityOverride);
+        Assert.Equal(edited.Time, current.Time);
+        Assert.Contains(change.Key, current.Evidence);
+        Assert.Empty(Tasks().ListReviews());
+    }
+
+    [Theory]
+    [InlineData("手动课程", RuleAction.Cancel)]
+    [InlineData(null, RuleAction.Cancel)]
+    [InlineData("手动课程", RuleAction.Remind)]
+    [InlineData(null, RuleAction.Remind)]
+    public void EditedTitleAndCourse_OriginalGroupQuoteStillAssociatesCancellationAndReminder(
+        string? course, RuleAction action)
+    {
+        var original = CreateOriginal();
+        var edited = Tasks().EditTask(original.Id, "edit-1", original.Version,
+            "我重新命名的事项", course, original.Time, 3, Now.AddMinutes(1));
+        var change = Change("quoted-change", action, original.Evidence[0], SentAt.AddMinutes(1));
+        Enqueue(change);
+
+        Assert.Equal(1, Router().ProcessAndRoutePending(Context(), Pinned()));
+
+        var candidate = Candidate(change);
+        Assert.Equal(original.Id, candidate.TargetTaskId);
+        Assert.Equal(RuleDisposition.Change, candidate.Disposition);
+        var current = Tasks().FindTask(original.Id)!;
+        Assert.Equal(action == RuleAction.Cancel ? TaskState.Cancelled : TaskState.Active, current.State);
+        Assert.Equal(edited.Title, current.Title);
+        Assert.Equal(edited.Course, current.Course);
+        Assert.Equal(edited.Time, current.Time);
+        Assert.Equal(edited.TimeVersion, current.TimeVersion);
+        Assert.Equal(3, current.PriorityOverride);
+        Assert.Contains(change.Key, current.Evidence);
+        Assert.Empty(Tasks().ListReviews());
+    }
+
+    [Fact]
     public void CompletedPostponement_PreservesUndoDeadlineAndUndoUsesLatestTime()
     {
         var original = CreateOriginal();

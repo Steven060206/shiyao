@@ -103,7 +103,7 @@ public static class MessageRuleExtractor
                 new(courseReliable ? "本账号、本群的已确认课程关系" : "未确认课程关系", courseReliable),
                 new(action == RuleAction.Cancel ? "取消不需要新时间" : timeReliable ? "原文时间或不需要正式时间的通知" : parsed.Detail ?? "正式时间尚未确认", timeReliable),
                 new(sourceReliable ? "本群已确认发布者或原发布者的明确引用续发" : "发布者尚未确认；普通清楚行动不以此单独排除", sourceReliable),
-                new(target is not null ? "同群同课程完整独特名称或明确引用关联" : change ? "目标关联不足" : "新行动保留独立消息证据，不按相似文字合并", !change || target is not null));
+                new(target is not null ? "同群同课程完整独特名称或同账号同群明确引用关联" : change ? "目标关联不足" : "新行动保留独立消息证据，不按相似文字合并", !change || target is not null));
             return new(part, action, disposition, context.ConfirmedCourse, formalTime,
                 suggestedTime, target?.Id, priority, assessments, reasons, evidence);
         }
@@ -167,9 +167,10 @@ public static class MessageRuleExtractor
     {
         // Mentioning a complete title in an exclusion or contrast is not an affirmative target.
         if (Match(text, "除了|以外|除外|不包括|不是|而非")) return null;
-        var eligible = (context.KnownTasks ?? []).Where(task => task.Course == context.ConfirmedCourse &&
+        var eligible = (context.KnownTasks ?? []).Where(task =>
             task.Evidence.Any(key => key.AccountId == message.Key.AccountId && key.GroupId == message.Key.GroupId)).ToArray();
-        var named = eligible.Where(task => task.Title.Length > 0 && text.Contains(task.Title, StringComparison.Ordinal)).ToArray();
+        var named = eligible.Where(task => task.Course == context.ConfirmedCourse &&
+            task.Title.Length > 0 && text.Contains(task.Title, StringComparison.Ordinal)).ToArray();
         var quoted = eligible.Where(task => HasQuotedEvidence(message, task)).ToArray();
         if (quoted.Length > 0)
         {

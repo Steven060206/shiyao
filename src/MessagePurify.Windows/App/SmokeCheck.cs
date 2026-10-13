@@ -69,6 +69,37 @@ internal static class SmokeCheck
         await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(task.Id) + "]').click()");
         if (await EvaluateAsync(window, "document.querySelector('#reminder-form') === null") != "true")
             throw new InvalidOperationException("已取消的系统提醒设置仍在页面中。");
+        await WaitAsync(window, "document.querySelector('#time-form [name=title]') !== null");
+        var editedDate = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).AddDays(4).ToString("yyyy-MM-dd");
+        var editFields = JsonSerializer.Serialize(new { title = "修订后的数学报告", course = "数学实验",
+            date = editedDate, time = "18:30", timeKind = "start", priority = "3" });
+        await EvaluateAsync(window, "Object.entries(" + editFields + ").forEach(([name,value])=>{const control=document.querySelector('#time-form [name='+name+']');control.value=value;control.dispatchEvent(new Event('input',{bubbles:true}));control.dispatchEvent(new Event('change',{bubbles:true}));});document.querySelector('#time-form').requestSubmit()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).Title == "修订后的数学报告");
+        var edited = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id);
+        if (edited.Course != "数学实验" || edited.Due != editedDate || edited.Time != "18:30" || edited.TimeKind != "start"
+            || edited.Priority != 3 || edited.Version != task.Version + 3 || edited.Evidence.Count != task.Evidence.Count)
+            throw new InvalidOperationException("完整编辑未保存全部字段或丢失了原始证据。");
+        var editedReopened = new AccountWorkspace(dataRoot, workspace.AccountId).Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id);
+        if (editedReopened.Title != edited.Title || editedReopened.Course != edited.Course || editedReopened.Due != edited.Due
+            || editedReopened.Time != edited.Time || editedReopened.TimeKind != edited.TimeKind || editedReopened.Priority != 3)
+            throw new InvalidDataException("重开工作区没有保留完整编辑。");
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Any(i => i.Id == task.Id && i.Title == edited.Title
+            && i.Course == edited.Course && i.Due == edited.Due && i.Time == edited.Time && i.TimeKind == "start" && i.Priority == 3) == true);
+        // An incoming task change must not silently upgrade the version of the form draft.
+        workspace.Execute(new(workspace.AccountId, "edit-task", task.Id, "native-concurrent-edit", edited.Version,
+            Date: editedDate, Time: "18:30", TimeKind: "start", Title: "同步更新的数学报告", Course: "数学实验", Priority: 3), DateTimeOffset.UtcNow);
+        runtime.Refresh();
+        await WaitAsync(window, "document.querySelector('.detail-title').textContent === '同步更新的数学报告'");
+        await EvaluateAsync(window, "document.querySelector('#time-form').requestSubmit()");
+        await WaitAsync(window, "document.querySelector('#detail-error').textContent.includes('草稿') && document.querySelector('[data-action=refresh-edit]').hidden === false");
+        if (workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).Title != "同步更新的数学报告"
+            || await EvaluateAsync(window, "document.querySelector('#time-form [name=title]').value === '修订后的数学报告'") != "true")
+            throw new InvalidOperationException("版本冲突覆盖了正式任务或丢失了编辑草稿。");
+        await EvaluateAsync(window, "document.querySelector('[data-action=refresh-edit]').click()");
+        await WaitAsync(window, "document.querySelector('#detail-error').hidden === true");
+        await EvaluateAsync(window, "document.querySelector('#time-form').requestSubmit()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).Title == edited.Title);
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=pending]').click()");
         await EvaluateAsync(window, "document.querySelector('.task-row[data-id=" + JsonSerializer.Serialize(review.Id) + "]').click()");
         await WaitAsync(window, "document.querySelector('#review-form [name=date]') !== null");
@@ -107,7 +138,8 @@ internal static class SmokeCheck
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
             checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
-                "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide" },
+                "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
+                "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict" },
             taskCount = 2, capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
     }
 

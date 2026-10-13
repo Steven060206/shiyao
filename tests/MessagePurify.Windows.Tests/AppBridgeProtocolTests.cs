@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text.Json;
 using MessagePurify.Windows.App;
 
 namespace MessagePurify.Windows.Tests;
@@ -92,6 +94,113 @@ public sealed class AppBridgeProtocolTests
         Assert.Equal("convert-notice", request!.Operation);
         Assert.Equal("2026-10-14", request.Parameters.GetProperty("date").GetString());
     }
+
+    [Fact]
+    public void Accepts_full_task_edit_with_all_editable_fields()
+    {
+        const string json = """{"id":"e","operation":"edit-task","parameters":{"accountId":"123","id":"task-1","operationId":"o","version":2,"title":"新的实验报告","course":"高等数学","date":"2026-10-20","time":"18:30","timeKind":"start","priority":1}}""";
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out var request));
+        Assert.Equal("edit-task", request!.Operation);
+        Assert.Equal("新的实验报告", request.Parameters.GetProperty("title").GetString());
+        Assert.Equal("高等数学", request.Parameters.GetProperty("course").GetString());
+        Assert.Equal(1, request.Parameters.GetProperty("priority").GetInt32());
+    }
+
+    [Theory]
+    [InlineData("title", "")]
+    [InlineData("title", "   ")]
+    [InlineData("course", "bad\u0000value")]
+    [InlineData("date", "")]
+    [InlineData("date", "2026-02-30")]
+    [InlineData("time", "25:00")]
+    [InlineData("timeKind", "unknown")]
+    [InlineData("priority", "4")]
+    [InlineData("priority", "-1")]
+    [InlineData("priority", "1.5")]
+    public void Rejects_invalid_full_task_edit_fields(string field, string value)
+    {
+        var fields = new Dictionary<string, object?>
+        {
+            ["accountId"] = "123", ["id"] = "task-1", ["operationId"] = "o", ["version"] = 2,
+            ["title"] = "新的实验报告", ["course"] = "高等数学", ["date"] = "2026-10-20",
+            ["time"] = "18:30", ["timeKind"] = "start", ["priority"] = 1
+        };
+        fields[field] = field == "priority" ? (value.Contains('.') ? 1.5 : int.Parse(value, CultureInfo.InvariantCulture)) : value;
+        var json = JsonSerializer.Serialize(new { id = "e", operation = "edit-task", parameters = fields });
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out _));
+    }
+
+    [Fact]
+    public void Accepts_empty_course_and_time_for_full_task_edit()
+    {
+        const string json = """{"id":"e","operation":"edit-task","parameters":{"accountId":"123","id":"task-1","operationId":"o","version":2,"title":"新的实验报告","course":"","date":"2026-10-20","time":"","timeKind":"deadline","priority":0}}""";
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out _));
+    }
+
+    [Theory]
+    [InlineData("title")]
+    [InlineData("course")]
+    [InlineData("date")]
+    [InlineData("timeKind")]
+    [InlineData("priority")]
+    public void Rejects_missing_full_task_edit_fields(string field)
+    {
+        var fields = EditFields();
+        fields.Remove(field);
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl,
+            JsonSerializer.Serialize(new { id = "e", operation = "edit-task", parameters = fields }), out _));
+    }
+
+    [Theory]
+    [InlineData("title", "null")]
+    [InlineData("title", "1")]
+    [InlineData("course", "1")]
+    [InlineData("date", "null")]
+    [InlineData("date", "1")]
+    [InlineData("time", "1")]
+    [InlineData("timeKind", "null")]
+    [InlineData("timeKind", "1")]
+    [InlineData("priority", "null")]
+    [InlineData("priority", "\"1\"")]
+    [InlineData("priority", "true")]
+    public void Rejects_wrong_types_in_full_task_edit(string field, string jsonValue)
+    {
+        var fields = EditFields();
+        using var value = JsonDocument.Parse(jsonValue);
+        fields[field] = value.RootElement.Clone();
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl,
+            JsonSerializer.Serialize(new { id = "e", operation = "edit-task", parameters = fields }), out _));
+    }
+
+    [Theory]
+    [InlineData("title")]
+    [InlineData("course")]
+    public void Rejects_oversized_full_task_edit_text(string field)
+    {
+        var fields = EditFields();
+        fields[field] = new string('字', 257);
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl,
+            JsonSerializer.Serialize(new { id = "e", operation = "edit-task", parameters = fields }), out _));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Accepts_null_course_and_missing_or_null_time_for_full_task_edit(bool omitTime)
+    {
+        var fields = EditFields();
+        fields["course"] = null;
+        if (omitTime) fields.Remove("time"); else fields["time"] = null;
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl,
+            JsonSerializer.Serialize(new { id = "e", operation = "edit-task", parameters = fields }), out _));
+    }
+
+    private static Dictionary<string, object?> EditFields() => new()
+    {
+        ["accountId"] = "123", ["id"] = "task-1", ["operationId"] = "o", ["version"] = 2,
+        ["title"] = "新的实验报告", ["course"] = "高等数学", ["date"] = "2026-10-20",
+        ["time"] = "18:30", ["timeKind"] = "start", ["priority"] = 1
+    };
 
     [Fact]
     public void Rejects_oversized_payload_before_parsing() => Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, new string('x', 16385), out _));
