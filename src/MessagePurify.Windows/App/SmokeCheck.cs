@@ -173,7 +173,7 @@ internal static partial class SmokeCheck
         var resized = desktop.Layout;
         if (resized.Tasks.Width <= saved.Tasks.Width || resized.Tasks.Height <= saved.Tasks.Height)
             throw new InvalidOperationException("正式卡片缩放事件未更新窗口。");
-        var savedLayout = new DesktopLayoutStore(dataRoot).Load(new(0, 0, 100000, 100000),
+        var savedLayout = new DesktopLayoutStore(dataRoot).Load(new DesktopRect(0, 0, 100000, 100000),
             DesktopNative.GetDpiForWindow(new System.Windows.Interop.WindowInteropHelper(desktop.TaskWindow).Handle) / 96d);
         if (savedLayout != resized) throw new InvalidOperationException("正式卡片布局没有持久化。");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
@@ -208,6 +208,7 @@ internal static partial class SmokeCheck
         await CheckCrossGroupMergeSuggestionsAsync(window, workspace, runtime, desktop, dataRoot);
         await CheckCacheCleanupAsync(window, workspace, runtime, dataRoot);
         var backupSmoke = await CheckBackupRestoreAsync(window, workspace, runtime, desktop, dataRoot, reportFile);
+        var desktopRecoverySmoke = await CheckDesktopRecoveryAsync(dataRoot, reportFile);
         var expectedCards = workspace.Snapshot(DateTimeOffset.UtcNow);
         await desktop.RefreshAsync();
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == expectedCards.Items.Count(item => item.Kind == "task" && item.State == "active")
@@ -230,7 +231,7 @@ internal static partial class SmokeCheck
                 "cross-group-merge-confirm", "cross-group-merge-evidence-old-id", "cross-group-merge-suggestion-hide",
                 "cache-cleanup-page", "cache-cleanup-old-chat", "cache-cleanup-task-evidence",
                 "cache-cleanup-review-evidence", "cache-cleanup-notice-evidence", "cache-cleanup-reopen",
-                "cache-cleanup-replay-dedup" }.Concat(BackupChecks).ToArray(),
+                "cache-cleanup-replay-dedup" }.Concat(BackupChecks).Concat(DesktopRecoveryChecks).ToArray(),
             taskCount = final.Items.Count(item => item.Kind == "task" && item.State != "merged"),
             activeTaskCount = final.Items.Count(item => item.Kind == "task" && item.State == "active"),
             mergedTaskCount = final.Items.Count(item => item.State == "merged"),
@@ -238,6 +239,7 @@ internal static partial class SmokeCheck
             mergeSuggestionCount = final.Items.Count(item => item.Kind == "merge-review" && item.State == "pending"),
             cacheCleanup = final.CacheCleanup,
             backup = backupSmoke,
+            desktopRecovery = desktopRecoverySmoke,
             capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
     }
 

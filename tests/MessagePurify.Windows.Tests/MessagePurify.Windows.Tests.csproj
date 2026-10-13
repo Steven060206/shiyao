@@ -21,6 +21,8 @@
     <Compile Include="../../src/MessagePurify.Windows/App/AppBridgeProtocol.cs" Link="AppBridgeProtocol.cs" />
     <Compile Include="../../src/MessagePurify.Windows/App/DesktopCardProjection.cs" Link="DesktopCardProjection.cs" />
     <Compile Include="../../src/MessagePurify.Windows/App/DesktopLayoutStore.cs" Link="DesktopLayoutStore.cs" />
+    <Compile Include="../../src/MessagePurify.Windows/App/DesktopPlacement.cs" Link="DesktopPlacement.cs" />
+    <Compile Include="../../src/MessagePurify.Windows/App/DesktopSystemMessages.cs" Link="DesktopSystemMessages.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/BridgeProtocol.cs" Link="BridgeProtocol.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/NotificationRoute.cs" Link="NotificationRoute.cs" />
     <Compile Include="../../src/MessagePurify.Windows/IntegrationProbe/NotificationProtocol.cs" Link="NotificationProtocol.cs" />

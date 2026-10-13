@@ -31,13 +31,19 @@ public static class Program
             DesktopCardHost? desktop = null;
             using var stopping = new CancellationTokenSource();
             using var tray = new Forms.NotifyIcon { Text = "消息提纯", Icon = System.Drawing.SystemIcons.Application, Visible = !check };
+            var exiting = false;
             async Task Exit()
             {
-                desktop?.Dispose();
-                if (window is not null) { window.Exiting = true; window.Close(); }
-                tray.Visible = false; stopping.Cancel();
-                if (runtime is not null) await runtime.StopAsync();
-                application.Shutdown(exitCode);
+                if (exiting) return;
+                exiting = true;
+                try
+                {
+                    desktop?.Dispose();
+                    if (window is not null) { window.Exiting = true; window.Close(); }
+                    tray.Visible = false; stopping.Cancel();
+                    if (runtime is not null) await runtime.StopAsync();
+                }
+                finally { application.Shutdown(exitCode); }
             }
             try
             {
@@ -52,6 +58,7 @@ public static class Program
                 if (!check || synthetic is not null)
                 {
                     desktop = new(runtime, dataRoot, window.OpenItemAsync);
+                    desktop.WatchSystemWindow(window);
                     window.AppearanceChanged += desktop.SetAppearance;
                     desktop.StatusChanged += () =>
                     {

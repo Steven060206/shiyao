@@ -20,6 +20,47 @@ public sealed class DesktopLayoutStore
 
     public string? Error { get; private set; }
 
+    public DesktopCardLayout Load(IReadOnlyList<DesktopRect> workAreas, double scale)
+    {
+        ValidateScale(scale);
+        ValidateWorkAreas(workAreas);
+        var fallback = Default(workAreas[0], scale);
+        Error = null;
+        if (!File.Exists(path)) return fallback;
+        try
+        {
+            var stored = ReadStored();
+            return new(DesktopPlacement.Fit(FromDips(stored.Tasks, scale), workAreas),
+                DesktopPlacement.Fit(FromDips(stored.Pending, scale), workAreas));
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            Error = "桌面布局无法读取，已使用默认位置；原文件已保留。";
+            return fallback;
+        }
+    }
+
+    public void SaveCard(DesktopCardLayout current, double scale, bool pending)
+    {
+        ArgumentNullException.ThrowIfNull(current);
+        ValidateScale(scale);
+        Validate(current.Tasks);
+        Validate(current.Pending);
+
+        var tasks = ToDips(current.Tasks, scale);
+        var pendingLayout = ToDips(current.Pending, scale);
+        if (TryReadStored(out var stored))
+        {
+            // The card not explicitly changed keeps its stored DIP coordinates even
+            // when the other card was temporarily fitted to a surviving monitor.
+            if (pending) tasks = stored.Tasks;
+            else pendingLayout = stored.Pending;
+        }
+
+        Error = null;
+        WriteStored(new StoredLayout(1, tasks, pendingLayout));
+    }
+
     public DesktopCardLayout Load(DesktopRect bounds, double scale)
     {
         ValidateScale(scale);
@@ -48,6 +89,11 @@ public sealed class DesktopLayoutStore
         Validate(stored.Tasks);
         Validate(stored.Pending);
         Error = null;
+        WriteStored(stored);
+    }
+
+    private void WriteStored(StoredLayout stored)
+    {
         var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
         try
         {
@@ -63,6 +109,30 @@ public sealed class DesktopLayoutStore
         {
             try { File.Delete(temporary); }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    private StoredLayout ReadStored()
+    {
+        var stored = JsonSerializer.Deserialize<StoredLayout>(File.ReadAllText(path), JsonOptions);
+        if (stored?.Schema != 1) throw new JsonException("Unsupported desktop layout schema.");
+        Validate(stored.Tasks);
+        Validate(stored.Pending);
+        return stored;
+    }
+
+    private bool TryReadStored(out StoredLayout stored)
+    {
+        try
+        {
+            if (!File.Exists(path)) { stored = default!; return false; }
+            stored = ReadStored();
+            return true;
+        }
+        catch (Exception exception) when (exception is JsonException or ArgumentException or IOException or UnauthorizedAccessException)
+        {
+            stored = default!;
+            return false;
         }
     }
 
@@ -82,6 +152,13 @@ public sealed class DesktopLayoutStore
     private static void ValidateScale(double scale)
     {
         if (!double.IsFinite(scale) || scale <= 0) throw new ArgumentOutOfRangeException(nameof(scale), "Scale must be finite and positive.");
+    }
+
+    private static void ValidateWorkAreas(IReadOnlyList<DesktopRect> workAreas)
+    {
+        ArgumentNullException.ThrowIfNull(workAreas);
+        if (workAreas.Count == 0) throw new ArgumentException("At least one desktop work area is required.", nameof(workAreas));
+        foreach (var workArea in workAreas) Validate(workArea);
     }
 
     private static void Validate(DesktopRect rectangle) => DesktopGeometry.Clamp(rectangle, rectangle);

@@ -27,6 +27,7 @@ public sealed class DesktopCardHost : IDisposable
     private readonly AppRuntime runtime;
     private readonly DesktopLayoutStore layouts;
     private readonly Func<string, string, Task> openItem;
+    private readonly IDesktopEnvironment environment;
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(2) };
     private CardWindow? tasks, pending;
     private nint parent;
@@ -38,6 +39,12 @@ public sealed class DesktopCardHost : IDisposable
     private DesktopCardsSnapshot? current;
     private string? signature, operationError;
     private long? renderedGeneration;
+    private DesktopEnvironmentState? attachedEnvironment;
+    private long attachmentEpoch, recoveryVersion;
+    private bool reloadLayout;
+    private Window? watchedWindow;
+    private HwndSource? systemSource;
+    private uint taskbarCreatedMessage;
     public string State { get; private set; } = "waiting";
     public string? Error { get; private set; }
     public event Action? StatusChanged;
@@ -46,10 +53,11 @@ public sealed class DesktopCardHost : IDisposable
     internal Window PendingWindow => pending!;
     internal DesktopCardLayout Layout => new(tasks!.Bounds, pending!.Bounds);
 
-    public DesktopCardHost(AppRuntime runtime, string dataRoot, Func<string, string, Task> openItem)
+    public DesktopCardHost(AppRuntime runtime, string dataRoot, Func<string, string, Task> openItem, IDesktopEnvironment? environment = null)
     {
         this.runtime = runtime;
         this.openItem = openItem;
+        this.environment = environment ?? new NativeDesktopEnvironment();
         layouts = new(dataRoot);
         runtime.Changed += OnChanged;
         timer.Tick += async (_, _) => await RefreshAsync();
@@ -57,6 +65,53 @@ public sealed class DesktopCardHost : IDisposable
     }
 
     private void OnChanged() => Interlocked.Exchange(ref dirty, 1);
+
+    public void RequestRecovery()
+    {
+        if (disposed) return;
+        if (!timer.Dispatcher.CheckAccess())
+        {
+            timer.Dispatcher.BeginInvoke(new Action(RequestRecovery));
+            return;
+        }
+        recoveryVersion++;
+        reloadLayout = true;
+        signature = null;
+        OnChanged();
+        timer.Dispatcher.BeginInvoke(new Action(async () => await RefreshAsync()));
+    }
+
+    public void WatchSystemWindow(Window window)
+    {
+        UnwatchSystemWindow();
+        if (disposed) return;
+        watchedWindow = window;
+        taskbarCreatedMessage = DesktopNative.RegisterWindowMessage("TaskbarCreated");
+        window.SourceInitialized += OnSystemSourceInitialized;
+        AttachSystemHook();
+    }
+
+    private void OnSystemSourceInitialized(object? sender, EventArgs args) => AttachSystemHook();
+    private void AttachSystemHook()
+    {
+        if (systemSource is not null || watchedWindow is null) return;
+        var handle = new WindowInteropHelper(watchedWindow).Handle;
+        if (handle == 0) return;
+        systemSource = HwndSource.FromHwnd(handle);
+        systemSource?.AddHook(OnSystemMessage);
+    }
+    private nint OnSystemMessage(nint hwnd, int message, nint parameter, nint data, ref bool handled)
+    {
+        if (DesktopSystemMessages.ShouldRefresh(message, parameter, taskbarCreatedMessage)) RequestRecovery();
+        return 0;
+    }
+    private void UnwatchSystemWindow()
+    {
+        if (watchedWindow is not null) watchedWindow.SourceInitialized -= OnSystemSourceInitialized;
+        systemSource?.RemoveHook(OnSystemMessage);
+        systemSource = null;
+        watchedWindow = null;
+    }
 
     public void SetAppearance(string theme, bool reducedMotion)
     {
@@ -75,12 +130,18 @@ public sealed class DesktopCardHost : IDisposable
             if (!EnsureAttached()) return;
             var now = DateTimeOffset.UtcNow;
             if (Interlocked.Exchange(ref dirty, 0) == 0 && now - lastRefresh < TimeSpan.FromSeconds(30)) return;
-            var snapshot = await Task.Run(() => runtime.Workspace?.Snapshot(now));
+            var workspace = runtime.Workspace;
+            var epoch = attachmentEpoch;
+            var request = recoveryVersion;
+            var snapshot = await Task.Run(() => workspace?.Snapshot(now));
             if (disposed) return;
-            if (runtime.IsRestoring) { OnChanged(); return; }
+            if (runtime.IsRestoring || !ReferenceEquals(workspace, runtime.Workspace)
+                || snapshot?.Generation != workspace?.Generation || snapshot?.AccountId != workspace?.AccountId
+                || request != recoveryVersion) { OnChanged(); return; }
+            if (!EnsureAttached() || epoch != attachmentEpoch || request != recoveryVersion) { OnChanged(); return; }
             if (snapshot is not null && renderedGeneration is not null && renderedGeneration != snapshot.Generation)
             {
-                var restoredLayout = layouts.Load(ParentBounds(), scale);
+                var restoredLayout = layouts.Load(WorkAreas(), scale);
                 tasks!.SetBounds(restoredLayout.Tasks);
                 pending!.SetBounds(restoredLayout.Pending);
                 operationError = null;
@@ -94,55 +155,63 @@ public sealed class DesktopCardHost : IDisposable
             signature = nextSignature;
             var generation = snapshot?.Generation ?? 0;
             tasks!.Render(current, false, theme, operationError ?? layouts.Error, now,
-                (account, item) => OpenAsync(account, item, generation), (account, item) => CompleteAsync(account, item, generation));
+                (account, item) => OpenAsync(account, item, generation, epoch), (account, item) => CompleteAsync(account, item, generation, epoch));
             pending!.Render(current, true, theme, operationError ?? layouts.Error, now,
-                (account, item) => OpenAsync(account, item, generation), (account, item) => CompleteAsync(account, item, generation));
+                (account, item) => OpenAsync(account, item, generation, epoch), (account, item) => CompleteAsync(account, item, generation, epoch));
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
         {
-            operationError = "读取桌面事项失败，请打开主界面查看连接与本地数据状态。";
+            const string refreshError = "读取桌面事项失败，请打开主界面查看连接与本地数据状态。";
             signature = null;
             OnChanged();
-            tasks?.ShowError(operationError);
+            if (tasks?.Alive == true) tasks.ShowError(refreshError);
         }
         finally { refreshing = false; }
     }
 
     private bool EnsureAttached()
     {
-        var latest = DesktopNative.FindDesktopParent();
-        if (tasks is not null && pending is not null && latest == parent &&
-            DesktopNative.IsWindow(tasks.Handle) && DesktopNative.IsWindow(pending.Handle))
+        var latest = environment.Capture();
+        if (latest is null)
         {
-            var dpi = DesktopNative.GetDpiForWindow(parent) / 96d;
-            if (dpi != scale)
-            {
-                // Drag/resize already save; an automatic DPI reload must preserve a damaged layout file.
-                DisposeWindows();
-            }
-            else
-            {
-                var area = ParentBounds();
-                tasks.SetBounds(DesktopGeometry.Clamp(tasks.Bounds, area));
-                pending.SetBounds(DesktopGeometry.Clamp(pending.Bounds, area));
-                return true;
-            }
+            DisposeWindows();
+            SetStatus("waiting", "正在等待 Windows 桌面就绪。");
+            return false;
         }
-        DisposeWindows();
-        if (latest == 0) { SetStatus("waiting", "正在等待 Windows 桌面就绪。"); return false; }
-        if (!DesktopNative.AreDpiAwarenessContextsEqual(DesktopNative.GetWindowDpiAwarenessContext(latest),
-            DesktopNative.GetThreadDpiAwarenessContext()))
+        if (!latest.Compatible)
         {
+            DisposeWindows();
             SetStatus("unavailable", "桌面显示模式暂不兼容，请在主界面查看事项。");
             return false;
         }
-        parent = latest;
-        scale = DesktopNative.GetDpiForWindow(parent) / 96d;
-        var layout = layouts.Load(ParentBounds(), scale);
         try
         {
-            tasks = new("消息提纯 · 提醒事项", parent, scale, layout.Tasks, ParentBounds, SaveLayout);
-            pending = new("消息提纯 · 待确认", parent, scale, layout.Pending, ParentBounds, SaveLayout);
+            if (tasks?.Alive == true && pending?.Alive == true && latest.Parent == parent && latest.Scale == scale
+                && environment.IsAttached(tasks.Handle, parent) && environment.IsAttached(pending.Handle, parent))
+            {
+                if (reloadLayout || attachedEnvironment is null || attachedEnvironment.Bounds != latest.Bounds
+                    || !attachedEnvironment.WorkAreas.SequenceEqual(latest.WorkAreas))
+                {
+                    attachedEnvironment = latest;
+                    var layout = layouts.Load(latest.WorkAreas, scale);
+                    tasks.SetBounds(layout.Tasks);
+                    pending.SetBounds(layout.Pending);
+                    signature = null;
+                    OnChanged();
+                }
+                reloadLayout = false;
+                return true;
+            }
+            DisposeWindows();
+            parent = latest.Parent;
+            scale = latest.Scale;
+            attachedEnvironment = latest;
+            var restored = layouts.Load(WorkAreas(), scale);
+            tasks = new("消息提纯 · 提醒事项", parent, scale, restored.Tasks, WorkAreas, () => SaveLayout(false), RequestRecovery);
+            pending = new("消息提纯 · 待确认", parent, scale, restored.Pending, WorkAreas, () => SaveLayout(true), RequestRecovery);
+            if (!environment.IsAttached(tasks.Handle, parent) || !environment.IsAttached(pending.Handle, parent))
+                throw new InvalidOperationException("Desktop attachment changed during creation.");
+            reloadLayout = false;
             signature = null;
             OnChanged();
             SetStatus("attached", null);
@@ -156,36 +225,47 @@ public sealed class DesktopCardHost : IDisposable
         }
     }
 
-    private DesktopRect ParentBounds()
-    {
-        if (!DesktopNative.GetClientRect(parent, out var bounds)) throw new InvalidOperationException("Desktop bounds unavailable.");
-        return new(0, 0, bounds.Right - bounds.Left, bounds.Bottom - bounds.Top);
-    }
+    private IReadOnlyList<DesktopRect> WorkAreas() => attachedEnvironment?.WorkAreas
+        ?? throw new InvalidOperationException("Desktop work areas unavailable.");
 
-    private void SaveLayout()
+    private void SaveLayout(bool isPending)
     {
         if (runtime.IsRestoring) return;
-        if (tasks is not null && pending is not null) layouts.Save(Layout, scale);
+        if (tasks?.Alive != true || pending?.Alive != true
+            || !environment.IsAttached(tasks.Handle, parent) || !environment.IsAttached(pending.Handle, parent))
+        {
+            RequestRecovery();
+            return;
+        }
+        layouts.SaveCard(Layout, scale, isPending);
         signature = null;
         OnChanged();
     }
 
     internal void SetLayout(DesktopCardLayout layout)
     {
-        tasks!.SetBounds(DesktopGeometry.Clamp(layout.Tasks, ParentBounds()));
-        pending!.SetBounds(DesktopGeometry.Clamp(layout.Pending, ParentBounds()));
-        SaveLayout();
+        tasks!.SetBounds(DesktopPlacement.Fit(layout.Tasks, WorkAreas()));
+        pending!.SetBounds(DesktopPlacement.Fit(layout.Pending, WorkAreas()));
+        layouts.Save(Layout, scale);
+        signature = null;
+        OnChanged();
     }
 
-    private async Task OpenAsync(string accountId, ApplicationItem item, long generation)
+    private bool CanOperate(string accountId, long generation, long epoch) => !disposed && !runtime.IsRestoring
+        && epoch == attachmentEpoch && runtime.Workspace?.Generation == generation
+        && runtime.Workspace.AccountId == accountId && tasks?.Alive == true && pending?.Alive == true
+        && environment.IsAttached(tasks.Handle, parent) && environment.IsAttached(pending.Handle, parent);
+
+    private async Task OpenAsync(string accountId, ApplicationItem item, long generation, long epoch)
     {
-        if (runtime.IsRestoring || runtime.Workspace?.Generation != generation) return;
+        if (!CanOperate(accountId, generation, epoch)) return;
         try { await openItem(accountId, item.Id); }
         catch (InvalidOperationException) { operationError = "主界面尚未就绪，请稍后重试。"; OnChanged(); }
     }
 
-    private async Task CompleteAsync(string accountId, ApplicationItem item, long generation)
+    private async Task CompleteAsync(string accountId, ApplicationItem item, long generation, long epoch)
     {
+        if (!CanOperate(accountId, generation, epoch)) return;
         try
         {
             if (runtime.IsRestoring) throw new InvalidOperationException();
@@ -234,6 +314,10 @@ public sealed class DesktopCardHost : IDisposable
 
     private void DisposeWindows()
     {
+        attachmentEpoch++;
+        attachedEnvironment = null;
+        signature = null;
+        OnChanged();
         tasks?.Dispose(); pending?.Dispose();
         tasks = null; pending = null;
     }
@@ -244,6 +328,7 @@ public sealed class DesktopCardHost : IDisposable
         disposed = true;
         timer.Stop();
         runtime.Changed -= OnChanged;
+        UnwatchSystemWindow();
         DisposeWindows();
     }
 
@@ -251,21 +336,24 @@ public sealed class DesktopCardHost : IDisposable
     {
         private readonly nint parent, oldParent, originalStyle;
         private readonly double scale;
-        private readonly Func<DesktopRect> parentBounds;
+        private readonly Func<IReadOnlyList<DesktopRect>> workAreas;
         private readonly Action save;
+        private readonly Action recover;
         private readonly Grid content = new();
         private readonly StackPanel list = new();
         private readonly TextBlock heading = new(), footer = new();
         private readonly Border frame;
         private readonly Thumb resize;
-        private bool disposed;
+        private bool disposed, closed, interactionFailed;
         internal nint Handle { get; }
         internal DesktopRect Bounds { get; private set; }
+        internal bool Alive => !closed && !disposed && DesktopNative.IsWindow(Handle);
 
         public CardWindow(string title, nint parent, double scale, DesktopRect bounds,
-            Func<DesktopRect> parentBounds, Action save)
+            Func<IReadOnlyList<DesktopRect>> workAreas, Action save, Action recover)
         {
-            this.parent = parent; this.scale = scale; this.parentBounds = parentBounds; this.save = save;
+            this.parent = parent; this.scale = scale; this.workAreas = workAreas; this.save = save; this.recover = recover;
+            Closed += (_, _) => closed = true;
             Title = title; WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize;
             ShowInTaskbar = false; ShowActivated = false; Topmost = false;
             Width = bounds.Width / scale; Height = bounds.Height / scale;
@@ -291,16 +379,41 @@ public sealed class DesktopCardHost : IDisposable
             Content = frame;
             DesktopPoint? initial = null;
             DesktopRect start = default;
-            heading.MouseLeftButtonDown += (_, args) => { initial = CursorInParent(); start = Bounds; heading.CaptureMouse(); args.Handled = true; };
+            void Interact(Action action)
+            {
+                if (!Alive) return;
+                try { action(); }
+                catch (InvalidOperationException)
+                {
+                    interactionFailed = true; initial = null; heading.ReleaseMouseCapture(); recover();
+                }
+            }
+            heading.MouseLeftButtonDown += (_, args) => Interact(() =>
+            {
+                interactionFailed = false; initial = CursorInParent(); start = Bounds; heading.CaptureMouse(); args.Handled = true;
+            });
             heading.MouseMove += (_, args) =>
             {
                 if (initial is not null && args.LeftButton == MouseButtonState.Pressed)
-                    SetBounds(DesktopGeometry.Drag(start, initial.Value, CursorInParent(), parentBounds()));
+                    Interact(() =>
+                    {
+                        var cursor = CursorInParent();
+                        SetBounds(DesktopPlacement.Fit(start with { X = start.X + cursor.X - initial.Value.X,
+                            Y = start.Y + cursor.Y - initial.Value.Y }, workAreas()));
+                    });
             };
-            heading.MouseLeftButtonUp += (_, args) => { initial = null; heading.ReleaseMouseCapture(); save(); args.Handled = true; };
-            resize.DragDelta += (_, args) => SetBounds(DesktopGeometry.Resize(Bounds,
-                new(args.HorizontalChange * scale, args.VerticalChange * scale), parentBounds(), new(260 * scale, 200 * scale)));
-            resize.DragCompleted += (_, _) => save();
+            heading.MouseLeftButtonUp += (_, args) =>
+            {
+                var changed = initial is not null; initial = null; heading.ReleaseMouseCapture();
+                if (changed && Alive && !interactionFailed) save(); args.Handled = true;
+            };
+            resize.DragStarted += (_, _) => interactionFailed = false;
+            resize.DragDelta += (_, args) => Interact(() => SetBounds(DesktopPlacement.Fit(Bounds with
+            {
+                Width = Math.Max(260 * scale, Bounds.Width + args.HorizontalChange * scale),
+                Height = Math.Max(200 * scale, Bounds.Height + args.VerticalChange * scale)
+            }, workAreas())));
+            resize.DragCompleted += (_, _) => { if (Alive && !interactionFailed) save(); };
             Handle = new WindowInteropHelper(this).EnsureHandle();
             originalStyle = DesktopNative.GetWindowLongPtr(Handle, -16);
             DesktopNative.SetWindowLongPtr(Handle, -16, (nint)(((long)originalStyle & ~0x80000000L) | 0x40000000L));
@@ -314,19 +427,23 @@ public sealed class DesktopCardHost : IDisposable
                 Close();
                 throw new InvalidOperationException("Desktop attachment failed.");
             }
-            Show(); SetBounds(bounds);
+            try { Show(); SetBounds(bounds); }
+            catch (InvalidOperationException) { Dispose(); throw; }
         }
 
         internal void SetBounds(DesktopRect bounds)
         {
+            if (!Alive || !DesktopNative.IsWindow(parent) || DesktopNative.GetParent(Handle) != parent
+                || !DesktopNative.SetWindowPos(Handle, 0, (int)Math.Round(bounds.X), (int)Math.Round(bounds.Y),
+                    (int)Math.Round(bounds.Width), (int)Math.Round(bounds.Height), 4 | 0x10 | 0x20))
+                throw new InvalidOperationException("Desktop positioning failed.");
             Bounds = bounds;
-            DesktopNative.SetWindowPos(Handle, 0, (int)Math.Round(bounds.X), (int)Math.Round(bounds.Y),
-                (int)Math.Round(bounds.Width), (int)Math.Round(bounds.Height), 4 | 0x10 | 0x20);
         }
 
         private DesktopPoint CursorInParent()
         {
-            if (!DesktopNative.GetCursorPos(out var point) || !DesktopNative.ScreenToClient(parent, ref point))
+            if (!Alive || !DesktopNative.IsWindow(parent) || !DesktopNative.GetCursorPos(out var point)
+                || !DesktopNative.ScreenToClient(parent, ref point))
                 throw new InvalidOperationException("Desktop pointer unavailable.");
             return new(point.X, point.Y);
         }
@@ -402,11 +519,11 @@ public sealed class DesktopCardHost : IDisposable
         {
             if (disposed) return;
             disposed = true;
-            if (DesktopNative.IsWindow(Handle))
+            if (!closed && DesktopNative.IsWindow(Handle))
             {
                 Hide(); DesktopNative.SetParent(Handle, oldParent); DesktopNative.SetWindowLongPtr(Handle, -16, originalStyle);
             }
-            Close();
+            if (!closed) Close();
         }
     }
 }
@@ -432,6 +549,7 @@ internal static class DesktopNative
     [DllImport("user32.dll")] internal static extern bool ScreenToClient(nint hwnd, ref Point point);
     [DllImport("user32.dll")] internal static extern bool SetWindowPos(nint hwnd, nint after, int x, int y, int width, int height, uint flags);
     [DllImport("user32.dll")] internal static extern bool IsWindow(nint hwnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] internal static extern uint RegisterWindowMessage(string message);
     internal static string ClassName(nint hwnd) { var buffer = new StringBuilder(256); GetClassName(hwnd, buffer, buffer.Capacity); return buffer.ToString(); }
     internal static nint FindDesktopParent()
     {

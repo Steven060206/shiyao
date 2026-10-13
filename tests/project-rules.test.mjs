@@ -287,6 +287,20 @@ test('账号备份恢复记录区分本地快照和未下载原图', () => {
     assert.ok(plan.toLowerCase().includes(term.toLowerCase()), term);
 });
 
+test('桌面恢复记录保留合成验证边界和原布局偏好', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md']) {
+    const content = read(file);
+    assert.match(content, /桌面.*恢复.*(?:已实现|已写入)/s, file);
+    assert.match(content, /desktop-recovery-native\.json/, file);
+    assert.match(content, /(?:多屏|屏幕|工作区域).*原.*(?:布局|偏好)/s, file);
+    assert.match(content, /(?:真实|实际|物理).*(?:Explorer|多屏|睡眠).*(?:未验收|仍.*验收|后置)/, file);
+    assert.match(content, /睡眠漏同步政策.*(?:未确认|未决定)/, file);
+  }
+  const plan = read('docs/superpowers/plans/2026-10-13-desktop-recovery.md');
+  for (const term of ['schema1', 'IsAttached', 'SetWindowPos', 'Generation', '隔离合成', '不重启用户Explorer'])
+    assert.ok(plan.toLowerCase().includes(term.toLowerCase()), term);
+});
+
 test('M4 首轮候选路由状态明确本地分流、课程确认和后续实现边界', () => {
   for (const file of ['docs/requirements.md', 'tests/README.md']) {
     const content = read(file);
