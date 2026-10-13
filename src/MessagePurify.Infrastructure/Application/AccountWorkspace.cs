@@ -21,6 +21,7 @@ public sealed class AccountWorkspace
     private IReminderSink? reminderSink;
     private readonly string settingsPath;
     private WorkspaceSettings settings;
+    private string? cacheCleanupError;
     private Dictionary<string, string> availableGroups = new(StringComparer.Ordinal);
     private HashSet<string> pinnedGroups = new(StringComparer.Ordinal);
     public string AccountId { get; }
@@ -86,6 +87,25 @@ public sealed class AccountWorkspace
         }
     }
 
+    public CacheCleanupResult CleanMessageCache(DateTimeOffset now, Func<bool>? canContinue = null)
+    {
+        lock (gate)
+        {
+            try
+            {
+                var result = router.CleanMessageCache(now, canContinue);
+                cacheCleanupError = null;
+                return result;
+            }
+            catch (OperationCanceledException) { throw; }
+            catch
+            {
+                cacheCleanupError = "缓存清理失败，临时消息与上次成功结果已保留。";
+                throw;
+            }
+        }
+    }
+
     private bool EnqueueCore(SchoolMessage message, IReadOnlySet<string> pinnedGroupIds,
         MessageOrigin origin, string batchId, DateTimeOffset now)
     {
@@ -95,6 +115,7 @@ public sealed class AccountWorkspace
             throw new ArgumentException("消息账号不属于当前工作区。", nameof(message));
         var context = Context(message.Key.GroupId, now);
         if (context.CourseExcluded) return false;
+        if (router.HasRouted(message.Key)) return false;
         return processor.Ingest(message, pinnedGroupIds, context, origin, batchId, now);
     }
 
@@ -204,7 +225,8 @@ public sealed class AccountWorkspace
                         match.SecondTaskId, match.SecondTaskVersion)
                 });
             }
-            return new(AccountId, items, groups, now, reminders.Synchronize(now));
+            return new(AccountId, items, groups, now, reminders.Synchronize(now),
+                router.ReadCacheCleanupResult(), cacheCleanupError);
         }
     }
 
@@ -251,6 +273,11 @@ public sealed class AccountWorkspace
             ArgumentException.ThrowIfNullOrWhiteSpace(command.OperationId);
             switch (command.Operation)
             {
+                case "clean-cache":
+                    if (command.Id != "cache" || command.Version != 0)
+                        throw new ArgumentException("缓存清理须使用 cache 标识及版本 0。", nameof(command));
+                    CleanMessageCache(now);
+                    return;
                 case "create-task":
                     if (command.Version != 0) throw new ArgumentException("新增任务版本须为 0。", nameof(command));
                     ArgumentException.ThrowIfNullOrWhiteSpace(command.Title);

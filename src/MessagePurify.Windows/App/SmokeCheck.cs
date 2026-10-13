@@ -206,6 +206,11 @@ internal static class SmokeCheck
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2);
         await CheckTaskStructureAsync(window, workspace, runtime, desktop, dataRoot, task.Id, acceptedTask.Id);
         await CheckCrossGroupMergeSuggestionsAsync(window, workspace, runtime, desktop, dataRoot);
+        await CheckCacheCleanupAsync(window, workspace, runtime, dataRoot);
+        var expectedCards = workspace.Snapshot(DateTimeOffset.UtcNow);
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Count == expectedCards.Items.Count(item => item.Kind == "task" && item.State == "active")
+            && desktop.Snapshot.Pending.Count == expectedCards.Items.Count(item => item.Kind is "review" or "merge-review" && item.State == "pending"));
         desktop.Capture(cardsCapture);
         var final = workspace.Snapshot(DateTimeOffset.UtcNow);
         var capture = Path.ChangeExtension(reportFile, ".png");
@@ -221,13 +226,111 @@ internal static class SmokeCheck
                 "split-task-pending", "task-structure-reopen", "task-structure-two-cards",
                 "cross-group-merge-suggestion", "cross-group-merge-card", "cross-group-merge-preselected",
                 "cross-group-merge-current-conflict", "cross-group-keep-separate", "cross-group-keep-separate-reopen",
-                "cross-group-merge-confirm", "cross-group-merge-evidence-old-id", "cross-group-merge-suggestion-hide" },
+                "cross-group-merge-confirm", "cross-group-merge-evidence-old-id", "cross-group-merge-suggestion-hide",
+                "cache-cleanup-page", "cache-cleanup-old-chat", "cache-cleanup-task-evidence",
+                "cache-cleanup-review-evidence", "cache-cleanup-notice-evidence", "cache-cleanup-reopen",
+                "cache-cleanup-replay-dedup" },
             taskCount = final.Items.Count(item => item.Kind == "task" && item.State != "merged"),
             activeTaskCount = final.Items.Count(item => item.Kind == "task" && item.State == "active"),
             mergedTaskCount = final.Items.Count(item => item.State == "merged"),
             pendingCount = final.Items.Count(item => item.Kind == "review" && item.State == "pending"),
             mergeSuggestionCount = final.Items.Count(item => item.Kind == "merge-review" && item.State == "pending"),
+            cacheCleanup = final.CacheCleanup,
             capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
+    }
+
+    private static async Task CheckCacheCleanupAsync(AppWindow window, AccountWorkspace workspace,
+        AppRuntime runtime, string dataRoot)
+    {
+        // Program supplies a unique temporary root and never starts the NapCat runtime in smoke mode.
+        if (workspace.AccountId != "10000" || !Path.GetFileName(dataRoot).StartsWith("messagepurify-app-", StringComparison.Ordinal))
+            throw new InvalidOperationException("缓存合成检查必须使用隔离的临时工作区。");
+        var now = DateTimeOffset.UtcNow;
+        var old = now.AddDays(-10);
+        var due = now.ToOffset(TimeSpan.FromHours(8)).AddDays(5);
+        HashSet<string> pinned = ["10001", "10101", "10102"];
+        string[] texts = [$"{due.Year}年{due.Month}月{due.Day}日之前提交数学缓存专项资料",
+            "请提交数学缓存待核对附件", $"自愿报名数学缓存讲座，{due.Month}月{due.Day}日18点截止",
+            "合成闲聊：今天阳光很好。"];
+        var messages = texts.Select((text, index) => new SchoolMessage(
+            new(workspace.AccountId, "10001", (801 + index).ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            "10002", old.AddSeconds(index), [new(SegmentKind.Text, text)])).ToArray();
+        foreach (var message in messages)
+            if (!workspace.Ingest(message, pinned, MessageOrigin.History, "synthetic-cache-cleanup", now))
+                throw new InvalidOperationException("缓存检查的合成消息未入库。");
+        var store = new AccountMessageStore(dataRoot, workspace.AccountId);
+        var seeded = workspace.Snapshot(now);
+        string[] kinds = ["task", "review", "notice"];
+        var kept = texts.Take(3).Select((text, index) => seeded.Items.Single(item => item.Kind == kinds[index]
+            && item.Evidence.Any(evidence => evidence.Text == text))).ToArray();
+        if (store.Find(messages[3].Key)?.Extraction is not { } chatExtraction
+            || chatExtraction.Candidates.Any(candidate => candidate.Disposition != RuleDisposition.Ignored)
+            || kept.Any(item => item.Evidence.Count != 1 || item.Evidence[0].SentAt != old.AddSeconds(Array.IndexOf(kept, item))))
+            throw new InvalidOperationException("缓存检查未建立已处理的旧闲聊及三类旧证据。");
+
+        runtime.Refresh();
+        await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
+        await WaitAsync(window, "document.querySelector('[data-action=clean-cache]')?.disabled === false");
+        await EvaluateAsync(window, "document.querySelector('[data-action=clean-cache]').click()");
+        await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).CacheCleanup is not null);
+        var cleaned = workspace.Snapshot(DateTimeOffset.UtcNow);
+        var result = cleaned.CacheCleanup ?? throw new InvalidDataException("手动清理没有保存成功结果。");
+        if (result.AccountId != workspace.AccountId || result.DeletedMessages != 1 || result.RetainedOldMessages != 3
+            || result.RemainingMessages < 3 || result.Cutoff != result.CompletedAt.AddDays(-7)
+            || cleaned.CacheCleanupError is not null || store.Find(messages[3].Key) is not null)
+            throw new InvalidOperationException("设置页清理未按原发送日期删除一条闲聊并保留旧证据。");
+        await WaitAsync(window, "document.querySelector('#cache-cleanup-result')?.textContent.includes('实际删除 1 条') === true");
+        var displayedResult = await EvaluateAsync(window, "document.querySelector('#cache-cleanup-result').textContent");
+        for (var index = 0; index < kept.Length; index++)
+        {
+            var item = cleaned.Items.Single(candidate => candidate.Id == kept[index].Id);
+            if (item.Kind != kinds[index] || item.State != kept[index].State || item.Title != kept[index].Title
+                || !item.Evidence.SequenceEqual(kept[index].Evidence) || store.Find(messages[index].Key) is null)
+                throw new InvalidOperationException("缓存清理丢失任务、待确认或通知的原始证据。");
+            if (item.Kind == "notice")
+            {
+                await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=notices]').click()");
+                await EvaluateAsync(window, "Array.from(document.querySelectorAll('[data-action=select]')).find(row => row.dataset.id === "
+                    + JsonSerializer.Serialize(item.Id) + ")?.click()");
+            }
+            else await window.OpenItemAsync(workspace.AccountId, item.Id);
+            await WaitAsync(window, "document.querySelector('.source-section .message')?.textContent === " + JsonSerializer.Serialize(texts[index]));
+        }
+
+        var reopenedWorkspace = new AccountWorkspace(dataRoot, workspace.AccountId);
+        reopenedWorkspace.SetAvailableGroups(seeded.Groups.Select(group => new OneBotGroup(group.GroupId, group.Name)).ToArray(), pinned);
+        var reopened = reopenedWorkspace.Snapshot(DateTimeOffset.UtcNow);
+        if (reopened.CacheCleanup != result || reopened.CacheCleanupError is not null
+            || kept.Any(item => !reopened.Items.Single(candidate => candidate.Id == item.Id).Evidence.SequenceEqual(item.Evidence)))
+            throw new InvalidDataException("重开工作区丢失缓存清理结果或旧证据。");
+        var reopenedRuntime = new AppRuntime(dataRoot, reopenedWorkspace);
+        var reopenedWindow = new AppWindow(reopenedRuntime, dataRoot, hidden: true, registerStartup: false);
+        try
+        {
+            reopenedWindow.Show();
+            await reopenedWindow.Ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            // NavigationReady only confirms the HTML loaded; wait for the first account snapshot
+            // so its default-page initialization cannot replace the settings page after our click.
+            await WaitAsync(reopenedWindow, "document.querySelector('.task-row') !== null");
+            await EvaluateAsync(reopenedWindow, "document.querySelector('[data-action=nav][data-page=settings]').click()");
+            await WaitAsync(reopenedWindow, "document.querySelector('#cache-cleanup-result')?.textContent.includes('实际删除 1 条') === true");
+            if (await EvaluateAsync(reopenedWindow, "document.querySelector('#cache-cleanup-result').textContent") != displayedResult)
+                throw new InvalidDataException("重开正式页面没有保留相同的成功清理时间及条数。");
+        }
+        finally
+        {
+            reopenedWindow.Exiting = true;
+            reopenedWindow.Close();
+            await reopenedRuntime.StopAsync();
+        }
+        if (reopenedWorkspace.Ingest(messages[3], pinned, MessageOrigin.History, "synthetic-cache-replay", DateTimeOffset.UtcNow)
+            || store.Find(messages[3].Key) is not null || reopenedWorkspace.ProcessPending(pinned, DateTimeOffset.UtcNow) != 0
+            || reopenedWorkspace.Snapshot(DateTimeOffset.UtcNow).Items.Count != reopened.Items.Count
+            || reopenedWorkspace.Snapshot(DateTimeOffset.UtcNow).CacheCleanup != result)
+            throw new InvalidOperationException("重读已清理的旧消息重新入库、生成事项或改写了清理结果。");
+        runtime.Refresh();
+        await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
+        await WaitAsync(window, "document.querySelector('#cache-cleanup-result')?.textContent.includes('实际删除 1 条') === true");
     }
 
     private static async Task CheckCrossGroupMergeSuggestionsAsync(AppWindow window, AccountWorkspace workspace,

@@ -33,11 +33,13 @@ let filters = { search: '', course: '', state: 'active' }, detailSignature = '',
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
 let manualOpen = false, structureOpen = null, mergedSourceId = null;
 const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), structureDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
+const cacheCleanupErrors = new Map();
 const bridge = window.chrome?.webview;
 const uuid = () => crypto.randomUUID();
 const items = () => snapshot?.items || [];
 const selected = () => items().find(item => item.id === selectedId);
 const loadedAccount = () => typeof snapshot?.accountId === 'string' && Boolean(snapshot.accountId.trim());
+const cacheCleanupBusyKey = accountId => `${accountId}/cache-cleanup`;
 const manualDraft = () => manualDrafts.get(snapshot?.accountId);
 const structureKey = (accountId, id, mode) => `${accountId}/${id}/${mode}`;
 const structureDraft = () => structureOpen && structureOpen.accountId === snapshot?.accountId ? structureDrafts.get(structureOpen.draftKey) : null;
@@ -86,11 +88,20 @@ function toast(message) {
   clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false;
   toastTimer = setTimeout(() => { $('toast').hidden = true; }, 3500);
 }
+function setCacheCleanupError(accountId, message, startedAt = Date.now(), incomingCleanup = null) {
+  const previous = snapshot?.cacheCleanup?.accountId === accountId ? Date.parse(snapshot.cacheCleanup.completedAt) : 0;
+  const incoming = incomingCleanup?.accountId === accountId ? Date.parse(incomingCleanup.completedAt) : 0;
+  cacheCleanupErrors.set(accountId, { message, afterCompletedAt: Math.max(previous || 0, incoming || 0) || startedAt });
+}
 function request(operation, parameters, itemId = null) {
-  if (!bridge) { hostError = errorLabel('bridge_unavailable'); renderStatus(); return; }
-  const id = uuid();
+  if (!bridge) {
+    if (operation === 'clean-cache') { setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable')); renderSettings(); }
+    else { hostError = errorLabel('bridge_unavailable'); renderStatus(); }
+    return;
+  }
+  const id = uuid(), startedAt = Date.now();
   const structural = structureOperations.includes(operation);
-  const busyKey = structural ? structureBusyKey(parameters.accountId, itemId) : itemId;
+  const busyKey = operation === 'clean-cache' ? cacheCleanupBusyKey(parameters.accountId) : structural ? structureBusyKey(parameters.accountId, itemId) : itemId;
   if (busyKey) busy.add(busyKey);
   const structureDraftKey = structural ? structureOpen?.accountId === parameters.accountId && structureOpen.id === itemId ? structureOpen.draftKey : structureKey(parameters.accountId, itemId, operation === 'split-task' ? 'split' : 'merge') : null;
   const timer = setTimeout(() => {
@@ -101,7 +112,9 @@ function request(operation, parameters, itemId = null) {
       if (draft?.operationId === pending.structureOperationId) { draft.unconfirmed = true; draft.error = '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。'; }
     } else requests.delete(id);
     releaseBusy(pending);
-    if (pending.structural) { /* Retain the request so a late response can confirm this operation. */ }
+    if (pending.operation === 'clean-cache') {
+      if (pending.accountId === snapshot?.accountId) setCacheCleanupError(pending.accountId, '清理结果尚未确认，请刷新核对最近成功记录后再试。', pending.startedAt);
+    } else if (pending.structural) { /* Retain the request so a late response can confirm this operation. */ }
     else if (pending.operation === 'create-task') {
       const draft = manualDrafts.get(pending.accountId);
       if (draft?.id === pending.itemId) { draft.unconfirmed = true; draft.error = '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。'; }
@@ -110,15 +123,17 @@ function request(operation, parameters, itemId = null) {
     render();
   }, 15000);
   const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen?.draftKey } : null;
-  requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, structural, structureDraftKey, structureOperationId: parameters.operationId });
+  requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, structural, structureDraftKey, structureOperationId: parameters.operationId, startedAt });
   try { bridge.postMessage({ id, operation, parameters }); }
   catch {
     clearTimeout(timer); requests.delete(id); if (busyKey) busy.delete(busyKey);
-    if (structural && structureDrafts.get(structureDraftKey)) structureDrafts.get(structureDraftKey).error = errorLabel('bridge_unavailable');
+    if (operation === 'clean-cache') setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable'), startedAt);
+    else if (structural && structureDrafts.get(structureDraftKey)) structureDrafts.get(structureDraftKey).error = errorLabel('bridge_unavailable');
     else if (operation === 'create-task' && manualDraft()?.id === itemId) manualDraft().error = errorLabel('bridge_unavailable');
     else hostError = errorLabel('bridge_unavailable');
   }
   updateDetailControls(); renderStatus();
+  if (operation === 'clean-cache' && page === 'settings') renderSettings();
 }
 function command(operation, item, extra = {}) {
   if (!snapshot || !item || busy.has(item.id)) return;
@@ -176,6 +191,10 @@ function receive(message) {
       render();
       return;
     }
+    if (pending.operation === 'clean-cache') {
+      if (pending.accountId !== snapshot?.accountId || message.snapshot && message.snapshot.accountId !== pending.accountId) { render(); return; }
+      if (!message.success) setCacheCleanupError(pending.accountId, errorLabel(message.error), pending.startedAt, message.snapshot?.cacheCleanup);
+    }
     if (pending.structural) {
       const draft = structureDrafts.get(pending.structureDraftKey);
       pending.openStructure = structureOpen && pending.structureDraftKey === structureOpen.draftKey && selectedId === pending.itemId;
@@ -212,7 +231,7 @@ function receive(message) {
       }
       if (pending.accountId !== snapshot?.accountId) { render(); return; }
     }
-    if (pending.structural) { /* The operation's own draft carries its error and retry state. */ }
+    if (pending.structural || pending.operation === 'clean-cache') { /* Each operation carries its own error without changing the current editor. */ }
     else if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
       else if (pending.operation === 'create-task') { /* Keep the account's manual draft for retry. */ }
@@ -238,6 +257,9 @@ function receive(message) {
     const incoming = message.snapshot;
     const older = snapshot && Date.parse(incoming.generatedAt) < Date.parse(snapshot.generatedAt);
     if (!older) {
+      const cleanupError = cacheCleanupErrors.get(incoming.accountId);
+      if (cleanupError && !incoming.cacheCleanupError && incoming.cacheCleanup?.accountId === incoming.accountId
+        && Date.parse(incoming.cacheCleanup.completedAt) > cleanupError.afterCompletedAt) cacheCleanupErrors.delete(incoming.accountId);
       if (snapshot && snapshot.accountId !== incoming.accountId) {
         drafts.clear(); groupDrafts.clear(); readAttempts.clear(); selectedId = null; initialized = false;
         manualOpen = false; structureOpen = null; mergedSourceId = null; detailError = null;
@@ -257,6 +279,7 @@ function receive(message) {
     toast({ 'merge-tasks': '重复事项已合并', 'split-task': '已拆出关联事项', 'keep-separate': '已保留为独立事项' }[pending.operation]);
     if (pending.openStructure) { openItem({ accountId: pending.accountId, id: pending.itemId }); return; }
   }
+  if (pending?.operation === 'clean-cache' && message.success && snapshot?.cacheCleanup?.accountId === pending.accountId) toast(`消息缓存清理完成，实际删除 ${snapshot.cacheCleanup.deletedMessages} 条。`);
   if (pending?.operation === 'snapshot' && message.success && pending.refreshTarget && pending.refreshTarget.accountId === snapshot?.accountId) {
     const item = items().find(item => item.id === pending.refreshTarget.id), draft = item && drafts.get(item.id);
     if (item?.kind === 'task' && draft) draft.version = item.version;
@@ -595,11 +618,15 @@ function updateDetailControls() {
 }
 function renderSettings() {
   const pinnedGroups = (snapshot?.groups || []).filter(group => group.pinned);
-  const signature = JSON.stringify([pinnedGroups, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
+  const cleanup = snapshot?.cacheCleanup?.accountId === snapshot?.accountId ? snapshot.cacheCleanup : null;
+  const cleanupError = cacheCleanupErrors.get(snapshot?.accountId)?.message || snapshot?.cacheCleanupError || '';
+  const cleanupBusy = busy.has(cacheCleanupBusyKey(snapshot?.accountId));
+  const signature = JSON.stringify([snapshot?.accountId, pinnedGroups, cleanup, cleanupError, cleanupBusy, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
   if (signature === settingsSignature) return;
   retainFocus($('settings-panel'), () => {
     $('settings-panel').innerHTML = `<section class="settings-section"><h2>界面</h2><div class="setting-row"><span>主题</span><select id="theme-setting"><option value="system">跟随 Windows</option><option value="light">浅色</option><option value="dark">深色</option></select></div><div class="setting-row"><span>动画</span><select id="motion-setting"><option value="system">跟随系统</option><option value="reduce">减少动画</option></select></div></section>
       <section class="settings-section"><h2>启动</h2><div class="setting-row"><span>登录 Windows 后自动启动</span><select id="autostart-setting"><option value="on">开启</option><option value="off">关闭</option></select></div><p class="hint">开启后登录 Windows 时在托盘后台运行，桌面卡片继续显示。</p></section>
+      <section class="settings-section"><h2>清理消息缓存</h2><p>仅清理最近 7 天分析窗口之外、已处理且没有保留引用的临时消息。任务、待确认、普通通知的原始证据和处理记录长期保留；未处理消息及其引用也会保留。</p><p id="cache-cleanup-result">${cleanup ? `最近成功清理：${html(syncTimeLabel(cleanup.completedAt, '时间待确认'))} · 实际删除 ${html(cleanup.deletedMessages)} 条消息。` : '尚无成功清理记录。'}</p><p id="cache-cleanup-error" class="hint" role="alert" ${cleanupError ? '' : 'hidden'}>${html(cleanupError)}</p><button class="button small" data-action="clean-cache" ${!loadedAccount() || cleanupBusy ? 'disabled' : ''}>${cleanupBusy ? '正在清理…' : '清理消息缓存'}</button></section>
       <section class="settings-section"><h2>课程与置顶群</h2><p>按真实置顶群名称确认课程；无需先填写课程名单。关联变更用于新消息，已有待确认仍需逐项核对。</p>
       ${pinnedGroups.length ? pinnedGroups.map(group => {
         if (!groupDrafts.has(group.groupId)) groupDrafts.set(group.groupId, group.course || group.suggestedCourse || '');
@@ -718,6 +745,11 @@ document.addEventListener('click', event => {
   }
   if (action === 'select') { manualOpen = false; structureOpen = null; mergedSourceId = null; selectedId = button.dataset.id; detailError = null; render(); return; }
   if (action === 'refresh' || action === 'refresh-edit' || action === 'refresh-structure') { hostError = ''; request('snapshot', {}); return; }
+  if (action === 'clean-cache') {
+    if (!loadedAccount() || busy.has(cacheCleanupBusyKey(snapshot.accountId))) return;
+    cacheCleanupErrors.delete(snapshot.accountId);
+    request('clean-cache', { accountId: snapshot.accountId, id: 'cache', operationId: uuid(), version: 0 }, 'cache'); return;
+  }
   if (action === 'open-related') { openItem({ accountId: snapshot.accountId, id: button.dataset.id }); return; }
   if (action === 'view-merged-source') { mergedSourceId = button.dataset.id; render(); return; }
   if (action === 'close-structure') {

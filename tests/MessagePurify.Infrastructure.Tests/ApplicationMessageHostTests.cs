@@ -29,6 +29,80 @@ public sealed class ApplicationMessageHostTests : IDisposable
     }
 
     [Fact]
+    public async Task CompletedBatchAutomaticallyCleansOldTemporaryMessages()
+    {
+        await using var server = new LoopbackOneBotServer
+        { EmitHistoryEvents = false, HistoryResponder = (_, _) => (0, BoundaryHistory()) };
+        var workspace = Workspace();
+        var old = new SchoolMessage(new(Account, First, "old-chat"), "teacher", DateTimeOffset.UtcNow.AddDays(-10),
+            [new(SegmentKind.Text, "大家早上好")]);
+        workspace.Ingest(old, new HashSet<string> { First }, MessageOrigin.History, "prior", DateTimeOffset.UtcNow);
+        var host = new NapCatMessageHost(workspace, server.Url);
+
+        await ObserveAsync(host, () => host.Status.History == "complete");
+
+        Assert.Null(Messages().Find(old.Key));
+        Assert.Equal(1, JsonSerializer.SerializeToElement(workspace.Snapshot(DateTimeOffset.UtcNow))
+            .GetProperty("CacheCleanup").GetProperty("DeletedMessages").GetInt32());
+        Assert.NotNull(host.Status.LastSuccessfulSyncAt);
+    }
+
+    [Fact]
+    public async Task CleanupFailureIsSeparateFromSuccessfulHistorySync()
+    {
+        await using var server = new LoopbackOneBotServer
+        { EmitHistoryEvents = false, HistoryResponder = (_, _) => (0, BoundaryHistory()) };
+        var workspace = Workspace();
+        var old = new SchoolMessage(new(Account, First, "old-chat"), "teacher", DateTimeOffset.UtcNow.AddDays(-10),
+            [new(SegmentKind.Text, "大家早上好")]);
+        workspace.Ingest(old, new HashSet<string> { First }, MessageOrigin.History, "prior", DateTimeOffset.UtcNow);
+        using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = Messages().DatabasePath }.ToString()))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE messages SET message_json = 'invalid-json' WHERE message_id = 'old-chat';";
+            command.ExecuteNonQuery();
+        }
+        var host = new NapCatMessageHost(workspace, server.Url);
+
+        var observed = await ObserveAsync(host, () => host.Status.History == "complete");
+
+        Assert.Equal("connected", observed.Transport);
+        Assert.NotNull(observed.LastSuccessfulSyncAt);
+        Assert.Null(observed.Error);
+        Assert.False(string.IsNullOrWhiteSpace(JsonSerializer.SerializeToElement(workspace.Snapshot(DateTimeOffset.UtcNow))
+            .GetProperty("CacheCleanupError").GetString()));
+        Assert.Equal(1, StoredCount());
+    }
+
+    [Fact]
+    public async Task GamePauseDefersCleanupUntilResumedBatchCompletes()
+    {
+        await using var server = new LoopbackOneBotServer
+        { EmitHistoryEvents = false, HistoryResponder = (_, _) => (0, BoundaryHistory()) };
+        var workspace = Workspace();
+        var old = new SchoolMessage(new(Account, First, "old-chat"), "teacher", DateTimeOffset.UtcNow.AddDays(-10),
+            [new(SegmentKind.Text, "大家早上好")]);
+        workspace.Ingest(old, new HashSet<string> { First }, MessageOrigin.History, "prior", DateTimeOffset.UtcNow);
+        var detector = new MutableGameDetector { Active = true };
+        var controller = new ResidentSyncController(detector);
+        controller.Request(new(SyncRequestKind.Scheduled, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        var host = new NapCatMessageHost(workspace, server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+        var running = host.RunAsync(cancellation.Token);
+        try
+        {
+            await UntilAsync(() => host.Status.Transport == "connected" && host.Status.Receiving == "paused");
+            Assert.NotNull(Messages().Find(old.Key));
+            Assert.Empty(server.HistoryParameters);
+            detector.Active = false;
+            await UntilAsync(() => host.Status.History == "complete");
+            Assert.Null(Messages().Find(old.Key));
+        }
+        finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+
+    [Fact]
     public async Task ResidentHostKeepsConnectionIdleUntilScheduledRequestThenRunsOneBatch()
     {
         await using var server = new LoopbackOneBotServer

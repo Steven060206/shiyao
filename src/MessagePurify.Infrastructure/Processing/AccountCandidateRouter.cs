@@ -10,7 +10,7 @@ using Microsoft.Data.Sqlite;
 namespace MessagePurify.Infrastructure.Processing;
 
 /// <summary>将消息的首轮提取结果分流，单条消息的全部结果与回执原子提交。</summary>
-public sealed class AccountCandidateRouter
+public sealed partial class AccountCandidateRouter
 {
     private readonly AccountMessageStore messages;
     private readonly AccountTaskStore tasks;
@@ -345,6 +345,11 @@ public sealed class AccountCandidateRouter
             schema.ExecuteNonQuery();
         }
         CheckStore(connection, transaction, "main", messages.AccountId);
+        using (var cleanup = Command(connection, transaction, """
+            CREATE TABLE IF NOT EXISTS cache_cleanup_result(
+                id INTEGER PRIMARY KEY CHECK(id=1), record_json TEXT NOT NULL);
+            """))
+            cleanup.ExecuteNonQuery();
         transaction.Commit();
     }
 

@@ -69,6 +69,11 @@ const mockScript = `(() => {
     if (backend.failNext && command.operation !== 'snapshot' && command.operation !== 'mark-read') {
       const error=backend.failNext;backend.failNext=null;backend.emit({id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
     }
+    if(command.operation==='clean-cache') {
+      backend.snapshot.cacheCleanup={accountId:parameters.accountId,completedAt:'2026-10-13T02:30:00Z',cutoff:'2026-10-06T02:30:00Z',deletedMessages:backend.cleanupDeleted ?? 12,retainedOldMessages:3,remainingMessages:15};
+      backend.snapshot.cacheCleanupError=null;backend.snapshot.generatedAt=new Date().toISOString();
+      backend.emit({id:command.id,success:true,snapshot:backend.snapshot,status:backend.status});return;
+    }
     const item=backend.snapshot?.items.find(item=>item.id===parameters.id);
     if(['merge-tasks','split-task','keep-separate'].includes(command.operation)) {
       const saved=backend.structureRequests[parameters.operationId];
@@ -1152,6 +1157,109 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelector("#merge-task-form [name=titleTaskId]").disabled'),false);
       await click('[data-action=keep-separate]');const saved=await evaluate('backend.messages.filter(message=>message.operation==="keep-separate").at(-1)');
       assert.equal(saved.parameters.accountId,'67890');assert.notEqual(saved.parameters.operationId,first.parameters.operationId);
+    });
+    await t.test('消息缓存设置说明最近七天窗口、长期证据及处理记录，按实际结果显示北京时间',async()=>{
+      const cleanup={accountId:'12345',completedAt:'2026-10-13T02:30:00Z',cutoff:'2026-10-06T02:30:00Z',deletedMessages:12,retainedOldMessages:3,remainingMessages:15};
+      await push({...structuredClone(fixture),cacheCleanup:cleanup,cacheCleanupError:null});await nav('settings');
+      assert.equal(await evaluate('!!document.querySelector("[data-action=clean-cache]")'),true);
+      assert.match(await evaluate('document.querySelector("#settings-panel").textContent'),/最近\s*7\s*天/);
+      assert.match(await evaluate('document.querySelector("#settings-panel").textContent'),/证据.*处理记录.*长期保留/);
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/2026-10-13 10:30/);
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/实际删除.*12.*条/);
+      assert.doesNotMatch(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/释放.*磁盘|图片已清理/);
+    });
+    await t.test('清理入口在没有账号时禁用，使用当前账号和固定缓存ID，忙碌时阻止重复提交',async()=>{
+      await push({...structuredClone(fixture),accountId:'',cacheCleanup:null,cacheCleanupError:null});await nav('settings');
+      assert.equal(await evaluate('document.querySelector("[data-action=clean-cache]").disabled'),true);
+      await push({...structuredClone(fixture),cacheCleanup:null,cacheCleanupError:null});await nav('settings');
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/尚无成功清理/);
+      await evaluate('backend.hold=true');await click('[data-action=clean-cache]');
+      const command=await evaluate('backend.messages.filter(message=>message.operation==="clean-cache").at(-1)');
+      assert.deepEqual(command.parameters,{accountId:'12345',id:'cache',operationId:command.parameters.operationId,version:0});
+      assert.match(command.parameters.operationId,/\S/);
+      assert.equal(await evaluate('document.querySelector("[data-action=clean-cache]").disabled'),true);
+      assert.match(await evaluate('document.querySelector("[data-action=clean-cache]").textContent'),/正在清理/);
+      const count=await evaluate('backend.messages.filter(message=>message.operation==="clean-cache").length');await click('[data-action=clean-cache]');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="clean-cache").length'),count);
+      await evaluate('backend.release()');
+      assert.equal(await evaluate('document.querySelector("[data-action=clean-cache]").disabled'),false);
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/实际删除.*12.*条/);
+    });
+    await t.test('清理失败保留上次成功记录、课程草稿及焦点，重试成功清除独立错误',async()=>{
+      await nav('settings');await change('[data-group-id="100"] input[name=course]','清理时的课程草稿');
+      await evaluate('document.querySelector("[data-group-id=\\"100\\"] input[name=course]").focus();backend.failNext="本地消息缓存清理失败，原数据已保留。"');
+      await click('[data-action=clean-cache]');
+      assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),false);
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-error").textContent'),/清理失败/);
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/实际删除.*12.*条/);
+      assert.equal(await evaluate('document.querySelector("[data-group-id=\\"100\\"] input[name=course]").value'),'清理时的课程草稿');
+      assert.equal(await evaluate('document.activeElement.name'),'course');
+      await click('[data-action=clean-cache]');assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),true);
+    });
+    await t.test('清理超时释放按钮并保留结果，迟到响应不覆盖后续成功清理',async()=>{
+      await evaluate('window.originalCacheSetTimeout=window.setTimeout;window.setTimeout=(handler,ms,...args)=>{const id=window.originalCacheSetTimeout(handler,ms,...args);if(ms===15000)window.cacheTimeout={handler,id};return id;};backend.hold=true');
+      try {
+        await click('[data-action=clean-cache]');const late=await evaluate('backend.messages.filter(message=>message.operation==="clean-cache").at(-1)');
+        await evaluate('clearTimeout(window.cacheTimeout.id);window.cacheTimeout.handler()');
+        assert.equal(await evaluate('document.querySelector("[data-action=clean-cache]").disabled'),false);
+        assert.match(await evaluate('document.querySelector("#cache-cleanup-error").textContent'),/尚未确认|暂未响应/);
+        assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/实际删除.*12.*条/);
+        await evaluate('backend.held=[];backend.hold=false;backend.cleanupDeleted=0');await click('[data-action=clean-cache]');
+        assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/实际删除.*0.*条/);
+        const stale={...structuredClone(fixture),generatedAt:'2099-01-01T00:00:00Z',cacheCleanup:{accountId:'12345',completedAt:'2099-01-01T00:00:00Z',deletedMessages:999}};
+        await evaluate(`backend.emit({id:${JSON.stringify(late.id)},success:true,snapshot:${JSON.stringify(stale)}})`);
+        assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/实际删除.*0.*条/);
+        assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),true);
+      }finally{await evaluate('window.setTimeout=window.originalCacheSetTimeout;backend.cleanupDeleted=12;backend.release()');}
+    });
+    await t.test('旧账号清理响应不切换新账号或占用按钮，清理结果不清除当前任务编辑草稿',async()=>{
+      await push({...structuredClone(fixture),cacheCleanup:null,cacheCleanupError:null});await nav('tasks');await select('task1');await change('#time-form [name=title]','清理后保留的编辑草稿');await nav('settings');
+      await evaluate('backend.hold=true');await click('[data-action=clean-cache]');await nav('tasks');await select('task1');
+      await evaluate('document.querySelector("#time-form [name=title]").focus();document.querySelector("#time-form [name=title]").setSelectionRange(1,3);backend.release()');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'),'清理后保留的编辑草稿');
+      assert.equal(await evaluate('document.activeElement.name'),'title');assert.equal(await evaluate('document.activeElement.selectionStart'),1);
+      await nav('settings');await evaluate('backend.hold=true');await click('[data-action=clean-cache]');
+      const late=await evaluate('backend.messages.filter(message=>message.operation==="clean-cache").at(-1)');
+      const accountB={...structuredClone(fixture),accountId:'67890',cacheCleanup:null,cacheCleanupError:'本次自动清理失败，原数据已保留。'};
+      await push(accountB);await nav('settings');assert.equal(await evaluate('document.querySelector("[data-action=clean-cache]").disabled'),false);
+      await change('[data-group-id="100"] input[name=course]','新账号课程草稿');
+      await evaluate(`backend.held=backend.held.filter(message=>message.id!==${JSON.stringify(late.id)});backend.emit({id:${JSON.stringify(late.id)},success:true,snapshot:${JSON.stringify({...fixture,generatedAt:'2099-01-01T00:00:00Z',cacheCleanup:{accountId:'12345',deletedMessages:888}})}});backend.release()`);
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/尚无成功清理/);
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-error").textContent'),/自动清理失败/);
+      assert.equal(await evaluate('document.querySelector("[data-group-id=\\"100\\"] input[name=course]").value'),'新账号课程草稿');
+      await click('[data-action=clean-cache]');assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="clean-cache").at(-1).parameters.accountId'),'67890');
+    });
+    await t.test('手动清理失败后新的自动成功清除本地错误，重复上次成功记录保留新错误',async()=>{
+      const previous={accountId:'12345',completedAt:new Date(Date.now()-60000).toISOString(),deletedMessages:4};
+      const current={...structuredClone(fixture),cacheCleanup:previous,cacheCleanupError:null};
+      await push(current);await nav('settings');await evaluate('backend.failNext="本地消息缓存清理失败，原数据已保留。"');await click('[data-action=clean-cache]');
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-error").textContent'),/清理失败/);
+      await push(current);assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),false,'重复旧成功结果不能清除新错误');
+      const completed={...current,cacheCleanup:{...previous,completedAt:new Date(Date.now()+1000).toISOString(),deletedMessages:5}};
+      await push(completed);
+      assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),true,'新的自动成功应清除对应账号本地错误');
+      assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/实际删除.*5.*条/);
+    });
+    await t.test('清理超时错误只由本账号请求之后的新成功解除，过期快照和另一账号结果不能解除',async()=>{
+      const current={...structuredClone(fixture),cacheCleanup:null,cacheCleanupError:null};
+      await push(current);await nav('settings');
+      await evaluate('window.originalCacheRecoverySetTimeout=window.setTimeout;window.setTimeout=(handler,ms,...args)=>{const id=window.originalCacheRecoverySetTimeout(handler,ms,...args);if(ms===15000)window.cacheRecoveryTimeout={handler,id};return id;};backend.hold=true');
+      try {
+        await click('[data-action=clean-cache]');await evaluate('clearTimeout(window.cacheRecoveryTimeout.id);window.cacheRecoveryTimeout.handler();backend.held=[];backend.hold=false');
+        const newer={accountId:'12345',completedAt:new Date(Date.now()+2000).toISOString(),deletedMessages:6};
+        await evaluate(`backend.emit({type:'state',snapshot:${JSON.stringify({...current,generatedAt:'2000-01-01T00:00:00Z',cacheCleanup:newer})}})`);
+        assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),false,'过期快照不能清除错误');
+        await push({...current,cacheCleanup:{...newer,accountId:'67890'}});
+        assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),false,'另一账号的清理结果不能清除错误');
+        await push({...current,accountId:'67890',cacheCleanup:{...newer,accountId:'67890'}});await nav('settings');
+        assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),true);
+        await push(current);await nav('settings');
+        assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),false,'账号切换不会删除原账号错误');
+        await push({...current,cacheCleanup:{...newer,completedAt:new Date(Date.now()-60000).toISOString()}});
+        assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),false,'请求之前的成功不能解除结果未知');
+        await push({...current,cacheCleanup:newer});
+        assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),true);
+      }finally{await evaluate('window.setTimeout=window.originalCacheRecoverySetTimeout;backend.release()');}
     });
     assert.deepEqual(browserErrors, []);
   } finally {

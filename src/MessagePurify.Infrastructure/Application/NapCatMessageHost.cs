@@ -192,6 +192,20 @@ public sealed class NapCatMessageHost
                     if (workspace.ProcessPending(state.Pins, DateTimeOffset.UtcNow,
                             syncController is null ? null : () => syncController.CanSync) > 0) DataChanged?.Invoke();
                     EnsureSyncAllowed();
+                    try
+                    {
+                        workspace.CleanMessageCache(DateTimeOffset.UtcNow,
+                            () => !cancellationToken.IsCancellationRequested && syncController?.CanSync != false);
+                    }
+                    catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && syncController?.CanSync == false)
+                    { throw new SyncPausedException(); }
+                    catch (OperationCanceledException) { throw; }
+                    catch
+                    {
+                        // 清理错误由独立工作区状态呈现；已完成的消息同步仍按实际结果记录。
+                    }
+                    DataChanged?.Invoke();
+                    EnsureSyncAllowed();
                     state.HistoryRunning = false;
                     state.CompletedHistory = state.Failures.Count == 0 ? "complete" : "partial";
                     PublishConnected(state, completedBatch: true);

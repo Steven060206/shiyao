@@ -1,4 +1,5 @@
 using MessagePurify.Infrastructure.Reminders;
+using MessagePurify.Infrastructure.Processing;
 using MessagePurify.Infrastructure.Tasks;
 
 namespace MessagePurify.Infrastructure.Application;
@@ -14,7 +15,8 @@ public sealed record WorkspaceCommand(string AccountId, string Operation, string
 
 public sealed record ApplicationSnapshot(string AccountId, IReadOnlyList<ApplicationItem> Items,
     IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt,
-    IReadOnlyList<TaskReminderPlan> Reminders);
+    IReadOnlyList<TaskReminderPlan> Reminders, CacheCleanupResult? CacheCleanup = null,
+    string? CacheCleanupError = null);
 
 public sealed record ApplicationItem(string Id, string Kind, string Title, string? Course,
     string Group, string State, string? Due, string? Time, string TimeKind, int? Priority,

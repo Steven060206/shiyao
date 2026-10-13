@@ -43,7 +43,7 @@ test('OCR 后置且 QQ 只读边界保持为硬约束', () => {
   }
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /普通通知转任务已实现.*完整编辑已接入.*通过自动回归及 Native 合成验证/s);
-  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*手动合并.*拆分已接入.*跨群可能重复建议已接入.*下一项为缓存清理.*备份恢复.*桌面卡片恢复/s);
+  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*手动合并.*拆分已接入.*跨群可能重复建议已接入.*缓存清理.*(?:正在实施|已接入).*备份恢复.*桌面卡片恢复/s);
   assert.doesNotMatch(requirements.split('## 4. 图片辅助')[0], /下一项实现图片下载与 OCR 队列/);
 });
 
@@ -647,5 +647,26 @@ test('跨群重复建议要求人工核对并保留独立与拆分决定', () =>
   const plan = read('docs/superpowers/plans/2026-10-13-cross-group-merge.md');
   for (const term of ['a16ccea', 'merge-review', '双方 ID/版本', '不伪造普通', 'Native Smoke']) {
     assert.ok(plan.includes(term), `跨群建议计划缺少：${term}`);
+  }
+});
+
+test('消息缓存保留全部状态证据和递归引用，并区分合成验证及后期图片缓存', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
+    const content = read(file);
+    for (const term of ['原消息发送时刻', '全部状态待确认', '递归引用链', '路由回执', '实际删除', '清理消息缓存']) {
+      assert.ok(content.includes(term), `${file} 缺少缓存清理规则：${term}`);
+    }
+    assert.match(content, /图片.*(?:尚未接入|后期|后置)/s, file);
+    assert.match(content, /真实.*(?:后置|未操作|不操作)/s, file);
+  }
+  const plan = read('docs/superpowers/plans/2026-10-13-cache-cleanup.md');
+  for (const term of ['CleanMessageCache', 'HasRouted', '回滚', '7 天', 'Native']) {
+    assert.ok(plan.includes(term), `缓存清理计划缺少：${term}`);
+  }
+  for (const artifact of ['src/MessagePurify.Infrastructure/Processing/AccountCacheCleanup.cs',
+    'tests/MessagePurify.Infrastructure.Tests/CacheCleanupTests.cs',
+    'tests/MessagePurify.Infrastructure.Tests/CacheCleanupWorkspaceTests.cs',
+    'tests/MessagePurify.Windows.Tests/CacheCleanupBridgeTests.cs']) {
+    assert.ok(fs.statSync(path.join(root, artifact)).isFile(), artifact);
   }
 });
