@@ -11,6 +11,7 @@ try {
   const saved = JSON.parse(localStorage.getItem(preferencesKey));
   if (['system', 'light', 'dark'].includes(saved?.theme)) preferences.theme = saved.theme;
   if (['system', 'reduce'].includes(saved?.motion)) preferences.motion = saved.motion;
+  if (Number.isInteger(saved?.desktopTransparency) && saved.desktopTransparency >= 0 && saved.desktopTransparency <= 100) preferences.desktopTransparency = saved.desktopTransparency;
 } catch {}
 const systemTheme = matchMedia('(prefers-color-scheme:dark)');
 const systemMotion = matchMedia('(prefers-reduced-motion:reduce)');
@@ -22,7 +23,8 @@ applyPreferences();
 requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.dataset.ready = 'true'; }));
 function syncAppearance() {
   applyPreferences();
-  request('set-appearance', { theme: document.documentElement.dataset.theme, reducedMotion: preferences.motion === 'reduce' || systemMotion.matches, preferenceTheme: preferences.theme, preferenceMotion: preferences.motion });
+  request('set-appearance', { theme: document.documentElement.dataset.theme, reducedMotion: preferences.motion === 'reduce' || systemMotion.matches, preferenceTheme: preferences.theme, preferenceMotion: preferences.motion,
+    ...(Number.isInteger(preferences.desktopTransparency) ? { desktopTransparency: preferences.desktopTransparency } : {}) });
 }
 systemTheme.addEventListener('change', syncAppearance);
 systemMotion.addEventListener('change', syncAppearance);
@@ -283,6 +285,8 @@ function receive(message) {
   if (message.preferences && (!pending?.accountId || pending.accountId === snapshot?.accountId)) {
     if (['system', 'light', 'dark'].includes(message.preferences.theme)) preferences.theme = message.preferences.theme;
     if (['system', 'reduce'].includes(message.preferences.motion)) preferences.motion = message.preferences.motion;
+    if (message.preferences.desktopTransparency === null) delete preferences.desktopTransparency;
+    else if (Number.isInteger(message.preferences.desktopTransparency) && message.preferences.desktopTransparency >= 0 && message.preferences.desktopTransparency <= 100) preferences.desktopTransparency = message.preferences.desktopTransparency;
     try { localStorage.setItem(preferencesKey, JSON.stringify(preferences)); } catch { toast('界面偏好暂时无法保存。'); }
     syncAppearance();
   }
@@ -672,6 +676,7 @@ function renderSettings() {
   const result = backupResults.get(snapshot?.accountId), backupError = backupErrors.get(snapshot?.accountId) || '';
   const preview = backupPreview?.preview?.accountId === snapshot?.accountId ? backupPreview : null;
   const backingUp = backupBusy(), restoring = restoreLocked();
+  if (!restoring && $('desktop-transparency-setting')?.matches(':active')) return;
   const signature = JSON.stringify([snapshot?.accountId, generation(), pinnedGroups, cleanup, cleanupError, cleanupBusy, result, preview, backupError, backingUp, restoring, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
   if (signature === settingsSignature) return;
   retainFocus($('settings-panel'), () => {
@@ -687,6 +692,8 @@ function renderSettings() {
       <section class="settings-section"><h2>${status?.scheduled ? '同步状态' : '接收状态'}</h2><p>${html($('connection-status').textContent)} · ${html($('receiving-status').textContent)}</p>${status?.scheduled ? `<p>上次成功同步（本次运行）：<span id="last-successful-sync">${html(syncTimeLabel(status.lastSuccessfulSyncAt, '本次运行尚无成功同步'))}</span></p><p>下次计划同步：<span id="next-scheduled-sync">${html(syncTimeLabel(status.nextScheduledSyncAt, '计划时间待确认'))}</span></p><p class="hint">每日 08:00、12:00、20:00（北京时间）；游戏期间延后同步。</p>` : `<p>${html($('history-status').textContent)}</p>`}${status?.historyFailures?.length ? '<p>未完成历史读取：</p>' + status.historyFailures.map(failure => `<p>${html(pinnedGroups.find(group => group.groupId === failure.groupId)?.name || failure.groupId)} · ${html(errorLabel(failure.reason))}</p>`).join('') : ''}</section>
       <section class="settings-section"><h2>桌面卡片提醒</h2><p>通过桌面卡片提醒，不播放声音或发送系统通知。</p><p>任务与待确认使用两张常驻桌面卡片，普通群通知仍在通知列表查看。</p><p id="desktop-status">${desktop.state === 'attached' ? '两张桌面卡片已挂载。' : desktop.state === 'unavailable' ? '桌面卡片暂不可用，仍可在主界面查看任务和待确认。' : '桌面卡片正在等待挂载。'}</p></section>`;
     $('theme-setting').value = preferences.theme; $('motion-setting').value = preferences.motion; $('autostart-setting').value = startupEnabled ? 'on' : 'off';
+    const transparency = preferences.desktopTransparency ?? (document.documentElement.dataset.theme === 'dark' ? 20 : 13);
+    $('desktop-status').insertAdjacentHTML('beforebegin', `<div class="setting-row"><label for="desktop-transparency-setting">卡片底色透明度</label><div class="transparency-control"><input id="desktop-transparency-setting" type="range" min="0" max="100" step="1" value="${transparency}"><output id="desktop-transparency-value" for="desktop-transparency-setting">${transparency}%</output></div></div><p class="hint">0%为实色，100%为透明；文字不受影响。拖动卡片靠近另一张时自动吸附，拖离即可解除。</p>`);
     $('settings-panel').querySelectorAll('select,input').forEach(element => { element.disabled = restoring; });
     $('settings-panel').querySelectorAll('.group-setting button,[data-action=clean-cache]').forEach(button => { if (restoring) button.disabled = true; });
   });
@@ -750,6 +757,14 @@ function changeStructureField(element) {
 
 document.addEventListener('input', event => {
   const element = event.target;
+  if (element.id === 'desktop-transparency-setting') {
+    if (restoreLocked()) return;
+    preferences.desktopTransparency = Number(element.value);
+    $('desktop-transparency-value').value = `${element.value}%`;
+    syncAppearance();
+    try { localStorage.setItem(preferencesKey, JSON.stringify(preferences)); } catch { toast('界面偏好暂时无法保存'); }
+    return;
+  }
   if (element.id === 'search') { filters.search = element.value; render(); }
   const form = element.closest('form[data-id]');
   if (form && ['merge-task-form', 'split-task-form'].includes(form.id)) { changeStructureField(element); return; }
@@ -762,7 +777,7 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('change', event => {
   const element = event.target;
-  if (restoreLocked() && ['theme-setting', 'motion-setting', 'autostart-setting'].includes(element.id)) return;
+  if (restoreLocked() && ['theme-setting', 'motion-setting', 'autostart-setting', 'desktop-transparency-setting'].includes(element.id)) return;
   if (element.id === 'course-filter') { filters.course = element.value; render(); }
   else if (element.id === 'state-filter') { filters.state = element.value; render(); }
   else if (element.id === 'theme-setting' || element.id === 'motion-setting') {

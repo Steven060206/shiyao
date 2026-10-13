@@ -18,7 +18,7 @@ function fixture(t) {
     fs.rmSync(directory,{recursive:true,force:true});
   });
   const scripts = path.join(directory,'项目 根','packaging','app');
-  const published = path.join(directory,'项目 根','.tools','published','app-desktop-appearance');
+  const published = path.join(directory,'项目 根','.tools','published','app-card-controls');
   fs.mkdirSync(scripts,{recursive:true}); fs.mkdirSync(path.join(published,'ui'),{recursive:true});
   for (const name of ['Install-MessagePurifyShortcuts.ps1','Start-MessagePurify.ps1'])
     fs.copyFileSync(path.join(root,'packaging/app',name),path.join(scripts,name));

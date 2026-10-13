@@ -1352,6 +1352,30 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelector("#theme-setting").value'),'system');
       assert.equal(await evaluate('document.querySelector("#motion-setting").value'),'system');
     });
+    await t.test('透明度滑块即时同步、保存偏好，恢复旧备份时回到主题默认值', async () => {
+      await nav('settings');
+      assert.equal(await evaluate('document.querySelector("#desktop-transparency-setting").min'), '0');
+      assert.equal(await evaluate('document.querySelector("#desktop-transparency-setting").max'), '100');
+      await evaluate('document.querySelector("#desktop-transparency-setting").value=60;document.querySelector("#desktop-transparency-setting").dispatchEvent(new Event("input",{bubbles:true}))');
+      await waitFor('backend.appearance?.desktopTransparency===60');
+      assert.equal(await evaluate('document.querySelector("#desktop-transparency-value").value'), '60%');
+      assert.equal(await evaluate('JSON.parse(localStorage.getItem("message-purify-preferences")).desktopTransparency'), 60);
+      await evaluate('document.querySelector("#desktop-transparency-setting").scrollIntoView({block:"center"})');
+      const slider = await evaluate('(() => { const slider=document.querySelector("#desktop-transparency-setting");slider.dataset.dragCheck="active";const rect=slider.getBoundingClientRect();return {x:rect.x,y:rect.y,width:rect.width,height:rect.height}; })()');
+      await call('Input.dispatchMouseEvent', { type:'mousePressed', x:slider.x+slider.width*0.6, y:slider.y+slider.height/2, button:'left', clickCount:1 });
+      await call('Input.dispatchMouseEvent', { type:'mouseMoved', x:slider.x+slider.width*0.8, y:slider.y+slider.height/2, button:'left', buttons:1 });
+      await waitFor('backend.appearance.desktopTransparency > 70');
+      assert.equal(await evaluate('document.querySelector("#desktop-transparency-setting").dataset.dragCheck'), 'active');
+      const dragged = await evaluate('Number(document.querySelector("#desktop-transparency-setting").value)');
+      await call('Input.dispatchMouseEvent', { type:'mouseReleased', x:slider.x+slider.width*0.8, y:slider.y+slider.height/2, button:'left', clickCount:1 });
+      await change('#theme-setting', 'light');
+      assert.equal(await evaluate('backend.appearance.desktopTransparency'), dragged);
+      await evaluate('backend.emit({type:"state",preferences:{theme:"dark",motion:"reduce",desktopTransparency:35},snapshot:backend.snapshot})');
+      assert.equal(await evaluate('document.querySelector("#desktop-transparency-setting").value'), '35');
+      await evaluate('backend.emit({type:"state",preferences:{theme:"dark",motion:"reduce",desktopTransparency:null},snapshot:backend.snapshot})');
+      assert.equal(await evaluate('document.querySelector("#desktop-transparency-setting").value'), '20');
+      assert.equal(await evaluate('JSON.parse(localStorage.getItem("message-purify-preferences")).desktopTransparency ?? null'), null);
+    });
     assert.deepEqual(browserErrors, []);
   } finally {
     socket?.close(); browser.kill();

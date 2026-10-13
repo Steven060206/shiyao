@@ -20,7 +20,7 @@ public static class AppBridgeProtocol
     {
         "accountId", "id", "operationId", "version", "date", "time", "timeKind",
         "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled", "title", "priority",
-        "mergeWithId", "mergeWithVersion", "mergeSelection", "newItemId", "state", "evidenceIndexes", "generation", "motion", "previewId", "preferenceTheme", "preferenceMotion"
+        "mergeWithId", "mergeWithVersion", "mergeSelection", "newItemId", "state", "evidenceIndexes", "generation", "motion", "previewId", "preferenceTheme", "preferenceMotion", "desktopTransparency"
     };
 
     public static bool IsTrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -41,12 +41,14 @@ public static class AppBridgeProtocol
             if (operation == "set-appearance")
             {
                 var hasPreferences = parameters.TryGetProperty("preferenceTheme", out _);
-                if (parameters.EnumerateObject().Count() != (hasPreferences ? 4 : 2) || !Text(parameters, "theme", 8, out var theme)
+                var hasTransparency = parameters.TryGetProperty("desktopTransparency", out var transparency);
+                if (hasTransparency && !ValidTransparency(transparency)) return false;
+                if (parameters.EnumerateObject().Count() != (hasPreferences ? 4 : 2) + (hasTransparency ? 1 : 0) || !Text(parameters, "theme", 8, out var theme)
                     || theme is not ("light" or "dark") || !parameters.TryGetProperty("reducedMotion", out var motion)
                     || motion.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
                 if (hasPreferences && (!Text(parameters, "preferenceTheme", 8, out var preferenceTheme) || preferenceTheme is not ("system" or "light" or "dark")
                     || !Text(parameters, "preferenceMotion", 8, out var preferenceMotion) || preferenceMotion is not ("system" or "reduce"))) return false;
-                if (parameters.EnumerateObject().Any(p => p.Name is not ("theme" or "reducedMotion" or "preferenceTheme" or "preferenceMotion"))) return false;
+                if (parameters.EnumerateObject().Any(p => p.Name is not ("theme" or "reducedMotion" or "preferenceTheme" or "preferenceMotion" or "desktopTransparency"))) return false;
                 request = new(id, operation, parameters.Clone());
                 return true;
             }
@@ -67,7 +69,10 @@ public static class AppBridgeProtocol
                     "cancel-backup" => new[] { "accountId", "previewId" },
                     _ => new[] { "accountId" }
                 };
-                if (parameters.EnumerateObject().Count() != names.Length || parameters.EnumerateObject().Any(p => !names.Contains(p.Name))
+                var hasTransparency = parameters.TryGetProperty("desktopTransparency", out var transparency);
+                if (hasTransparency && (operation is not ("export-backup" or "restore-backup") || !ValidTransparency(transparency))) return false;
+                if (parameters.EnumerateObject().Count() != names.Length + (hasTransparency ? 1 : 0)
+                    || parameters.EnumerateObject().Any(p => !names.Contains(p.Name) && p.Name != "desktopTransparency")
                     || !Text(parameters, "accountId", 64, out var backupAccount) || backupAccount.Any(c => c is < '0' or > '9')) return false;
                 if (names.Contains("generation") && (!parameters.TryGetProperty("generation", out var generation)
                     || !generation.TryGetInt64(out var generationNumber) || generationNumber < 0)) return false;
@@ -77,7 +82,7 @@ public static class AppBridgeProtocol
                 request = new(id, operation, parameters.Clone());
                 return true;
             }
-            if (parameters.EnumerateObject().Any(p => p.Name is "motion" or "previewId" or "preferenceTheme" or "preferenceMotion")) return false;
+            if (parameters.EnumerateObject().Any(p => p.Name is "motion" or "previewId" or "preferenceTheme" or "preferenceMotion" or "desktopTransparency")) return false;
             if (parameters.TryGetProperty("generation", out var commandGeneration)
                 && (!commandGeneration.TryGetInt64(out var generationValue) || generationValue < 0)) return false;
             if (parameters.EnumerateObject().Any(p => p.Name is "theme" or "reducedMotion")) return false;
@@ -159,6 +164,9 @@ public static class AppBridgeProtocol
         catch (Exception exception) when (exception is JsonException or InvalidOperationException or FormatException)
         { return false; }
     }
+
+    private static bool ValidTransparency(JsonElement element) => element.ValueKind == JsonValueKind.Null
+        || element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out var value) && value is >= 0 and <= 100;
 
     private static bool UniqueObject(JsonElement element) => element.ValueKind == JsonValueKind.Object
         && element.EnumerateObject().Select(p => p.Name).Distinct(StringComparer.Ordinal).Count() == element.EnumerateObject().Count();

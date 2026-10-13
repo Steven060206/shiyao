@@ -5,6 +5,46 @@ namespace MessagePurify.Windows.Tests;
 
 public sealed class DesktopPlacementTests
 {
+    [Theory]
+    [InlineData(507, 107, 500, 100)]
+    [InlineData(507, 200, 500, 100)]
+    [InlineData(90, 107, 100, 100)]
+    [InlineData(305, 370, 300, 364)]
+    [InlineData(305, 30, 300, 36)]
+    public void NearbyCardsSnapToAllFourSidesWithoutResizing(double x, double y, double expectedX, double expectedY)
+    {
+        var moving = new DesktopRect(x, y, 200, 360);
+        Assert.Equal(moving with { X = expectedX, Y = expectedY }, DesktopPlacement.Snap(moving,
+            new(300, 100, 200, 400), 64, 264, [new(0, 0, 1200, 900)], 1));
+    }
+
+    [Theory]
+    [InlineData(525, 100)]
+    [InlineData(502, 600)]
+    [InlineData(350, 370)]
+    public void CardsAwayFromAnAlignedEdgeRemainFree(double x, double y)
+    {
+        var moving = new DesktopRect(x, y, 200, 300);
+        Assert.Equal(moving, DesktopPlacement.Snap(moving, new(300, 100, 200, 400),
+            300, 400, [new(0, 0, 1200, 900)], 1));
+    }
+
+    [Fact]
+    public void SnapDistanceScalesWithDpiAndUsesCompactVisibleHeight()
+    {
+        var moving = new DesktopRect(606, 594, 400, 400);
+        Assert.Equal(moving with { X = 600, Y = 580 }, DesktopPlacement.Snap(moving,
+            new(600, 252, 400, 720), 400, 328, [new(0, 0, 2400, 1800)], 2));
+    }
+
+    [Fact]
+    public void SnappingDoesNotMoveOrResizeCardsOutsideTheWorkArea()
+    {
+        var moving = new DesktopRect(100, 285, 200, 300);
+        Assert.Equal(moving, DesktopPlacement.Snap(moving, new(100, 100, 200, 200),
+            300, 200, [new(0, 0, 800, 590)], 1));
+    }
+
     [Fact]
     public void CardAlreadyInsideANegativeCoordinateMonitorKeepsItsPositionAndSize()
     {

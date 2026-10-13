@@ -65,3 +65,7 @@ body,.app,.sidebar,.topbar,.detail-pane,.confirmation-bar,.nav button,.count,.co
 @media(prefers-reduced-motion:reduce) { * { transition:none!important; }.button:hover,.task-row:hover { transform:none!important; box-shadow:none!important; } }
 [data-motion="reduce"] * { transition:none!important; }[data-motion="reduce"] .button:hover,[data-motion="reduce"] .task-row:hover { transform:none!important; box-shadow:none!important; }
 :root:not([data-ready]) * { transition:none!important; }
+
+.transparency-control { display:flex; align-items:center; gap:10px; }
+.transparency-control input[type="range"] { width:150px; padding:0; border:0; background:transparent; accent-color:var(--accent); cursor:pointer; }
+.transparency-control output { min-width:40px; text-align:right; font-variant-numeric:tabular-nums; color:var(--muted); }

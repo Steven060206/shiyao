@@ -7,6 +7,30 @@ namespace MessagePurify.Windows.Tests;
 public sealed class AppBridgeProtocolTests
 {
     [Theory]
+    [InlineData("0", true)]
+    [InlineData("60", true)]
+    [InlineData("100", true)]
+    [InlineData("null", true)]
+    [InlineData("-1", false)]
+    [InlineData("101", false)]
+    [InlineData("50.5", false)]
+    [InlineData("\"60\"", false)]
+    [InlineData("true", false)]
+    public void ValidatesDesktopTransparencyOnAppearanceAndBackup(string value, bool valid)
+    {
+        foreach (var command in new[]
+        {
+            "\"operation\":\"set-appearance\",\"parameters\":{\"theme\":\"dark\",\"reducedMotion\":false,",
+            "\"operation\":\"export-backup\",\"parameters\":{\"accountId\":\"123\",\"generation\":0,\"theme\":\"system\",\"motion\":\"system\",",
+            "\"operation\":\"restore-backup\",\"parameters\":{\"accountId\":\"123\",\"generation\":0,\"previewId\":\"preview\",\"theme\":\"system\",\"motion\":\"system\","
+        })
+            Assert.Equal(valid, AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl,
+                "{\"id\":\"opacity\"," + command + "\"desktopTransparency\":" + value + "}}", out _));
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, Command.Replace("\"version\":2",
+            "\"version\":2,\"desktopTransparency\":" + value), out _));
+    }
+
+    [Theory]
     [InlineData("light", false)]
     [InlineData("dark", true)]
     public void Parses_desktop_appearance_without_account(string theme, bool reducedMotion)

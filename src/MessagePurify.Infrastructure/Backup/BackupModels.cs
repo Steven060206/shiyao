@@ -1,7 +1,7 @@
 namespace MessagePurify.Infrastructure.Backup;
 
 public sealed record BackupApplicationSettings(bool AutoStartEnabled, string Theme, string Motion,
-    string? DesktopLayoutJson);
+    string? DesktopLayoutJson, int? DesktopTransparency = null);
 
 public sealed record BackupResult(string AccountId, string Path, DateTimeOffset CreatedAt,
     bool IsComplete, int MissingImageCount, int TaskCount, int ReviewCount, int NoticeCount,

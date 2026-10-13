@@ -79,8 +79,9 @@ internal static partial class SmokeCheck
             await WaitAsync(window, "document.querySelector('[data-action=export-backup]')?.disabled === false");
             await ChangeSettingAsync(window, "theme-setting", "dark");
             await ChangeSettingAsync(window, "motion-setting", "reduce");
+            await ChangeTransparencyAsync(window, "35");
             await desktop.RefreshAsync();
-            await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true));
+            await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true, 35));
             var baseline = workspace.Snapshot(DateTimeOffset.UtcNow);
             var baselineFingerprint = BackupFingerprint(dataRoot, workspace, baseline);
             var baselineSettings = File.ReadAllText(Path.Combine(dataRoot, "accounts", workspace.AccountId, "workspace-settings.json"));
@@ -119,6 +120,7 @@ internal static partial class SmokeCheck
             runtime.Refresh();
             await ChangeSettingAsync(window, "theme-setting", "light");
             await ChangeSettingAsync(window, "motion-setting", "system");
+            await ChangeTransparencyAsync(window, "70");
             await ChangeSettingAsync(window, "autostart-setting", "on");
             await WaitAsync(() => AppStartupPreferences.Load(dataRoot));
             var resize = FindThumb(desktop.TaskWindow);
@@ -158,7 +160,8 @@ internal static partial class SmokeCheck
             var preRestorePath = result.PreRestoreBackupPath ?? throw new InvalidDataException("恢复没有先生成自动备份。");
             using (var prepared = workspace.InspectBackup(preRestorePath))
                 if (prepared.Preview.TaskCount != exported.TaskCount + 1 || !prepared.ApplicationSettings.AutoStartEnabled
-                    || prepared.ApplicationSettings.Theme != "light" || prepared.ApplicationSettings.Motion != "system")
+                    || prepared.ApplicationSettings.Theme != "light" || prepared.ApplicationSettings.Motion != "system"
+                    || prepared.ApplicationSettings.DesktopTransparency != 70)
                     throw new InvalidDataException("恢复前自动备份没有保留新增事项及后改设置。");
             var preserved = ReadSyntheticBackup(preRestorePath, dataRoot, workspace.AccountId);
             if (preserved.Items.Single(item => item.Id == task.Id).Title != "恢复前临时修改"
@@ -170,7 +173,7 @@ internal static partial class SmokeCheck
             await WaitAsync(() => desktop.Snapshot?.Tasks.Count == restored.Items.Count(item => item.Kind == "task" && item.State == "active")
                 && desktop.Snapshot.Pending.Count == restored.Items.Count(item => item.Kind is "review" or "merge-review" && item.State == "pending")
                 && desktop.Layout == baselineLayout
-                && HasDesktopTheme(desktop.TaskWindow, true));
+                && HasDesktopTheme(desktop.TaskWindow, true, 35));
             await CheckStaleBackupCommandAsync(window, workspace, task, baselineGeneration);
             if (workspace.Ingest(imageMessage, pinned, MessageOrigin.History, "native-backup-replay", DateTimeOffset.UtcNow)
                 || new AccountMessageStore(dataRoot, workspace.AccountId).Find(imageKey)?.Message.Segments.Single(segment => segment.Kind == SegmentKind.Image).AssetId != "synthetic-not-downloaded-image")

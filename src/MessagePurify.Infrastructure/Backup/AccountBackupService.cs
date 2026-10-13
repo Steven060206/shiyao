@@ -240,7 +240,7 @@ public sealed class AccountBackupService
         var startup = ReadJson<StartupSettings>(Path.Combine(directory, "settings", "app-settings.json"));
         var preferences = ReadJson<InterfacePreferences>(Path.Combine(directory, "settings", "interface-preferences.json"));
         var settings = new BackupApplicationSettings(startup.AutoStartEnabled, preferences.Theme, preferences.Motion,
-            includeLayout ? File.ReadAllText(Path.Combine(directory, "settings", "desktop-layout.json")) : null);
+            includeLayout ? File.ReadAllText(Path.Combine(directory, "settings", "desktop-layout.json")) : null, preferences.DesktopTransparency);
         ValidateApplicationSettings(settings);
         var content = ValidateAccountDirectory(Path.Combine(directory, "account"), accountId);
         if (manifest.TaskCount != content.TaskCount || manifest.ReviewCount != content.ReviewCount || manifest.NoticeCount != content.NoticeCount ||
@@ -474,6 +474,7 @@ public sealed class AccountBackupService
     private static void ValidateApplicationSettings(BackupApplicationSettings settings)
     {
         if (settings.Theme is not ("system" or "light" or "dark") || settings.Motion is not ("system" or "reduce")) throw new InvalidDataException("备份界面偏好无效。");
+        if (settings.DesktopTransparency is < 0 or > 100) throw new InvalidDataException("备份桌面透明度无效。");
         if (settings.DesktopLayoutJson is { } layout)
         {
             var stored = JsonSerializer.Deserialize<DesktopLayout>(layout, Json) ?? throw new InvalidDataException("备份桌面布局为空。");
@@ -489,7 +490,7 @@ public sealed class AccountBackupService
         Directory.CreateDirectory(directory);
         // AppStartupPreferences 使用 PascalCase；页面偏好和桌面布局沿用 Web JSON。
         AtomicWrite(Path.Combine(directory, "app-settings.json"), JsonSerializer.Serialize(new StartupSettings(settings.AutoStartEnabled)));
-        WriteJson(Path.Combine(directory, "interface-preferences.json"), new InterfacePreferences(settings.Theme, settings.Motion));
+        WriteJson(Path.Combine(directory, "interface-preferences.json"), new InterfacePreferences(settings.Theme, settings.Motion, settings.DesktopTransparency));
         var layoutPath = Path.Combine(directory, "desktop-layout.json");
         if (settings.DesktopLayoutJson is { } layout) AtomicWrite(layoutPath, layout);
         else if (File.Exists(layoutPath)) File.Delete(layoutPath);
@@ -619,7 +620,7 @@ public sealed class AccountBackupService
         DateTimeOffset CreatedAt, bool IsComplete, int TaskCount, int ReviewCount, int NoticeCount, IReadOnlyList<FileEntry> Files, IReadOnlyList<ImageEvidence> Evidence);
     private sealed record AccountContent(int TaskCount, int ReviewCount, int NoticeCount, IReadOnlyList<ImageEvidence> Images);
     private sealed record StartupSettings(bool AutoStartEnabled);
-    private sealed record InterfacePreferences(string Theme, string Motion);
+    private sealed record InterfacePreferences(string Theme, string Motion, int? DesktopTransparency = null);
     private sealed record GroupRelationship(string Name, string? Course, bool Excluded);
     private sealed record WorkspaceSettings(string AccountId, Dictionary<string, GroupRelationship> Relationships, Dictionary<string, long> ReadVersions);
     private sealed record Rectangle(double X, double Y, double Width, double Height);

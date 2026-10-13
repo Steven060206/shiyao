@@ -15,7 +15,7 @@ test('正式入口已切最新版并保留真实登录与持续观察验收边�
     assert.match(content,/正式入口已切换到最新版/);
     assert.match(content,/拾要/);
     const currentEntry = content.slice(content.indexOf('正式入口已切换到最新版')).split('\n')[0];
-    assert.match(currentEntry,/\.tools\/published\/app-desktop-appearance\//);
+    assert.match(currentEntry,/\.tools\/published\/app-card-controls\//);
     assert.match(content,/app-desktop-recovery/);
     assert.match(content,/真实(?:Windows|登录).*自启动仍未验收/);
   }

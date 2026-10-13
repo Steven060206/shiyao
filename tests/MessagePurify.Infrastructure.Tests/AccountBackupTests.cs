@@ -69,6 +69,36 @@ public sealed class AccountBackupTests : IDisposable
         Assert.True(JsonNode.Parse(File.ReadAllText(Path.Combine(root, "interface-preferences.json")))!["theme"]!.GetValue<string>() == "dark");
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(0)]
+    [InlineData(60)]
+    [InlineData(100)]
+    public void DesktopTransparencySurvivesBackupRestoreAndPreRestoreProtection(int? transparency)
+    {
+        Seed();
+        var saved = Preferences with { DesktopTransparency = transparency };
+        Service().Export(Package, SettingsJson, saved, Now);
+        using var prepared = Service().Inspect(Package);
+        Assert.Equal(saved, prepared.ApplicationSettings);
+        var result = Service().Restore(prepared, SettingsJson, Preferences with { DesktopTransparency = 25 }, Now.AddDays(1));
+        var preferences = JsonNode.Parse(File.ReadAllText(Path.Combine(root, "interface-preferences.json")))!;
+        Assert.Equal(transparency, preferences["desktopTransparency"]?.GetValue<int>());
+        using var before = Service().Inspect(result.PreRestoreBackupPath!);
+        Assert.Equal(25, before.ApplicationSettings.DesktopTransparency);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(101)]
+    public void InvalidDesktopTransparencyIsRejectedBeforeCreatingABackup(int transparency)
+    {
+        Seed();
+        Assert.Throws<InvalidDataException>(() => Service().Export(Package, SettingsJson,
+            Preferences with { DesktopTransparency = transparency }, Now));
+        Assert.False(File.Exists(Package));
+    }
+
     [Fact]
     public void Export_UnavailableOriginalImageIsExplicitAndPreservesReference()
     {

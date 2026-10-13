@@ -23,7 +23,7 @@ public sealed class AppWindow : Window
     private bool backupBusy;
     private readonly InterfacePreferences? initialPreferences;
     private bool initialPreferencesSent;
-    private sealed record InterfacePreferences(string Theme, string Motion);
+    private sealed record InterfacePreferences(string Theme, string Motion, int? DesktopTransparency = null);
     private readonly DispatcherTimer updates = new() { Interval = TimeSpan.FromSeconds(1) };
     private int dirty = 1;
     private bool posting;
@@ -31,7 +31,7 @@ public sealed class AppWindow : Window
     private bool autoStartEnabled;
     public bool Exiting { get; set; }
     public TaskCompletionSource<bool> Ready { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    public event Action<string, bool>? AppearanceChanged;
+    public event Action<string, bool, int?>? AppearanceChanged;
     public object DesktopStatus { get; set; } = new { state = "waiting", error = (string?)null };
 
     public AppWindow(AppRuntime runtime, string dataRoot, bool hidden, bool registerStartup = true, IBackupFileDialogs? backupFileDialogs = null)
@@ -130,11 +130,13 @@ public sealed class AppWindow : Window
                 throw new InvalidOperationException("账号正在恢复，请等待结果后再操作。");
             if (request!.Operation == "set-appearance")
             {
+                var transparency = request.Parameters.TryGetProperty("desktopTransparency", out var value) && value.ValueKind != JsonValueKind.Null
+                    ? value.GetInt32() : (int?)null;
                 if (request.Parameters.TryGetProperty("preferenceTheme", out var preferenceTheme)
                     && (initialPreferences is null || initialPreferencesSent))
-                    SaveInterfacePreferences(new(preferenceTheme.GetString()!, request.Parameters.GetProperty("preferenceMotion").GetString()!));
+                    SaveInterfacePreferences(new(preferenceTheme.GetString()!, request.Parameters.GetProperty("preferenceMotion").GetString()!, transparency));
                 AppearanceChanged?.Invoke(request.Parameters.GetProperty("theme").GetString()!,
-                    request.Parameters.GetProperty("reducedMotion").GetBoolean());
+                    request.Parameters.GetProperty("reducedMotion").GetBoolean(), transparency);
                 Post(new { id = request.Id, success = true });
                 return;
             }
@@ -264,7 +266,8 @@ public sealed class AppWindow : Window
                     if (registerStartup) StartupRegistration.SetEnabled(restored.AutoStartEnabled);
                     autoStartEnabled = restored.AutoStartEnabled;
                 });
-                var restoredPreferences = new { theme = prepared.ApplicationSettings.Theme, motion = prepared.ApplicationSettings.Motion };
+                var restoredPreferences = new { theme = prepared.ApplicationSettings.Theme, motion = prepared.ApplicationSettings.Motion,
+                    desktopTransparency = prepared.ApplicationSettings.DesktopTransparency };
                 ReleaseBackupPreview();
                 var snapshot = await Task.Run(() => workspace.Snapshot(DateTimeOffset.UtcNow));
                 Post(new { id = request.Id, success = true, backupResult = result, snapshot, preferences = restoredPreferences, startupEnabled = autoStartEnabled, isRestoring = false });
@@ -278,7 +281,8 @@ public sealed class AppWindow : Window
     {
         var path = Path.Combine(dataRoot, "desktop-layout.json");
         return new(autoStartEnabled, parameters.GetProperty("theme").GetString()!, parameters.GetProperty("motion").GetString()!,
-            File.Exists(path) ? File.ReadAllText(path) : null);
+            File.Exists(path) ? File.ReadAllText(path) : null,
+            parameters.TryGetProperty("desktopTransparency", out var value) && value.ValueKind != JsonValueKind.Null ? value.GetInt32() : null);
     }
 
     private void ReleaseBackupPreview()
@@ -295,7 +299,8 @@ public sealed class AppWindow : Window
         {
             if (!File.Exists(path)) return null;
             var value = JsonSerializer.Deserialize<InterfacePreferences>(File.ReadAllText(path), JsonOptions);
-            return value is { Theme: "system" or "light" or "dark", Motion: "system" or "reduce" } ? value : null;
+            return value is { Theme: "system" or "light" or "dark", Motion: "system" or "reduce" }
+                && value.DesktopTransparency is not (< 0 or > 100) ? value : null;
         }
         catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException) { return null; }
     }

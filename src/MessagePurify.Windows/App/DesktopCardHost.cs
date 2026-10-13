@@ -33,6 +33,7 @@ public sealed class DesktopCardHost : IDisposable
     private nint parent;
     private double scale = 1;
     private string theme = "light";
+    private int? desktopTransparency;
     private bool refreshing, disposed;
     private int dirty = 1;
     private DateTimeOffset lastRefresh;
@@ -113,10 +114,12 @@ public sealed class DesktopCardHost : IDisposable
         watchedWindow = null;
     }
 
-    public void SetAppearance(string theme, bool reducedMotion)
+    public void SetAppearance(string theme, bool reducedMotion, int? desktopTransparency = null)
     {
+        if (desktopTransparency is < 0 or > 100) throw new ArgumentOutOfRangeException(nameof(desktopTransparency));
         // Cards do not animate; reduced motion therefore also applies without a second setting.
         this.theme = theme;
+        this.desktopTransparency = desktopTransparency;
         signature = null;
         OnChanged();
     }
@@ -154,9 +157,9 @@ public sealed class DesktopCardHost : IDisposable
             if (signature == nextSignature) return;
             signature = nextSignature;
             var generation = snapshot?.Generation ?? 0;
-            tasks!.Render(current, false, theme, operationError ?? layouts.Error, now,
+            tasks!.Render(current, false, theme, desktopTransparency, operationError ?? layouts.Error, now,
                 (account, item) => OpenAsync(account, item, generation, epoch), (account, item) => CompleteAsync(account, item, generation, epoch));
-            pending!.Render(current, true, theme, operationError ?? layouts.Error, now,
+            pending!.Render(current, true, theme, desktopTransparency, operationError ?? layouts.Error, now,
                 (account, item) => OpenAsync(account, item, generation, epoch), (account, item) => CompleteAsync(account, item, generation, epoch));
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
@@ -207,8 +210,8 @@ public sealed class DesktopCardHost : IDisposable
             scale = latest.Scale;
             attachedEnvironment = latest;
             var restored = layouts.Load(WorkAreas(), scale);
-            tasks = new("拾要 · 提醒事项", parent, scale, restored.Tasks, WorkAreas, () => SaveLayout(false), RequestRecovery);
-            pending = new("拾要 · 待确认", parent, scale, restored.Pending, WorkAreas, () => SaveLayout(true), RequestRecovery);
+            tasks = new("拾要 · 提醒事项", parent, scale, restored.Tasks, WorkAreas, bounds => MoveCard(bounds, false), () => SaveLayout(false), RequestRecovery);
+            pending = new("拾要 · 待确认", parent, scale, restored.Pending, WorkAreas, bounds => MoveCard(bounds, true), () => SaveLayout(true), RequestRecovery);
             if (!environment.IsAttached(tasks.Handle, parent) || !environment.IsAttached(pending.Handle, parent))
                 throw new InvalidOperationException("Desktop attachment changed during creation.");
             reloadLayout = false;
@@ -228,7 +231,23 @@ public sealed class DesktopCardHost : IDisposable
     private IReadOnlyList<DesktopRect> WorkAreas() => attachedEnvironment?.WorkAreas
         ?? throw new InvalidOperationException("Desktop work areas unavailable.");
 
-    private void SaveLayout(bool isPending)
+    internal void MoveCard(DesktopRect bounds, bool isPending)
+    {
+        if (runtime.IsRestoring) return;
+        var card = isPending ? pending : tasks;
+        if (card?.Alive == true) card.SetBounds(SnapBounds(bounds, isPending));
+    }
+
+    private DesktopRect SnapBounds(DesktopRect bounds, bool isPending)
+    {
+        var moving = isPending ? pending : tasks;
+        var anchor = isPending ? tasks : pending;
+        if (runtime.IsRestoring || moving?.Alive != true || anchor?.Alive != true || !anchor.IsVisible)
+            return DesktopPlacement.Fit(bounds, WorkAreas());
+        return DesktopPlacement.Snap(bounds, anchor.Bounds, moving.VisibleHeight, anchor.VisibleHeight, WorkAreas(), scale);
+    }
+
+    internal void SaveLayout(bool isPending)
     {
         if (runtime.IsRestoring) return;
         if (tasks?.Alive != true || pending?.Alive != true
@@ -350,9 +369,10 @@ public sealed class DesktopCardHost : IDisposable
         internal nint Handle { get; }
         internal DesktopRect Bounds { get; private set; }
         internal bool Alive => !closed && !disposed && DesktopNative.IsWindow(Handle);
+        internal double VisibleHeight => Math.Min(Bounds.Height, (frame.ActualHeight + frame.Margin.Top + frame.Margin.Bottom) * scale);
 
         public CardWindow(string title, nint parent, double scale, DesktopRect bounds,
-            Func<IReadOnlyList<DesktopRect>> workAreas, Action save, Action recover)
+            Func<IReadOnlyList<DesktopRect>> workAreas, Action<DesktopRect> move, Action save, Action recover)
         {
             this.parent = parent; this.scale = scale; this.workAreas = workAreas; this.save = save; this.recover = recover;
             Closed += (_, _) => closed = true;
@@ -407,8 +427,8 @@ public sealed class DesktopCardHost : IDisposable
                     Interact(() =>
                     {
                         var cursor = CursorInParent();
-                        SetBounds(DesktopPlacement.Fit(start with { X = start.X + cursor.X - initial.Value.X,
-                            Y = start.Y + cursor.Y - initial.Value.Y }, workAreas()));
+                        move(start with { X = start.X + cursor.X - initial.Value.X,
+                            Y = start.Y + cursor.Y - initial.Value.Y });
                     });
             };
             heading.MouseLeftButtonUp += (_, args) =>
@@ -459,12 +479,17 @@ public sealed class DesktopCardHost : IDisposable
 
         internal void ShowError(string error) => footer.Text = error;
 
-        internal void Render(DesktopCardsSnapshot snapshot, bool isPending, string theme, string? error, DateTimeOffset now,
+        internal void Render(DesktopCardsSnapshot snapshot, bool isPending, string theme, int? desktopTransparency, string? error, DateTimeOffset now,
             Func<string, ApplicationItem, Task> open, Func<string, ApplicationItem, Task> complete)
         {
             var dark = theme == "dark";
             Brush Brush(string color) => (SolidColorBrush)new BrushConverter().ConvertFromString(color)!;
             var background = Brush(dark ? "#CD182532" : "#DEF4F7FA");
+            if (desktopTransparency is { } transparency)
+            {
+                var color = ((SolidColorBrush)background).Color;
+                background = new SolidColorBrush(System.Windows.Media.Color.FromArgb((byte)Math.Round(255 * (100 - transparency) / 100d), color.R, color.G, color.B));
+            }
             var text = Brush(dark ? "#F3F6FC" : "#182A3B");
             var muted = Brush(dark ? "#CFD8E5" : "#485D70");
             var line = Brush(dark ? "#36D1DDED" : "#99FFFFFF");

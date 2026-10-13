@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Controls.Primitives;
 using MessagePurify.Infrastructure.Application;
+using MessagePurify.Windows.IntegrationProbe;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Orientation = System.Windows.Controls.Orientation;
@@ -16,12 +17,17 @@ internal static partial class SmokeCheck
 {
     private static readonly string[] DesktopAppearanceChecks = ["desktop-dark-translucent", "desktop-light-translucent",
         "desktop-rounded-transparent-corners", "desktop-empty-compact", "desktop-content-height-restored",
-        "desktop-slim-scrollbar", "desktop-theme-scroll-preserved"];
+        "desktop-slim-scrollbar", "desktop-theme-scroll-preserved", "desktop-snap-horizontal", "desktop-snap-vertical-compact",
+        "desktop-snap-detach", "desktop-snap-layout-reopen", "desktop-hidden-card-no-snap",
+        "desktop-transparency-page", "desktop-transparency-text", "desktop-transparency-reopen", "desktop-transparency-backup"];
 
-    private static bool HasDesktopTheme(Window window, bool dark) => window.AllowsTransparency
-        && window.Background is SolidColorBrush backdrop && backdrop.Color.A == 0
-        && window.Content is Border { Background: SolidColorBrush surface }
-        && surface.Color == (Color)ColorConverter.ConvertFromString(dark ? "#CD182532" : "#DEF4F7FA");
+    private static bool HasDesktopTheme(Window window, bool dark, int? transparency = null)
+    {
+        var expected = (Color)ColorConverter.ConvertFromString(dark ? "#CD182532" : "#DEF4F7FA");
+        if (transparency is { } value) expected.A = (byte)Math.Round(255 * (100 - value) / 100d);
+        return window.AllowsTransparency && window.Background is SolidColorBrush backdrop && backdrop.Color.A == 0
+            && window.Content is Border { Background: SolidColorBrush surface } && surface.Color == expected;
+    }
 
     private static async Task CheckDesktopAppearanceAsync(string dataRoot, string reportFile)
     {
@@ -83,7 +89,94 @@ internal static partial class SmokeCheck
             desktop.Capture(Path.Combine(captureRoot, "appearance-light.png"));
             if (File.Exists(Path.Combine(appearanceRoot, "desktop-layout.json")))
                 throw new InvalidDataException("自动空状态或主题切换写入了布局偏好。");
+            await CheckDesktopControlsAsync(desktop, runtime, workspace, appearanceRoot, captureRoot);
         }
         finally { await runtime.StopAsync(); }
     }
+
+    private static async Task CheckDesktopControlsAsync(DesktopCardHost desktop, AppRuntime runtime,
+        AccountWorkspace workspace, string root, string captureRoot)
+    {
+        var initial = desktop.Layout;
+        var scale = DesktopNative.GetDpiForWindow(DesktopNative.GetParent(new WindowInteropHelper(desktop.TaskWindow).Handle)) / 96d;
+        var anchor = initial.Tasks with { X = initial.Tasks.Width + 5 * scale, Y = initial.Pending.Height + 5 * scale };
+        desktop.SetLayout(initial with { Tasks = anchor });
+        foreach (var target in new DesktopPoint[]
+        {
+            new(anchor.X + anchor.Width, anchor.Y), new(anchor.X - initial.Pending.Width, anchor.Y),
+            new(anchor.X, anchor.Y - initial.Pending.Height)
+        })
+        {
+            desktop.MoveCard(initial.Pending with { X = target.X + 4 * scale, Y = target.Y + 4 * scale }, true);
+            if (desktop.Layout.Pending != initial.Pending with { X = target.X, Y = target.Y } || desktop.Layout.Tasks != anchor)
+                throw new InvalidOperationException("实际卡片未吸附到相邻边缘，或改变了另一张卡片。");
+        }
+        desktop.Capture(Path.Combine(captureRoot, "snap-horizontal-and-above.png"));
+        foreach (var task in workspace.Snapshot(DateTimeOffset.UtcNow).Items.Where(item => item.Kind == "task" && item.State == "active"))
+            workspace.Execute(new(workspace.AccountId, "complete", task.Id, "snap-complete-" + task.Id, task.Version), DateTimeOffset.UtcNow);
+        runtime.Refresh(); await desktop.RefreshAsync(); desktop.TaskWindow.UpdateLayout();
+        var surface = (Border)desktop.TaskWindow.Content;
+        var bottom = anchor.Y + (surface.ActualHeight + 10) * scale;
+        desktop.MoveCard(initial.Pending with { X = anchor.X + 4 * scale, Y = bottom + 4 * scale }, true);
+        var snapped = initial.Pending with { X = anchor.X, Y = bottom };
+        if (desktop.Layout.Pending != snapped || surface.ActualHeight > 155 || desktop.Layout.Tasks != anchor)
+            throw new InvalidOperationException("上下吸附没有使用紧凑卡片的可见高度。");
+        desktop.SaveLayout(true);
+        if (new DesktopLayoutStore(root).Load(new DesktopRect(0, 0, 100000, 100000), scale) != desktop.Layout)
+            throw new InvalidOperationException("吸附位置重读后改变。");
+        desktop.Capture(Path.Combine(captureRoot, "snap-vertical-compact.png"));
+        var detached = snapped with { Y = snapped.Y + 64 * scale };
+        desktop.MoveCard(detached, true);
+        if (desktop.Layout.Pending != detached) throw new InvalidOperationException("拖离后仍被强制吸附。");
+        foreach (var review in workspace.Snapshot(DateTimeOffset.UtcNow).Items.Where(item => item.Kind == "review" && item.State == "pending"))
+            workspace.Execute(new(workspace.AccountId, "ignore", review.Id, "snap-ignore-" + review.Id, review.Version), DateTimeOffset.UtcNow);
+        runtime.Refresh(); await desktop.RefreshAsync();
+        var free = anchor with { X = detached.X - anchor.Width + 4 * scale, Y = detached.Y + 4 * scale };
+        desktop.MoveCard(free, false);
+        if (desktop.PendingWindow.IsVisible || desktop.Layout.Tasks != free)
+            throw new InvalidOperationException("隐藏卡片仍参与吸附。");
+
+        var window = new AppWindow(runtime, root, true, registerStartup: false);
+        window.AppearanceChanged += desktop.SetAppearance;
+        try
+        {
+            window.Show(); await window.Ready.Task;
+            await WaitAsync(window, "snapshot !== null && initialized");
+            await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
+            await WaitAsync(window, "document.querySelector('#desktop-transparency-setting') !== null");
+            await ChangeSettingAsync(window, "theme-setting", "dark");
+            await ChangeTransparencyAsync(window, "60");
+            await desktop.RefreshAsync();
+            try { await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true, 60) && HasDesktopTheme(desktop.PendingWindow, true, 60)); }
+            catch (TimeoutException exception)
+            {
+                var diagnostics = await EvaluateAsync(window, "JSON.stringify({theme:document.documentElement.dataset.theme,value:document.querySelector('#desktop-transparency-setting')?.value,preferences,hostError})");
+                throw new InvalidOperationException($"透明度同步失败：tasks={((SolidColorBrush)((Border)desktop.TaskWindow.Content).Background).Color}、pending={((SolidColorBrush)((Border)desktop.PendingWindow.Content).Background).Color}、page={diagnostics}", exception);
+            }
+            if (((SolidColorBrush)desktop.TaskWindow.Foreground).Color.A != 255 || desktop.TaskWindow.Opacity != 1)
+                throw new InvalidOperationException("调节底色导致文字一起透明。");
+            using var preferences = System.Text.Json.JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "interface-preferences.json")));
+            if (preferences.RootElement.GetProperty("desktopTransparency").GetInt32() != 60)
+                throw new InvalidOperationException("桌面透明度未写入偏好。");
+            await EvaluateAsync(window, "document.querySelector('#desktop-transparency-setting').scrollIntoView({block:'center'})");
+            await using var imageFile = File.Create(Path.Combine(captureRoot, "transparency-settings.png"));
+            await window.Browser.CoreWebView2.CapturePreviewAsync(Microsoft.Web.WebView2.Core.CoreWebView2CapturePreviewImageFormat.Png, imageFile);
+        }
+        finally { window.AppearanceChanged -= desktop.SetAppearance; window.Exiting = true; window.Close(); }
+        var reopened = new AppWindow(runtime, root, true, registerStartup: false);
+        reopened.AppearanceChanged += desktop.SetAppearance;
+        try
+        {
+            reopened.Show(); await reopened.Ready.Task;
+            await WaitAsync(reopened, "snapshot !== null && initialized");
+            await EvaluateAsync(reopened, "document.querySelector('[data-action=nav][data-page=settings]').click()");
+            await WaitAsync(reopened, "document.querySelector('#desktop-transparency-setting')?.value === '60'");
+            await desktop.RefreshAsync();
+            await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true, 60));
+        }
+        finally { reopened.AppearanceChanged -= desktop.SetAppearance; reopened.Exiting = true; reopened.Close(); }
+    }
+
+    private static Task ChangeTransparencyAsync(AppWindow window, string value) => EvaluateAsync(window,
+        $"document.querySelector('#desktop-transparency-setting').value='{value}';document.querySelector('#desktop-transparency-setting').dispatchEvent(new Event('input',{{bubbles:true}}))");
 }

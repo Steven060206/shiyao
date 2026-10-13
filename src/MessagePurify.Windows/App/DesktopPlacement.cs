@@ -4,6 +4,30 @@ namespace MessagePurify.Windows.App;
 
 public static class DesktopPlacement
 {
+    public static DesktopRect Snap(DesktopRect moving, DesktopRect anchor, double movingVisibleHeight,
+        double anchorVisibleHeight, IReadOnlyList<DesktopRect> workAreas, double scale)
+    {
+        var fitted = Fit(moving, workAreas);
+        Validate(anchor);
+        if (!double.IsFinite(scale) || scale <= 0) throw new ArgumentOutOfRangeException(nameof(scale));
+        var threshold = 16 * scale;
+        var targets = new DesktopPoint[]
+        {
+            new(anchor.X + anchor.Width, anchor.Y), new(anchor.X - fitted.Width, anchor.Y),
+            new(anchor.X, anchor.Y + anchorVisibleHeight), new(anchor.X, anchor.Y - movingVisibleHeight)
+        };
+        var nearest = targets.Where((point, index) => index < 2
+            ? Math.Abs(point.X - fitted.X) <= threshold && fitted.Y < anchor.Y + anchorVisibleHeight && fitted.Y + movingVisibleHeight > anchor.Y
+            : Math.Abs(point.Y - fitted.Y) <= threshold && fitted.X < anchor.X + anchor.Width && fitted.X + fitted.Width > anchor.X)
+            .OrderBy(point => Math.Abs(point.X - fitted.X) + Math.Abs(point.Y - fitted.Y));
+        foreach (var point in nearest)
+        {
+            var snapped = fitted with { X = point.X, Y = point.Y };
+            if (Fit(snapped, workAreas) == snapped) return snapped;
+        }
+        return fitted;
+    }
+
     public static DesktopRect Fit(DesktopRect rectangle, IReadOnlyList<DesktopRect> workAreas)
     {
         Validate(rectangle);
