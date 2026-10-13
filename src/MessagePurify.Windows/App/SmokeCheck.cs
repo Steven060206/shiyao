@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.Json;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Controls.Primitives;
@@ -16,6 +17,9 @@ namespace MessagePurify.Windows.App;
 /// <summary>仅验证模式使用合成账号，正式启动绝不载入样例。</summary>
 internal static partial class SmokeCheck
 {
+    [DllImport("shell32.dll", ExactSpelling = true)]
+    private static extern int GetCurrentProcessExplicitAppUserModelID(out IntPtr id);
+
     public static AccountWorkspace CreateWorkspace(string dataRoot)
     {
         var workspace = new AccountWorkspace(dataRoot, "10000");
@@ -34,6 +38,15 @@ internal static partial class SmokeCheck
     public static async Task RunAsync(AppWindow window, AccountWorkspace workspace, AppRuntime runtime,
         DesktopCardHost desktop, string dataRoot, string reportPath)
     {
+        Marshal.ThrowExceptionForHR(GetCurrentProcessExplicitAppUserModelID(out var appId));
+        try
+        {
+            if (Marshal.PtrToStringUni(appId) != AppIdentity.Id)
+                throw new InvalidOperationException("应用启动时没有设置独立任务栏标识。");
+        }
+        finally { Marshal.FreeCoTaskMem(appId); }
+        if (AppIdentity.GetWindowId(new System.Windows.Interop.WindowInteropHelper(window).Handle) != AppIdentity.Id)
+            throw new InvalidOperationException("主窗口没有独立任务栏标识。");
         var initial = workspace.Snapshot(DateTimeOffset.UtcNow);
         var task = initial.Items.Single(i => i.Kind == "task");
         var review = initial.Items.Single(i => i.Kind == "review" && i.State == "pending");
@@ -224,7 +237,7 @@ internal static partial class SmokeCheck
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
-            checks = new[] { "branding", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+            checks = new[] { "branding", "taskbar-identity", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",

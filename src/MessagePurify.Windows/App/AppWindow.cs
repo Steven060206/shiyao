@@ -44,6 +44,7 @@ public sealed class AppWindow : Window
         autoStartEnabled = AppStartupPreferences.Load(dataRoot);
         if (registerStartup && StartupRegistration.IsEnabled() != autoStartEnabled) StartupRegistration.SetEnabled(autoStartEnabled);
         Title = "拾要";
+        SourceInitialized += (_, _) => AppIdentity.SetWindow(new System.Windows.Interop.WindowInteropHelper(this).Handle);
         Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/ui/assets/shiyao.ico"));
         Width = 1360; Height = 880; MinWidth = 1000; MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;

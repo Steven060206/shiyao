@@ -10,6 +10,7 @@ public static class Program
     [STAThread]
     public static int Main(string[] arguments)
     {
+        AppIdentity.Initialize();
         var check = arguments.Contains("--smoke-test") || arguments.Contains("--read-only-check");
         var background = arguments.Contains("--background");
         var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MessagePurify", "App");

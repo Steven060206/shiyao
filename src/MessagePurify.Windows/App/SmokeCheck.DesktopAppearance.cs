@@ -10,6 +10,8 @@ using MessagePurify.Windows.IntegrationProbe;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Orientation = System.Windows.Controls.Orientation;
+using Point = System.Windows.Point;
+using Size = System.Windows.Size;
 
 namespace MessagePurify.Windows.App;
 
@@ -103,28 +105,28 @@ internal static partial class SmokeCheck
         desktop.SetLayout(initial with { Tasks = anchor });
         foreach (var target in new DesktopPoint[]
         {
-            new(anchor.X + anchor.Width, anchor.Y), new(anchor.X - initial.Pending.Width, anchor.Y),
-            new(anchor.X, anchor.Y - initial.Pending.Height)
+            new(anchor.X + anchor.Width - 8 * scale, anchor.Y), new(anchor.X - initial.Pending.Width + 8 * scale, anchor.Y),
+            new(anchor.X, anchor.Y - initial.Pending.Height + 8 * scale)
         })
         {
             desktop.MoveCard(initial.Pending with { X = target.X + 4 * scale, Y = target.Y + 4 * scale }, true);
             if (desktop.Layout.Pending != initial.Pending with { X = target.X, Y = target.Y } || desktop.Layout.Tasks != anchor)
                 throw new InvalidOperationException("实际卡片未吸附到相邻边缘，或改变了另一张卡片。");
+            CheckPanelGap(desktop, scale, Path.Combine(captureRoot, target.Y < anchor.Y ? "snap-above.png" : target.X > anchor.X ? "snap-right.png" : "snap-left.png"));
         }
-        desktop.Capture(Path.Combine(captureRoot, "snap-horizontal-and-above.png"));
         foreach (var task in workspace.Snapshot(DateTimeOffset.UtcNow).Items.Where(item => item.Kind == "task" && item.State == "active"))
             workspace.Execute(new(workspace.AccountId, "complete", task.Id, "snap-complete-" + task.Id, task.Version), DateTimeOffset.UtcNow);
         runtime.Refresh(); await desktop.RefreshAsync(); desktop.TaskWindow.UpdateLayout();
         var surface = (Border)desktop.TaskWindow.Content;
-        var bottom = anchor.Y + (surface.ActualHeight + 10) * scale;
+        var bottom = anchor.Y + (surface.ActualHeight + 2) * scale;
         desktop.MoveCard(initial.Pending with { X = anchor.X + 4 * scale, Y = bottom + 4 * scale }, true);
         var snapped = initial.Pending with { X = anchor.X, Y = bottom };
         if (desktop.Layout.Pending != snapped || surface.ActualHeight > 155 || desktop.Layout.Tasks != anchor)
             throw new InvalidOperationException("上下吸附没有使用紧凑卡片的可见高度。");
+        CheckPanelGap(desktop, scale, Path.Combine(captureRoot, "snap-vertical-compact.png"));
         desktop.SaveLayout(true);
         if (new DesktopLayoutStore(root).Load(new DesktopRect(0, 0, 100000, 100000), scale) != desktop.Layout)
             throw new InvalidOperationException("吸附位置重读后改变。");
-        desktop.Capture(Path.Combine(captureRoot, "snap-vertical-compact.png"));
         var detached = snapped with { Y = snapped.Y + 64 * scale };
         desktop.MoveCard(detached, true);
         if (desktop.Layout.Pending != detached) throw new InvalidOperationException("拖离后仍被强制吸附。");
@@ -175,6 +177,46 @@ internal static partial class SmokeCheck
             await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true, 60));
         }
         finally { reopened.AppearanceChanged -= desktop.SetAppearance; reopened.Exiting = true; reopened.Close(); }
+    }
+
+    private static void CheckPanelGap(DesktopCardHost desktop, double scale, string capture)
+    {
+        Rect Panel(Window window)
+        {
+            window.UpdateLayout();
+            var panel = (Border)window.Content;
+            return new Rect(panel.PointToScreen(new Point()), new Size(panel.ActualWidth * scale, panel.ActualHeight * scale));
+        }
+        var tasks = Panel(desktop.TaskWindow);
+        var pending = Panel(desktop.PendingWindow);
+        var gap = pending.Left > tasks.Left ? pending.Left - tasks.Right
+            : pending.Left < tasks.Left ? tasks.Left - pending.Right
+            : pending.Top > tasks.Top ? pending.Top - tasks.Bottom : tasks.Top - pending.Bottom;
+        if (Math.Abs(gap - 2 * scale) > 1)
+            throw new InvalidOperationException($"吸附后的实际面板间距不是2 DIP：{gap / scale}。");
+        Rect WindowBounds(Window window) => new(window.PointToScreen(new Point()),
+            new Size(window.ActualWidth * scale, window.ActualHeight * scale));
+        var taskWindow = WindowBounds(desktop.TaskWindow);
+        var pendingWindow = WindowBounds(desktop.PendingWindow);
+        var bounds = Rect.Union(taskWindow, pendingWindow);
+        var drawing = new DrawingVisual();
+        using (var context = drawing.RenderOpen())
+        {
+            foreach (var (window, rect) in new[] { (desktop.TaskWindow, taskWindow), (desktop.PendingWindow, pendingWindow) })
+            {
+                // Render the whole window: a VisualBrush includes effects in its bounds and stretches compact panels.
+                var windowPixels = new RenderTargetBitmap((int)Math.Ceiling(rect.Width), (int)Math.Ceiling(rect.Height),
+                    96 * scale, 96 * scale, PixelFormats.Pbgra32);
+                windowPixels.Render(window);
+                context.DrawImage(windowPixels,
+                    new Rect((rect.X - bounds.X) / scale, (rect.Y - bounds.Y) / scale, rect.Width / scale, rect.Height / scale));
+            }
+        }
+        var pixels = new RenderTargetBitmap((int)Math.Ceiling(bounds.Width), (int)Math.Ceiling(bounds.Height),
+            96 * scale, 96 * scale, PixelFormats.Pbgra32);
+        pixels.Render(drawing);
+        var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(pixels));
+        using var stream = File.Create(capture); encoder.Save(stream);
     }
 
     private static Task ChangeTransparencyAsync(AppWindow window, string value) => EvaluateAsync(window,

@@ -26,6 +26,9 @@ foreach ($shortcutPath in (@($shortcutPaths) + @($shortcutLegacyPaths))) {
         }
     }
 }
+if (-not ('MessagePurifyShortcutIdentity' -as [type])) {
+    Add-Type -Path (Join-Path $PSScriptRoot 'ShortcutIdentity.cs')
+}
 foreach ($shortcutPath in $shortcutPaths) {
     [void](New-Item -ItemType Directory -Path (Split-Path -Parent $shortcutPath) -Force)
     $shortcutLink = $shortcutShell.CreateShortcut($shortcutPath)
@@ -36,6 +39,7 @@ foreach ($shortcutPath in $shortcutPaths) {
     $shortcutLink.Description = '拾要 · 从纷杂消息中拾取要事'
     $shortcutLink.WindowStyle = 1
     $shortcutLink.Save()
+    [MessagePurifyShortcutIdentity]::Set($shortcutPath)
 }
 foreach ($shortcutPath in $shortcutLegacyPaths) {
     if (Test-Path -LiteralPath $shortcutPath) { Remove-Item -LiteralPath $shortcutPath }

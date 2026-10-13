@@ -14,8 +14,17 @@ test('正式入口已切最新版并保留真实登录与持续观察验收边�
     const content=read(file);
     assert.match(content,/正式入口已切换到最新版/);
     assert.match(content,/拾要/);
-    const currentEntry = content.slice(content.indexOf('正式入口已切换到最新版')).split('\n')[0];
+    const currentEntry = file === 'docs/requirements.md'
+      ? content.match(/^最新交付状态.*$/m)?.[0]
+      : file === 'docs/HANDOFF.md'
+        ? content.split('### 当前接续')[1].split('### 上一段')[0]
+        : content.slice(content.indexOf('正式入口已切换到最新版')).split('\n')[0];
+    assert.ok(currentEntry, `${file}: missing current delivery section`);
     assert.match(currentEntry,/\.tools\/published\/app-card-controls\//);
+    if (file.startsWith('docs/')) {
+      assert.match(currentEntry,/MessagePurify\.Shiyao/);
+      assert.match(currentEntry,/2 DIP/);
+    }
     assert.match(content,/app-desktop-recovery/);
     assert.match(content,/真实(?:Windows|登录).*自启动仍未验收/);
   }

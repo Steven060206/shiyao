@@ -6,11 +6,11 @@ namespace MessagePurify.Windows.Tests;
 public sealed class DesktopPlacementTests
 {
     [Theory]
-    [InlineData(507, 107, 500, 100)]
-    [InlineData(507, 200, 500, 100)]
-    [InlineData(90, 107, 100, 100)]
-    [InlineData(305, 370, 300, 364)]
-    [InlineData(305, 30, 300, 36)]
+    [InlineData(507, 107, 492, 100)]
+    [InlineData(507, 200, 492, 100)]
+    [InlineData(94, 107, 108, 100)]
+    [InlineData(305, 370, 300, 356)]
+    [InlineData(305, 30, 300, 44)]
     public void NearbyCardsSnapToAllFourSidesWithoutResizing(double x, double y, double expectedX, double expectedY)
     {
         var moving = new DesktopRect(x, y, 200, 360);
@@ -33,7 +33,7 @@ public sealed class DesktopPlacementTests
     public void SnapDistanceScalesWithDpiAndUsesCompactVisibleHeight()
     {
         var moving = new DesktopRect(606, 594, 400, 400);
-        Assert.Equal(moving with { X = 600, Y = 580 }, DesktopPlacement.Snap(moving,
+        Assert.Equal(moving with { X = 600, Y = 564 }, DesktopPlacement.Snap(moving,
             new(600, 252, 400, 720), 400, 328, [new(0, 0, 2400, 1800)], 2));
     }
 
@@ -43,6 +43,32 @@ public sealed class DesktopPlacementTests
         var moving = new DesktopRect(100, 285, 200, 300);
         Assert.Equal(moving, DesktopPlacement.Snap(moving, new(100, 100, 200, 200),
             300, 200, [new(0, 0, 800, 590)], 1));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(1.25)]
+    [InlineData(2)]
+    public void VisiblePanelsLeaveTwoDipGapOnEverySideAtDifferentDpi(double scale)
+    {
+        var anchor = new DesktopRect(400 * scale, 300 * scale, 200 * scale, 400 * scale);
+        var moving = new DesktopRect(0, 0, 200 * scale, 360 * scale);
+        var area = new DesktopRect(0, 0, 1200 * scale, 1000 * scale);
+        var inset = 5 * scale;
+        foreach (var point in new DesktopPoint[]
+        {
+            new(anchor.X + anchor.Width, anchor.Y), new(anchor.X - moving.Width, anchor.Y),
+            new(anchor.X, anchor.Y + 264 * scale), new(anchor.X, anchor.Y - 64 * scale)
+        })
+        {
+            var snapped = DesktopPlacement.Snap(moving with { X = point.X, Y = point.Y }, anchor,
+                64 * scale, 264 * scale, [area], scale);
+            var gap = snapped.X > anchor.X ? snapped.X + inset - (anchor.X + anchor.Width - inset)
+                : snapped.X < anchor.X ? anchor.X + inset - (snapped.X + moving.Width - inset)
+                : snapped.Y > anchor.Y ? snapped.Y + inset - (anchor.Y + 264 * scale - inset)
+                : anchor.Y + inset - (snapped.Y + 64 * scale - inset);
+            Assert.Equal(2 * scale, gap, 6);
+        }
     }
 
     [Fact]

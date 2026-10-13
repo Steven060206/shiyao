@@ -20,14 +20,14 @@ function fixture(t) {
   const scripts = path.join(directory,'项目 根','packaging','app');
   const published = path.join(directory,'项目 根','.tools','published','app-card-controls');
   fs.mkdirSync(scripts,{recursive:true}); fs.mkdirSync(path.join(published,'ui'),{recursive:true});
-  for (const name of ['Install-MessagePurifyShortcuts.ps1','Start-MessagePurify.ps1'])
+  for (const name of ['Install-MessagePurifyShortcuts.ps1','Start-MessagePurify.ps1','ShortcutIdentity.cs'])
     fs.copyFileSync(path.join(root,'packaging/app',name),path.join(scripts,name));
   fs.writeFileSync(path.join(published,'MessagePurify.exe'),'not executed');
   fs.writeFileSync(path.join(published,'ui/index.html'),'<html></html>');
   const destinations = [path.join(directory,'桌面'),path.join(directory,'开始 菜单')];
   const install = extra => run(`& ${quote(path.join(scripts,'Install-MessagePurifyShortcuts.ps1'))} -ShortcutDirectories @(${destinations.map(quote).join(',')}) ${extra || ''}`);
   const inspect = shortcut => {
-    const result = run(`$shell=New-Object -ComObject WScript.Shell;$link=$shell.CreateShortcut(${quote(shortcut)});@{Target=$link.TargetPath;Arguments=$link.Arguments;Icon=$link.IconLocation;WorkingDirectory=$link.WorkingDirectory;Style=$link.WindowStyle;Description=$link.Description}|ConvertTo-Json`);
+    const result = run(`$shell=New-Object -ComObject WScript.Shell;$link=$shell.CreateShortcut(${quote(shortcut)});$entry=(New-Object -ComObject Shell.Application).Namespace(${quote(path.dirname(shortcut))}).ParseName(${quote(path.basename(shortcut))});@{Target=$link.TargetPath;Arguments=$link.Arguments;Icon=$link.IconLocation;WorkingDirectory=$link.WorkingDirectory;Style=$link.WindowStyle;Description=$link.Description;AppId=$entry.ExtendedProperty('System.AppUserModel.ID')}|ConvertTo-Json`);
     assert.equal(result.status,0,result.stderr);
     return JSON.parse(result.stdout);
   };
@@ -52,6 +52,7 @@ test('拾要桌面与开始菜单入口直接打开应用，正确引用中文�
       assert.equal(link.WorkingDirectory,published);
       assert.equal(link.Style,1);
       assert.equal(link.Description,'拾要 · 从纷杂消息中拾取要事');
+      assert.equal(link.AppId,'MessagePurify.Shiyao');
     }
     assert.deepEqual(fs.readFileSync(qqPath),before);
     assert.doesNotMatch(result.stdout,/token|QQ\.exe|Framework/);

@@ -11,10 +11,12 @@ public static class DesktopPlacement
         Validate(anchor);
         if (!double.IsFinite(scale) || scale <= 0) throw new ArgumentOutOfRangeException(nameof(scale));
         var threshold = 16 * scale;
+        // Each visible panel has a 5 DIP inset; overlap the window margins to leave a 2 DIP gap.
+        var marginOverlap = 8 * scale;
         var targets = new DesktopPoint[]
         {
-            new(anchor.X + anchor.Width, anchor.Y), new(anchor.X - fitted.Width, anchor.Y),
-            new(anchor.X, anchor.Y + anchorVisibleHeight), new(anchor.X, anchor.Y - movingVisibleHeight)
+            new(anchor.X + anchor.Width - marginOverlap, anchor.Y), new(anchor.X - fitted.Width + marginOverlap, anchor.Y),
+            new(anchor.X, anchor.Y + anchorVisibleHeight - marginOverlap), new(anchor.X, anchor.Y - movingVisibleHeight + marginOverlap)
         };
         var nearest = targets.Where((point, index) => index < 2
             ? Math.Abs(point.X - fitted.X) <= threshold && fitted.Y < anchor.Y + anchorVisibleHeight && fitted.Y + movingVisibleHeight > anchor.Y
