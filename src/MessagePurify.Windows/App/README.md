@@ -2,7 +2,13 @@
 
 当前为可运行的 Windows 应用。AccountWorkspace 使用现有账号独立 SQLite 保存事项；NapCatMessageHost 只读置顶群。正式页面没有样例事项，刷新后仍读取本地数据。
 
-最新真实事项验收（2026-10-12）：用户选定材料完成通知并确认按日期保存，已保存 2026-10-09、无钟点；真实确认、卡片 P0/已逾期/仅有日期、从卡片完成、主界面撤销、退出重开及卡片打开正确原文通过，最终恢复为待办。当前 1 个待办任务、46 项未处理待确认、1 项已忽略，主窗口停在新版设置页，显示同步状态，两张卡片和 QQ/接口保持运行。群/课程关系未批量确认；一个真实例子不替代全部课程关系、识别准确率及完整端到端验收。此前 48 项待确认是 review 类总数，包含 1 项已忽略。
+## 当前正式入口（2026-10-13）
+
+正式入口已切换到最新版 `.tools/published/app-desktop-recovery/`，桌面和开始菜单的“消息提纯”均直接打开该exe；默认 `packaging/app/Start-MessagePurify.ps1` 也选择该目录。再次打开唤回同一应用，关闭主窗隐藏到托盘，托盘“退出”才退出应用。已启用的Windows自启动指向同版exe并保留 `--background` 和原开关偏好；真实Windows登录自启动仍未验收。原app-launcher及其余旧产物保留，不覆盖运行中的文件。
+
+更新已有旧版入口时，使用 `packaging/app/Install-MessagePurifyShortcuts.ps1 -PreviousPublishDirectory .tools/published/app-launcher`；只迁移明确指定旧版的空参数exe入口，拒绝其他程序或带参数入口。2026-10-13实际桌面/开始菜单唤回和单实例检查通过；两小时连续观察仍进行中，后续固定时刻、实际游戏及系统恢复尚未验收。
+
+历史真实事项验收（2026-10-12）：用户选定材料完成通知并确认按日期保存，已保存 2026-10-09、无钟点；真实确认、卡片 P0/已逾期/仅有日期、从卡片完成、主界面撤销、退出重开及卡片打开正确原文通过，最终恢复为待办。当时 1 个待办任务、46 项未处理待确认、1 项已忽略，主窗口停在新版设置页，显示同步状态，两张卡片和 QQ/接口保持运行。群/课程关系未批量确认；一个真实例子不替代全部课程关系、识别准确率及完整端到端验收。此前 48 项待确认是 review 类总数，包含 1 项已忽略。
 
 ## 备份与恢复（2026-10-13）
 
@@ -38,7 +44,7 @@
 
 发布后双击桌面或开始菜单中的“消息提纯”即可打开；入口直接指向正式 `MessagePurify.exe`，参数为空。关闭主窗口会隐藏到托盘；双击托盘图标重新打开，托盘菜单可退出。再次启动会唤起现有窗口。脚本入口 [启动消息提纯](../../../packaging/app/Start-MessagePurify.cmd) 仍可作为辅助入口。
 
-正式桌面卡片首段已实现并验证，上一版自包含产物位于 `.tools/published/app-tray-fix/`。本轮默认入口已指向 `.tools/published/app-launcher/`，新版本已自包含发布并通过 13 项合成 Native 验证；旧 app、app-reminders、app-desktop、app-tray-fix、app-scheduled-sync 和 app-sync-status 目录保留。上一段用户正常退出 QQ 后重开 Framework，新版真实首次后台同步与重开去重通过；当时主窗口隐藏，两张卡片及托盘可见。当前已完成一条真实任务验收，QQ/正式应用保持运行，主窗口展示新版设置页，3001/6099 监听且应用连接保持。便捷入口实际从桌面和开始菜单启动并保持单实例，隐藏主窗口后再次启动可唤回，真实只读报告和 UIA 时间检查通过。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”；上一版关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
+正式桌面卡片首段已实现并验证，上一版自包含产物位于 `.tools/published/app-tray-fix/`。便捷入口首段当时默认指向 `.tools/published/app-launcher/`，目前入口以上方2026-10-13最新记录为准，新版本已自包含发布并通过 13 项合成 Native 验证；旧 app、app-reminders、app-desktop、app-tray-fix、app-scheduled-sync 和 app-sync-status 目录保留。上一段用户正常退出 QQ 后重开 Framework，新版真实首次后台同步与重开去重通过；当时主窗口隐藏，两张卡片及托盘可见。当前已完成一条真实任务验收，QQ/正式应用保持运行，主窗口展示新版设置页，3001/6099 监听且应用连接保持。便捷入口实际从桌面和开始菜单启动并保持单实例，隐藏主窗口后再次启动可唤回，真实只读报告和 UIA 时间检查通过。已修复启动回调提前释放托盘图标的问题，图标可能位于任务栏右侧“显示隐藏的图标”中，名称为“消息提纯”；上一版关闭隐藏、再次启动唤回同一窗口及托盘菜单退出均已实际通过。
 
 Windows 登录自动启动已接入：默认在当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 注册 `MessagePurify.exe --background`，设置页可关闭或重新开启；后台模式隐藏主窗口但保留托盘和桌面卡片，手动入口仍会显示主窗口。设置文件保存在 `%LOCALAPPDATA%/MessagePurify/App/app-settings.json`。自动启动代码、桥接参数、异常回滚和偏好文件均已完成自动/合成验证；登录后的真实系统启动验收统一后置。
 
@@ -71,7 +77,7 @@ QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装�
 
 ## 桌面卡片
 
-桌面恢复已写入代码并通过隔离合成 Native 验证。实际 Explorer 重启、物理多屏和睡眠恢复仍待统一验收，睡眠漏同步政策仍未确认。本轮不重启 Explorer、不睡眠机器、不修改真实屏幕、账号或默认入口。 Release 全量Core306/306、Infrastructure675/675、Windows390/390、Node139/139和专项68/68通过；发布 `.tools/published/app-desktop-recovery/`，报告 `.tools/desktop-validation/desktop-recovery-native.json` 确为新写入、success=true、synthetic=true、83项通过（原68+桌面15）。
+桌面恢复已写入代码并通过隔离合成 Native 验证。实际 Explorer 重启、物理多屏和睡眠恢复仍待统一验收，睡眠漏同步政策仍未确认。桌面恢复合成验证时不重启 Explorer、不睡眠机器、不修改真实屏幕、账号或默认入口。 Release 全量Core306/306、Infrastructure675/675、Windows390/390、Node139/139和专项68/68通过；发布 `.tools/published/app-desktop-recovery/`，报告 `.tools/desktop-validation/desktop-recovery-native.json` 确为新写入、success=true、synthetic=true、83项通过（原68+桌面15）。
 
 “提醒事项”和“待确认”分别显示当前账号的待办任务与未处理待确认项，首次左右排列。点击事项标题打开主界面对应详情；点击任务“完成”使用正式账号/版本操作，成功后移出卡片，主界面提供撤销。任务为空显示“暂无待办”，待确认全部处理后隐藏；普通通知继续留在主界面列表。
 

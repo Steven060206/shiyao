@@ -1,5 +1,13 @@
 # 项目检查
 
+## 最新正式入口（2026-10-13）
+
+正式入口已切换到最新版 `.tools/published/app-desktop-recovery/`：默认启动脚本、桌面/开始菜单.lnk及当前启用的HKCU Run都指向该exe；普通入口空参数、正常窗口，自启动沿用 `--background`。真实COM属性、Ready/AuthenticationReady、隐藏主窗后两入口分别唤回同一PID40208、启动进程退出0且只有1个实例均通过。旧产物保留，开关偏好及真实事项未改，当前观察进程继续运行；真实Windows登录自启动仍未验收。
+
+`Install-MessagePurifyShortcuts.ps1 -PreviousPublishDirectory <明确指定的旧发布目录>` 用于迁移原消息提纯空参数exe入口。默认不接受不同target；即使指定旧版，其他程序或带参数旧入口也拒绝，先核对两个入口再写。`application-shortcuts.test.mjs` 新增迁移和拒绝边界回归，覆盖重复迁移、中文空格路径、旧产物保留及失败时原入口不变。真实入口/Run备份及验证报告位于 `.tools/entry-upgrade/20261013-165509/`；详细命令和持续观察状态见交接文档。
+
+实际入口专项9/9、入口/文档组合55/55、Node全量146/146（文档46）通过、退出0；日志 `.tools/entry-upgrade/{entry-tests,node-tests}.log`。产品源码未改，沿用既有.NET及83项Native合成证据，不重复运行。
+
 ## 无人值守观察（2026-10-13）
 
 `watch_application.ps1` 仅观察已有正常应用，不启动/退出应用、不发送 QQ 消息、不处理事项。按 PID 和启动时刻核对进程身份，每次记录 CPU、内存、句柄、响应状态及两张卡片真实 parent/styles；UIA 只保存白名单同步提示和数量，不保存事项标题、原文、凭据或原始异常。报告原子更新，失败退出 1，不终止被观察进程。仅适用于 Windows 桌面会话。

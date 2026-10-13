@@ -8,6 +8,16 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('正式入口已切最新版并保留真实登录与持续观察验收边界', () => {
+  for (const file of ['docs/requirements.md','docs/HANDOFF.md',
+    'src/MessagePurify.Windows/App/README.md','tests/README.md']) {
+    const content=read(file);
+    assert.match(content,/正式入口已切换到最新版/);
+    assert.match(content,/app-desktop-recovery/);
+    assert.match(content,/真实(?:Windows|登录).*自启动仍未验收/);
+  }
+});
+
 test('无人值守首轮记录保护数据及退出未知，不能替代两小时连续验收', () => {
   const requirements = read('docs/requirements.md').split('上一段真实运行核对')[1].split('历史真实事项验收')[0];
   const handoff = read('docs/HANDOFF.md').split('### 上一段（无人值守真实验收')[1].split('### 上一段（桌面恢复')[0];

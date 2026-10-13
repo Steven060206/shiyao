@@ -18,7 +18,7 @@ function fixture(t) {
     fs.rmSync(directory,{recursive:true,force:true});
   });
   const scripts = path.join(directory,'项目 根','packaging','app');
-  const published = path.join(directory,'项目 根','.tools','published','app-launcher');
+  const published = path.join(directory,'项目 根','.tools','published','app-desktop-recovery');
   fs.mkdirSync(scripts,{recursive:true}); fs.mkdirSync(path.join(published,'ui'),{recursive:true});
   for (const name of ['Install-MessagePurifyShortcuts.ps1','Start-MessagePurify.ps1'])
     fs.copyFileSync(path.join(root,'packaging/app',name),path.join(scripts,name));
@@ -76,7 +76,7 @@ test('发布缺失时停止创建两个入口，保留已有文件', t => {
 });
 
 test('同名入口属于其他程序时停止，保留原快捷方式且不创建另一入口', t => {
-  const {destinations,install} = fixture(t);
+  const {destinations,published,install} = fixture(t);
   fs.mkdirSync(destinations[1],{recursive:true});
   const conflicting = path.join(destinations[1],'消息提纯.lnk');
   const created = run(`$shell=New-Object -ComObject WScript.Shell;$link=$shell.CreateShortcut(${quote(conflicting)});$link.TargetPath=Join-Path $env:SystemRoot 'System32/notepad.exe';$link.Save()`);
@@ -87,4 +87,46 @@ test('同名入口属于其他程序时停止，保留原快捷方式且不创�
   assert.match(result.stderr,/Existing shortcut was preserved/);
   assert.deepEqual(fs.readFileSync(conflicting),original);
   assert.equal(fs.existsSync(path.join(destinations[0],'消息提纯.lnk')),false);
+  const explicit = install(`-PreviousPublishDirectory ${quote(published)}`);
+  assert.notEqual(explicit.status,0);
+  assert.deepEqual(fs.readFileSync(conflicting),original);
+  assert.equal(fs.existsSync(path.join(destinations[0],'消息提纯.lnk')),false);
+});
+
+test('显式指定旧发布目录后迁移两个入口，保留旧产物且重复安装一致', t => {
+  const {published,destinations,install,inspect} = fixture(t);
+  const previous = path.join(path.dirname(published),'app-launcher');
+  fs.mkdirSync(path.join(previous,'ui'),{recursive:true});
+  fs.writeFileSync(path.join(previous,'MessagePurify.exe'),'old executable remains');
+  fs.writeFileSync(path.join(previous,'ui/index.html'),'<html></html>');
+  assert.equal(install(`-PublishDirectory ${quote(previous)}`).status,0);
+  for (let attempt=0;attempt<2;attempt++) {
+    const result = install(`-PreviousPublishDirectory ${quote(previous)}`);
+    assert.equal(result.status,0,result.stderr);
+    for (const destination of destinations) {
+      const link = inspect(path.join(destination,'消息提纯.lnk'));
+      assert.equal(link.Target,path.join(published,'MessagePurify.exe'));
+      assert.equal(link.Arguments,'');
+      assert.equal(link.WorkingDirectory,published);
+      assert.equal(link.Icon,`${path.join(published,'MessagePurify.exe')},0`);
+    }
+  }
+  assert.equal(fs.readFileSync(path.join(previous,'MessagePurify.exe'),'utf8'),'old executable remains');
+});
+
+test('未显式指定旧版或旧入口带参数时拒绝迁移，保留两个原入口', t => {
+  const {published,destinations,install} = fixture(t);
+  const previous = path.join(path.dirname(published),'app-launcher');
+  fs.mkdirSync(path.join(previous,'ui'),{recursive:true});
+  fs.writeFileSync(path.join(previous,'MessagePurify.exe'),'old');
+  fs.writeFileSync(path.join(previous,'ui/index.html'),'<html></html>');
+  assert.equal(install(`-PublishDirectory ${quote(previous)}`).status,0);
+  const paths = destinations.map(dir=>path.join(dir,'消息提纯.lnk'));
+  let before = paths.map(file=>fs.readFileSync(file));
+  assert.notEqual(install().status,0);
+  paths.forEach((file,i)=>assert.deepEqual(fs.readFileSync(file),before[i]));
+  assert.equal(run(`$shell=New-Object -ComObject WScript.Shell;$link=$shell.CreateShortcut(${quote(paths[1])});$link.Arguments='--background';$link.Save()`).status,0);
+  before = paths.map(file=>fs.readFileSync(file));
+  assert.notEqual(install(`-PreviousPublishDirectory ${quote(previous)}`).status,0);
+  paths.forEach((file,i)=>assert.deepEqual(fs.readFileSync(file),before[i]));
 });
