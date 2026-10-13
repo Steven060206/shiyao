@@ -9,8 +9,8 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
 test('无人值守首轮记录保护数据及退出未知，不能替代两小时连续验收', () => {
-  const requirements = read('docs/requirements.md').split('历史真实事项验收')[0];
-  const handoff = read('docs/HANDOFF.md').split('### 上一段')[0];
+  const requirements = read('docs/requirements.md').split('上一段真实运行核对')[1].split('历史真实事项验收')[0];
+  const handoff = read('docs/HANDOFF.md').split('### 上一段（无人值守真实验收')[1].split('### 上一段（桌面恢复')[0];
   for (const content of [requirements, handoff]) {
     assert.match(content, /两小时连续观察未启动、仍未验收/);
     assert.match(content, /退出原因未(?:确定|定)/);
@@ -18,6 +18,20 @@ test('无人值守首轮记录保护数据及退出未知，不能替代两小�
     assert.match(content, /70\s*项未处理/);
     assert.match(content, /四库完整性|四库integrity=ok/);
   }
+});
+
+test('接续真实观察记录开始与未完成状态，保留数据及固定时刻验收边界', () => {
+  const requirements = read('docs/requirements.md').split('最新真实运行核对')[1].split('上一段真实运行核对')[0];
+  const handoff = read('docs/HANDOFF.md').split('### 上一段')[0];
+  for (const content of [requirements, handoff]) {
+    assert.match(content, /两小时连续观察已启动，尚未完成/);
+    assert.match(content, /16:40/);
+    assert.match(content, /18:40/);
+    assert.match(content, /无自动(?:回访\/)?通知|没有自动回访\/通知/);
+    assert.match(content, /75\s*项未处理/);
+    assert.match(content, /自然.*固定.*(?:未验收|验收)/s);
+  }
+  assert.match(read('tests/README.md'), /watch-2h\.json/);
 });
 
 test('同步状态记录真实批次时间和本次运行范围，固定时刻与游戏实测仍另行验收', () => {

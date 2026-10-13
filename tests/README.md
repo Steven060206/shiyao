@@ -12,7 +12,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/wa
 
 报告 `completed/success` 仅表示观察完成且采样中的两张卡片附着有效；连接提示和 `responding` 须逐样本核对，不能把退出 0 等同于持续在线、无卡顿或长期稳定性通过。卡片无数量时 `itemCount=null`，不能据此猜任务数。
 
-本轮真实冷启动、完整历史读取、正常两卡片/托盘检查及5秒观察通过；两小时观察未启动。16:23 时 QQ/应用均已退出，原因未确定；四库完整性正常，启动前任务记录和课程关系未变。详细命令、状态及本机报告见 `docs/HANDOFF.md`。`application-watch.test.mjs` 覆盖拒绝其他进程、已退出 PID 的安全失败报告及不终止被观察进程。
+首轮真实冷启动、完整历史读取、正常两卡片/托盘检查及5秒观察通过；当时两小时观察未启动。16:23 时 QQ/应用均已退出，原因未确定；四库完整性正常，启动前任务记录和课程关系未变。接续已重新保护数据并启动Framework/最新应用；北京时间16:40已启动两小时连续观察，预计18:40结束，初始采样正常、尚未完成。报告 `.tools/unattended-validation/continuous-20261013-163828/watch-2h.json` 后台更新，无自动通知；后续须读完整报告核对，不能把已启动写成验收通过。详细命令、状态及本机报告见 `docs/HANDOFF.md`。`application-watch.test.mjs` 覆盖拒绝其他进程、已退出 PID 的安全失败报告及不终止被观察进程。
 
 ## 桌面恢复（2026-10-13）
 
