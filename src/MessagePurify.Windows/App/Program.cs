@@ -30,7 +30,9 @@ public static class Program
             AppWindow? window = null;
             DesktopCardHost? desktop = null;
             using var stopping = new CancellationTokenSource();
-            using var tray = new Forms.NotifyIcon { Text = "消息提纯", Icon = System.Drawing.SystemIcons.Application, Visible = !check };
+            using var iconStream = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,,/ui/assets/shiyao.ico")).Stream;
+            using var trayIcon = new System.Drawing.Icon(iconStream);
+            using var tray = new Forms.NotifyIcon { Text = "拾要", Icon = trayIcon, Visible = !check };
             var exiting = false;
             async Task Exit()
             {
@@ -51,7 +53,7 @@ public static class Program
                 runtime = new(dataRoot, synthetic);
                 window = new(runtime, dataRoot, check || background, registerStartup: !check);
                 var menu = new Forms.ContextMenuStrip();
-                menu.Items.Add("打开消息提纯", null, (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow));
+                menu.Items.Add("打开拾要", null, (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow));
                 menu.Items.Add("退出", null, async (_, _) => await application.Dispatcher.InvokeAsync(Exit).Task.Unwrap());
                 tray.ContextMenuStrip = menu;
                 tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow);
@@ -94,7 +96,7 @@ public static class Program
                         File.WriteAllText(report, System.Text.Json.JsonSerializer.Serialize(new { success = false, error = "application-check-failed",
                             detail = arguments.Contains("--smoke-test") ? exception.ToString() : null }));
                 }
-                else System.Windows.MessageBox.Show("程序启动失败，已有数据已保留。请查看应用说明中的依赖检查。", "消息提纯");
+                else System.Windows.MessageBox.Show("程序启动失败，已有数据已保留。请查看应用说明中的依赖检查。", "拾要");
                 await Exit();
             }
         });

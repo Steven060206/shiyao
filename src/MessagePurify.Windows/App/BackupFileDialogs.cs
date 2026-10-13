@@ -15,7 +15,7 @@ public sealed class BackupFileDialogs : IBackupFileDialogs
     {
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
-            Title = "导出当前账号备份", Filter = "消息提纯备份 (*.zip)|*.zip", DefaultExt = ".zip",
+            Title = "导出当前账号备份", Filter = "拾要备份 (*.zip)|*.zip", DefaultExt = ".zip",
             AddExtension = true, FileName = suggestedName, OverwritePrompt = true
         };
         return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
@@ -23,7 +23,7 @@ public sealed class BackupFileDialogs : IBackupFileDialogs
 
     public string? SelectImportPath(Window owner)
     {
-        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "选择账号备份", Filter = "消息提纯备份 (*.zip)|*.zip", CheckFileExists = true };
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "选择账号备份", Filter = "拾要备份 (*.zip)|*.zip", CheckFileExists = true };
         return dialog.ShowDialog(owner) == true ? dialog.FileName : null;
     }
 }

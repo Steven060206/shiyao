@@ -197,6 +197,23 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
     await call('Page.navigate', { url: pageUrl });
     await waitFor('document.readyState === "complete"');
 
+    await t.test('拾要名称及本地图标实际加载，浅深主题均保持可见', async () => {
+      const check = await evaluate(`(async () => {
+        const icon = document.querySelector('img.brand-mark');
+        await icon.decode();
+        const originalTheme = document.documentElement.dataset.theme;
+        const themes = ['light', 'dark'].map(theme => {
+          document.documentElement.dataset.theme = theme;
+          const rect = icon.getBoundingClientRect();
+          return rect.width >= 24 && rect.height >= 24 && getComputedStyle(icon).display !== 'none';
+        });
+        document.documentElement.dataset.theme = originalTheme;
+        return { title: document.title, brand: document.querySelector('.brand').textContent.trim(),
+          loaded: icon.complete && icon.naturalWidth > 0, local: new URL(icon.src).protocol === 'file:', themes };
+      })()`);
+      assert.deepEqual(check,{title:'拾要',brand:'拾要',loaded:true,local:true,themes:[true,true]});
+    });
+
     await t.test('初次请求真实快照与卡片外观，等待时无样例或虚假在线状态', async () => {
       assert.ok(await evaluate('!!document.querySelector("#app")'), '正式页面尚未实现');
       assert.match(await body(), /正在读取|等待连接/);
@@ -294,7 +311,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await select('review1');
       assert.match(await body(), /原消息正文/);
       assert.match(await body(), /1 张图片/);
-      assert.equal(await evaluate('document.querySelectorAll("img,iframe").length'), 0);
+      assert.equal(await evaluate('document.querySelectorAll("#detail-pane img,#detail-pane iframe").length'), 0);
       assert.equal(await evaluate('document.querySelector("[name=date]").value'), '');
       assert.equal(await evaluate('document.querySelector("[name=time]").value'), '');
       assert.match(await body(), /历史.*部分|部分.*历史/);
@@ -842,7 +859,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       const malicious = structuredClone(fixture); malicious.items[2].title = '<img src=x onerror="window.compromised=true">'; malicious.items[2].evidence[0].text = '<script>window.compromised=true</script>'; malicious.items[2].evidence[0].groupName = '<iframe src=https://example.com>';
       await push(malicious); await nav('pending'); await select('review1');
       assert.match(await body(), /<script>window.compromised=true<\/script>/);
-      assert.equal(await evaluate('!!window.compromised || !!document.querySelector("img,iframe")'), false);
+      assert.equal(await evaluate('!!window.compromised || !!document.querySelector("img:not(.brand-mark),iframe")'), false);
     });
     await t.test('新增草稿按账号隔离，旧账号的迟到保存响应不切换当前账号或覆盖新草稿', async () => {
       await push(fixture); await nav('tasks'); await click('[data-action="new-task"]');

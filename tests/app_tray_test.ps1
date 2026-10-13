@@ -19,7 +19,9 @@ $root = [System.Windows.Automation.AutomationElement]::RootElement
 $containerCondition = [System.Windows.Automation.OrCondition]::new(
     [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ClassNameProperty, 'Shell_TrayWnd'),
     [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ClassNameProperty, 'TopLevelWindowForOverflowXamlIsland'))
-$iconCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '消息提纯')
+$iconCondition = [System.Windows.Automation.OrCondition]::new(
+    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '拾要'),
+    [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, '消息提纯'))
 $openedOverflow = $false
 $cursorMoved = $false
 $cursor = [TrayTestNative+Point]::new()

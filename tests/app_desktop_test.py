@@ -46,8 +46,8 @@ def main():
                 if owner.value == process.pid:
                     title = ctypes.create_unicode_buffer(256)
                     user32.GetWindowTextW(hwnd, title, len(title))
-                    if title.value in ("消息提纯 · 提醒事项", "消息提纯 · 待确认"):
-                        found[title.value] = hwnd
+                    if title.value in ("拾要 · 提醒事项", "拾要 · 待确认", "消息提纯 · 提醒事项", "消息提纯 · 待确认"):
+                        found[title.value.split(" · ", 1)[1]] = hwnd
                 return True
 
             @callback_type
@@ -66,8 +66,9 @@ def main():
                 extended = user32.GetWindowLongPtrW(hwnd, -20)
                 assert extended & 0x08000000, "Missing WS_EX_NOACTIVATE"
                 assert not extended & 8, "Desktop card must not be topmost"
-            assert user32.IsWindowVisible(found["消息提纯 · 提醒事项"])
-            assert not user32.IsWindowVisible(found["消息提纯 · 待确认"]), "Empty pending card must hide"
+            assert user32.IsWindowVisible(found["提醒事项"])
+            expected_pending = report["pendingCount"] + report["mergeSuggestionCount"] > 0
+            assert bool(user32.IsWindowVisible(found["待确认"])) == expected_pending, "Pending visibility must match final synthetic data"
             assert process.wait(timeout=15) == 0
             print(json.dumps({"success": True, "synthetic": True, "checks": report["checks"], "parentClass": "SHELLDLL_DefView", "windows": 2}, ensure_ascii=False))
         finally:

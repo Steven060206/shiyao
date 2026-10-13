@@ -11,8 +11,13 @@
     <PlatformTarget>x64</PlatformTarget>
     <AssemblyName>MessagePurify</AssemblyName>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>ui/assets/shiyao.ico</ApplicationIcon>
+    <Product>拾要</Product>
+    <AssemblyTitle>拾要</AssemblyTitle>
+    <Description>从纷杂消息中拾取要事</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Resource Include="ui/assets/shiyao.ico" />
     <Compile Include="../IntegrationProbe/DesktopGeometry.cs" Link="DesktopGeometry.cs" />
     <ProjectReference Include="../../MessagePurify.Infrastructure/MessagePurify.Infrastructure.csproj" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />

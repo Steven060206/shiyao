@@ -3,22 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
-  <title>消息提纯</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>拾要</title>
+  <link rel="icon" href="assets/shiyao.ico">
   <link rel="stylesheet" href="app.css">
   <script src="app.js" defer></script>
 </head>
 <body>
   <div class="app" id="app">
     <aside class="sidebar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>消息提纯</div>
+      <div class="brand"><img class="brand-mark" src="assets/shiyao.png" width="32" height="32" alt="" aria-hidden="true">拾要</div>
       <p class="brand-caption">学校群消息整理</p>
       <nav class="nav" id="nav" aria-label="主导航"></nav>
       <div class="sidebar-foot"><b id="connection-status">等待连接</b><span id="receiving-status">正在读取本地事项</span></div>
     </aside>
     <main class="main">
       <header class="topbar">
-        <div class="breadcrumb">消息提纯 <span aria-hidden="true"> / </span><strong id="breadcrumb">任务</strong></div>
+        <div class="breadcrumb">拾要 <span aria-hidden="true"> / </span><strong id="breadcrumb">任务</strong></div>
         <div class="top-actions"><span class="connection-badge" id="history-status">历史读取状态待确认</span><button class="button small" data-action="refresh">刷新</button></div>
       </header>
       <div class="workarea">

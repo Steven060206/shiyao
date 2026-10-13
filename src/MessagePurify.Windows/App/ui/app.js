@@ -69,7 +69,7 @@ function errorLabel(error) {
     operation_conflict: '这次操作与之前的请求冲突，请刷新后重试。',
     invalid_time: '请填写有效日期和时间。',
     command_timeout: '本地应用暂未响应，草稿已保留，请稍后刷新。',
-    bridge_unavailable: '页面尚未连接本地应用。请从消息提纯应用打开。',
+    bridge_unavailable: '页面尚未连接本地应用。请从拾要应用打开。',
     history_timeout: '历史读取超时',
     connection_failed: '连接失败',
     qq_offline: 'QQ 离线',

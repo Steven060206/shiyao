@@ -14,9 +14,10 @@ $shortcutAllowedTargets = @($shortcutTarget)
 if (-not [string]::IsNullOrWhiteSpace($PreviousPublishDirectory)) {
     $shortcutAllowedTargets += (Resolve-Path -LiteralPath (Join-Path $PreviousPublishDirectory 'MessagePurify.exe')).Path
 }
-$shortcutPaths = @($ShortcutDirectories | ForEach-Object { Join-Path ([IO.Path]::GetFullPath($_)) '消息提纯.lnk' } | Select-Object -Unique)
+$shortcutPaths = @($ShortcutDirectories | ForEach-Object { Join-Path ([IO.Path]::GetFullPath($_)) '拾要.lnk' } | Select-Object -Unique)
+$shortcutLegacyPaths = @($ShortcutDirectories | ForEach-Object { Join-Path ([IO.Path]::GetFullPath($_)) '消息提纯.lnk' } | Select-Object -Unique)
 # Check existing entries before creating either shortcut; preserve unrelated files.
-foreach ($shortcutPath in $shortcutPaths) {
+foreach ($shortcutPath in (@($shortcutPaths) + @($shortcutLegacyPaths))) {
     if (Test-Path -LiteralPath $shortcutPath) {
         if (-not (Test-Path -LiteralPath $shortcutPath -PathType Leaf)) { throw 'Shortcut destination is not a file. Existing entry was preserved.' }
         $shortcutExisting = $shortcutShell.CreateShortcut($shortcutPath)
@@ -32,8 +33,11 @@ foreach ($shortcutPath in $shortcutPaths) {
     $shortcutLink.Arguments = ''
     $shortcutLink.WorkingDirectory = Split-Path -Parent $shortcutTarget
     $shortcutLink.IconLocation = $shortcutReady.Executable + ',0'
-    $shortcutLink.Description = '消息提纯'
+    $shortcutLink.Description = '拾要 · 从纷杂消息中拾取要事'
     $shortcutLink.WindowStyle = 1
     $shortcutLink.Save()
+}
+foreach ($shortcutPath in $shortcutLegacyPaths) {
+    if (Test-Path -LiteralPath $shortcutPath) { Remove-Item -LiteralPath $shortcutPath }
 }
 [pscustomobject]@{ Shortcuts = $shortcutPaths; Executable = $shortcutTarget } | ConvertTo-Json

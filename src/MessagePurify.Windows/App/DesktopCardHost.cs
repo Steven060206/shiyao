@@ -207,8 +207,8 @@ public sealed class DesktopCardHost : IDisposable
             scale = latest.Scale;
             attachedEnvironment = latest;
             var restored = layouts.Load(WorkAreas(), scale);
-            tasks = new("消息提纯 · 提醒事项", parent, scale, restored.Tasks, WorkAreas, () => SaveLayout(false), RequestRecovery);
-            pending = new("消息提纯 · 待确认", parent, scale, restored.Pending, WorkAreas, () => SaveLayout(true), RequestRecovery);
+            tasks = new("拾要 · 提醒事项", parent, scale, restored.Tasks, WorkAreas, () => SaveLayout(false), RequestRecovery);
+            pending = new("拾要 · 待确认", parent, scale, restored.Pending, WorkAreas, () => SaveLayout(true), RequestRecovery);
             if (!environment.IsAttached(tasks.Handle, parent) || !environment.IsAttached(pending.Handle, parent))
                 throw new InvalidOperationException("Desktop attachment changed during creation.");
             reloadLayout = false;

@@ -1,12 +1,22 @@
 # 项目检查
 
-## 最新正式入口（2026-10-13）
+## 最新正式入口：拾要（2026-10-13）
 
-正式入口已切换到最新版 `.tools/published/app-desktop-recovery/`：默认启动脚本、桌面/开始菜单.lnk及当前启用的HKCU Run都指向该exe；普通入口空参数、正常窗口，自启动沿用 `--background`。真实COM属性、Ready/AuthenticationReady、隐藏主窗后两入口分别唤回同一PID40208、启动进程退出0且只有1个实例均通过。旧产物保留，开关偏好及真实事项未改，当前观察进程继续运行；真实Windows登录自启动仍未验收。
+正式入口已切换到最新版 `.tools/published/app-shiyao/`，桌面及开始菜单已实际改为“拾要”，图标直接引用新exe；已启用的Run同样指向新版本并保留 `--background`。17:44入口属性核对通过，旧实例PID40208继续运行，外观于下次正常退出重开显示。Node151/151、Windows390/390、Native84项合成检查与发布均通过；真实Windows登录自启动仍未验收。图标及迁移回归范围见下方品牌说明。
+
+## 上一段正式入口更新（2026-10-13）
+
+此前正式入口已切换到最新版 `.tools/published/app-desktop-recovery/`：当时默认启动脚本、桌面/开始菜单.lnk及已启用的HKCU Run都指向该exe；普通入口空参数、正常窗口，自启动沿用 `--background`。真实COM属性、Ready/AuthenticationReady、隐藏主窗后两入口分别唤回同一PID40208、启动进程退出0且只有1个实例均通过。旧产物保留，开关偏好及真实事项未改，当前观察进程继续运行；真实Windows登录自启动仍未验收。本段为16:55入口更新的历史记录，当前入口以上方拾要段为准。
 
 `Install-MessagePurifyShortcuts.ps1 -PreviousPublishDirectory <明确指定的旧发布目录>` 用于迁移原消息提纯空参数exe入口。默认不接受不同target；即使指定旧版，其他程序或带参数旧入口也拒绝，先核对两个入口再写。`application-shortcuts.test.mjs` 新增迁移和拒绝边界回归，覆盖重复迁移、中文空格路径、旧产物保留及失败时原入口不变。真实入口/Run备份及验证报告位于 `.tools/entry-upgrade/20261013-165509/`；详细命令和持续观察状态见交接文档。
 
 实际入口专项9/9、入口/文档组合55/55、Node全量146/146（文档46）通过、退出0；日志 `.tools/entry-upgrade/{entry-tests,node-tests}.log`。产品源码未改，沿用既有.NET及83项Native合成证据，不重复运行。
+
+## 拾要命名与图标（2026-10-13）
+
+产品显示名称改为拾要，默认发布目录为 `.tools/published/app-shiyao/`。`application-branding.test.mjs` 验证 Windows 实际解码PNG透明外侧、接近不透明的中心及ICO九档图像帧；页面回归验证本地图标实际加载与浅深主题可见；快捷方式回归验证旧名迁移、重复安装和其他程序入口保护。Native Smoke 还核对实际WPF窗口名称/图标与WebView图片加载。内部 MessagePurify 数据目录与单实例标识不变；当前连续观察中的旧进程保留，实际迁移和验证结果以交接最新记录为准。
+
+最终发布版独立运行 `python tests/app_desktop_test.py --executable .tools/published/app-shiyao/MessagePurify.exe` 已通过：84项合成及真实两窗口附着/styles检查，按报告中的待确认/合并建议数量核对最终可见性。原固定“最终为空”的假设不适用于当前合成流程，空待确认隐藏仍在Native流程内验证。PNG/ICO及最终exe产品名/描述和系统提取图标均已核对。首次失败与最终通过日志保留在 `.tools/shiyao-validation/`。
 
 ## 无人值守观察（2026-10-13）
 

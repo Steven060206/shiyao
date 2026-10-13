@@ -43,7 +43,8 @@ public sealed class AppWindow : Window
         initialPreferences = LoadInterfacePreferences();
         autoStartEnabled = AppStartupPreferences.Load(dataRoot);
         if (registerStartup && StartupRegistration.IsEnabled() != autoStartEnabled) StartupRegistration.SetEnabled(autoStartEnabled);
-        Title = "消息提纯";
+        Title = "拾要";
+        Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/ui/assets/shiyao.ico"));
         Width = 1360; Height = 880; MinWidth = 1000; MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Content = Browser;
@@ -111,7 +112,7 @@ public sealed class AppWindow : Window
         catch (Exception)
         {
             Ready.TrySetException(new InvalidOperationException("无法加载 WebView2 或本地界面。"));
-            if (Opacity != 0) System.Windows.MessageBox.Show(this, "无法加载本地界面，请检查 WebView2 运行时。", "消息提纯");
+            if (Opacity != 0) System.Windows.MessageBox.Show(this, "无法加载本地界面，请检查 WebView2 运行时。", "拾要");
         }
     }
 
@@ -233,7 +234,7 @@ public sealed class AppWindow : Window
         {
             if (request.Operation == "export-backup")
             {
-                var path = backupFileDialogs.SelectExportPath(this, $"消息提纯-{accountId}-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
+                var path = backupFileDialogs.SelectExportPath(this, $"拾要-{accountId}-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
                 if (path is null) { Post(new { id = request.Id, success = true, cancelled = true }); return; }
                 var settings = CurrentBackupSettings(p);
                 var result = await Task.Run(() => workspace.ExportBackup(path, settings, DateTimeOffset.UtcNow));

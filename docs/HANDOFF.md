@@ -1,10 +1,28 @@
-# 消息提纯：项目交接文档
+# 拾要（原消息提纯）：项目交接文档
 
 最后更新：2026-10-13（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、固定时刻/游戏实测、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 当前接续（正式入口更新及两小时连续观察，2026-10-13，进行中）
+### 当前接续（拾要命名与图标，2026-10-13，已接入、发布及更新入口）
+
+用户要求设计软件图标并换有深意的名字。本轮采用“拾要”（Shiyao），寓意从纷杂消息中拾取要事；用户尚未提供外观反馈。内置 image_gen 生成深青绿底、米白消息气泡和暖金折页图标，原图已保存 `src/MessagePurify.Windows/App/ui/assets/shiyao.png`（1254×1254、RGBA、外侧透明）；同图编码九尺寸 `shiyao.ico`。`ui/assets/README.md` 保存含义、规格、生成方式和最终提示词。
+
+正式页面、主窗口、托盘、桌面卡片标题、备份对话框及 exe 产品信息已写入“拾要”；exe/窗口/托盘共用嵌入ICO，页面使用本地PNG。内部 MessagePurify 标识、单实例管道/互斥锁、数据目录、备份格式不变。**正式入口已切换到最新版 `.tools/published/app-shiyao/`。** 安装脚本预检新旧两种名称入口后创建“拾要”，只清理目标及参数匹配的原“消息提纯”入口；其他程序入口保持拒绝。
+
+17:44实际迁移：`.tools/shiyao-validation/entry-backup-20261013-174413/` 保存原两入口及Run值；执行 `.tools/shiyao-validation/install-branding.ps1`，内部调用 `packaging/app/Install-MessagePurifyShortcuts.ps1 -PreviousPublishDirectory .tools/published/app-desktop-recovery`，退出0。`installed.json` success=true、两入口名称为拾要、target及图标为新exe、参数为空；自启动保持开启，只更新原Run值指向新exe加 `--background`，未写偏好。异常分支会恢复入口和Run，本次未触发。旧exe保留，PID40208仍存活，未退出或重启应用/QQ、未代改事项。新入口属性已核对，正常重开新版与真实Windows登录自启动仍未验收。
+
+实际验证：`node --test tests/*.test.mjs` 151/151（正式页面78、文档46、图标2、快捷方式8等）、`.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release` 390/390，均退出0；同一dotnet执行 `publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-shiyao` 退出0，无警告错误。新exe通过隐藏启动的 `--smoke-test --report .tools/shiyao-validation/native-smoke.json`，退出0，新报告success=true、synthetic=true、84项（新增branding）通过，实际验证窗口名称/ICO、WebViewPNG加载和两卡片名称。原生截图 `native-smoke.png` 已实际查看，浅深主题图片加载及可见性由浏览器回归验证。日志与报告均在 `.tools/shiyao-validation/`。
+
+首次Node失败根因已核对：两条原测试把新品牌图片误当正文图片，改为正文范围和排除品牌；生成图中心alpha=253，保留原alpha，验证接近不透明；文档测试原先只读取第一段，改为明确读取正在进行的观察记录。修正后全量151项通过，首次失败日志保留。首次exe FileDescription仍为MessagePurify，SDK生成AssemblyInfo证实Title属性未设置AssemblyTitle；改用AssemblyTitle并再次实际发布，`published-version.json`验证ProductName/FileDescription均为拾要，系统可提取40像素exe图标。元数据修正不改程序集名、数据或运行逻辑。本轮提交说明 feat: brand the application as Shiyao，标识以Git日志为准。
+
+最终发布的独立桌面脚本实际验证：`python tests/app_desktop_test.py --executable .tools/published/app-shiyao/MessagePurify.exe` 首次因旧脚本固定假设最终待确认为空而失败；核对现有84项合成流程与最终报告，当前有待确认，改为按 pendingCount+mergeSuggestionCount 核对Win32真实可见性。修正后再次执行退出0、success=true、synthetic=true、84项通过，两窗口真实parentClass=SHELLDLL_DefView且child/noActivate/非topmost，日志 `desktop-script-final.log`；空待确认隐藏仍由Native流程内 pending-hide 检查覆盖。更新后的托盘检查脚本经PowerShell Parser实际解析，错误0。
+
+上下文核对：本机两技能根目录未找到 maintain-context-hygiene 的SKILL.md，按项目规则人工核对有效需求、交接、源码、实际发布和报告。17:53观察146样本、completed=false、failure=null、原应用仍运行，仅记录时间点；下一步沿用下段观察接续，不能预先标为稳定通过。品牌范围完成，外观反馈及下次正常重开后实际使用反馈待用户提供。
+
+PID40208及原两小时观察继续运行；为保留16:40开始的连续观察，本轮不退出或重开原应用。新版本已单独发布并迁移入口，运行中的旧界面/托盘将在用户下次正常退出重开时更换；不会代改事项或QQ数据。已有观察验收状态仍按下段真实报告核对，品牌改动不代表两小时验收完成。
+
+### 上一段（正式入口更新及两小时连续观察，2026-10-13，进行中）
 
 **正式入口已切换到最新版 `.tools/published/app-desktop-recovery/`。** 用户要求先完成入口更新，接续基线 `9b566a0`。默认脚本已改，快捷方式安装脚本新增 `PreviousPublishDirectory` 仅接受明确指定旧版的空参数exe入口，其他程序和带参数旧入口仍拒绝；相关测试覆盖迁移、重复安装、旧产物保留和拒绝意外入口。
 
@@ -789,6 +807,7 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 
 | 记录日期 | 变更 | 依据与状态 |
 | --- | --- | --- |
+| 2026-10-13 | 产品显示名称改为拾要，制作并接入正式图标 | 用户要求有寓意的新名字与图标；采用拾取要事的命名及深青绿/米白/暖金折页消息图标。PNG、九尺寸ICO、提示词已保存，页面/窗口/托盘/卡片/exe及新名入口已接入；17:44迁移真实桌面/开始菜单和已启用Run，原入口与Run已备份、旧发布保留。Node151/151、Windows390/390、Native84项合成及发布通过；最终exe产品名与描述均为拾要，图标可被Windows提取。旧PID40208继续观察，新外观于下次正常退出重开显示，真实登录自启动及稳定性未验收；命名及外观尚未收到用户反馈，详见本文最新段 |
 | 2026-10-13 | 更新正式入口到当前最新版 | 用户要求先完成入口更新；默认脚本、桌面/开始菜单及已启用的Run切到app-desktop-recovery，保留原开关、旧产物和QQ入口。实际入口属性、默认预检和两个快捷方式唤回同一实例通过；观察进程继续运行，Windows登录及完整连续观察不标已验收。原入口和Run备份于.tools/entry-upgrade/20261013-165509/。 |
 | 2026-10-13 | 接续启动两小时真实只读观察 | 基线d5e0901，新的停机四库保护快照正常；Framework/最新应用重开、两卡片附着及观察初始采样通过。16:40启动现有工具、预计18:40结束，报告持续更新，尚未完成或验收；当前75未处理、人工记录与课程关系未变，默认入口/Run值保留。无自动通知，后续读取完整报告后再判定。 |
 | 2026-10-13 | 无人值守首轮真实验收及只读观察工具 | 用户授权约两小时安全操作；停机四库保护快照、Framework冷启动/只读完整历史、正常后台卡片附着及托盘、5秒观察通过，任务记录和课程关系未改。当前0待办/1已完成/70未处理；16:23 QQ与应用已退出且原因未定，两小时连续观察未启动，不标稳定验收完成。默认入口及Run值保留；新增安全观察脚本、失败路径测试和使用说明；Node全量142/142、文档44项通过，详细证据见当前接续。对应提交说明 test: add safe unattended application observation，标识以Git日志为准。 |

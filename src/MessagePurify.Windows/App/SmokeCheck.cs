@@ -38,9 +38,14 @@ internal static partial class SmokeCheck
         var task = initial.Items.Single(i => i.Kind == "task");
         var review = initial.Items.Single(i => i.Kind == "review" && i.State == "pending");
         await WaitAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]') !== null");
+        await WaitAsync(window, "document.title === '拾要' && document.querySelector('img.brand-mark')?.complete && document.querySelector('img.brand-mark').naturalWidth > 0");
+        if (window.Title != "拾要" || window.Icon is null)
+            throw new InvalidOperationException("拾要窗口名称或图标未加载。");
         await desktop.RefreshAsync();
         if (desktop.State != "attached" || desktop.Snapshot?.Tasks.Count != 1 || desktop.Snapshot.Pending.Count != 1)
             throw new InvalidOperationException("正式桌面未挂载或没有显示合成事项。");
+        if (desktop.TaskWindow.Title != "拾要 · 提醒事项" || desktop.PendingWindow.Title != "拾要 · 待确认")
+            throw new InvalidOperationException("拾要桌面卡片名称未更新。");
         await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
         await WaitAsync(window, "document.querySelector('#theme-setting') !== null");
         await EvaluateAsync(window, "document.querySelector('#theme-setting').value='dark';document.querySelector('#theme-setting').dispatchEvent(new Event('change',{bubbles:true}))");
@@ -218,7 +223,7 @@ internal static partial class SmokeCheck
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
-            checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+            checks = new[] { "branding", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",

@@ -29,7 +29,8 @@ public static class ApplicationWatchNative {
             uint owner; GetWindowThreadProcessId(hwnd, out owner);
             if (owner == process) {
                 var title = new StringBuilder(256); GetWindowText(hwnd, title, title.Capacity);
-                if (title.ToString() == "消息提纯 · 提醒事项" || title.ToString() == "消息提纯 · 待确认")
+                if (title.ToString() == "消息提纯 · 提醒事项" || title.ToString() == "消息提纯 · 待确认"
+                    || title.ToString() == "拾要 · 提醒事项" || title.ToString() == "拾要 · 待确认")
                     cards[title.ToString()] = hwnd;
             }
             return true;
