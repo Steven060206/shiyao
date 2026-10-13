@@ -8,6 +8,7 @@ using MessagePurify.Core;
 using MessagePurify.Infrastructure.Application;
 using MessagePurify.Infrastructure.NapCat;
 using MessagePurify.Infrastructure.Storage;
+using MessagePurify.Infrastructure.Tasks;
 using Microsoft.Web.WebView2.Core;
 
 namespace MessagePurify.Windows.App;
@@ -86,6 +87,10 @@ internal static class SmokeCheck
         await desktop.RefreshAsync();
         await WaitAsync(() => desktop.Snapshot?.Tasks.Any(i => i.Id == task.Id && i.Title == edited.Title
             && i.Course == edited.Course && i.Due == edited.Due && i.Time == edited.Time && i.TimeKind == "start" && i.Priority == 3) == true);
+        await WaitAsync(window, "document.querySelector('.change-history')?.textContent.includes('修改任务') && document.querySelector('.change-history').textContent.includes('修订后的数学报告')");
+        await WaitAsync(() => !workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).Unread);
+        if (workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).ChangeLabel is not null)
+            throw new InvalidOperationException("已展示的编辑历史没有清除变化标记。");
         // An incoming task change must not silently upgrade the version of the form draft.
         workspace.Execute(new(workspace.AccountId, "edit-task", task.Id, "native-concurrent-edit", edited.Version,
             Date: editedDate, Time: "18:30", TimeKind: "start", Title: "同步更新的数学报告", Course: "数学实验", Priority: 3), DateTimeOffset.UtcNow);
@@ -108,6 +113,44 @@ internal static class SmokeCheck
         var due = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(8)).AddDays(3).ToString("yyyy-MM-dd");
         await EvaluateAsync(window, "document.querySelector('#review-form [name=date]').value=" + JsonSerializer.Serialize(due) + ";document.querySelector('#review-form [name=date]').dispatchEvent(new Event('input',{bubbles:true}));document.querySelector('#pending-confirm-button').click()");
         await WaitAsync(() => workspace.Snapshot(DateTimeOffset.UtcNow).Items.Count(i => i.Kind == "task") == 2);
+        // Save a synthetic quoted requirement while no task detail is visible, then inspect its desktop label.
+        await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
+        var acceptedTask = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Kind == "task" && i.Id != task.Id);
+        var newRequirementDate = DateOnly.Parse(acceptedTask.Due!, System.Globalization.CultureInfo.InvariantCulture);
+        var requirementAt = DateTimeOffset.UtcNow.AddSeconds(5);
+        var requirementKey = new MessageKey(workspace.AccountId, "10001", "3");
+        workspace.Enqueue(new(requirementKey, "10002", requirementAt,
+            [new(SegmentKind.Text, $"数学报告新增要求：{newRequirementDate.Month}月{newRequirementDate.Day}日之前补交实验数据"),
+                new(SegmentKind.Quote, "原通知", new(workspace.AccountId, "10001", "2"))]),
+            new HashSet<string> { "10001" }, MessageOrigin.Realtime, "synthetic-new-requirement", requirementAt);
+        var taskRecord = new AccountTaskStore(dataRoot, workspace.AccountId).FindTask(acceptedTask.Id)
+            ?? throw new InvalidDataException("合成任务未保存。");
+        var reliable = new RuleAssessments(new("明确新要求", true), new("适用于本人", true),
+            new("课程已确认", true), new("正式时间明确", true), new("原消息可核对", true), new("引用明确", true));
+        new AccountTaskStore(dataRoot, workspace.AccountId).SavePending("synthetic-new-requirement-review",
+            new RuleCandidate(taskRecord.Title, RuleAction.NewRequirement, RuleDisposition.Change, taskRecord.Course,
+                taskRecord.Time, null, taskRecord.Id, taskRecord.Priority, reliable, [], [requirementKey]),
+            "synthetic-new-requirement-review-operation", requirementAt);
+        var newRequirement = workspace.Snapshot(requirementAt).Items.Single(i => i.Id == acceptedTask.Id);
+        if (newRequirement.ChangeLabel != "待确认变更" || !newRequirement.Unread || newRequirement.Title != acceptedTask.Title)
+            throw new InvalidOperationException("合成新要求没有保留稳定标题或产生未查看标记。");
+        runtime.Refresh();
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Any(i => i.Id == acceptedTask.Id && i.ChangeLabel == "待确认变更") == true);
+        await WaitAsync(() => Descendants(desktop.TaskWindow).OfType<System.Windows.Controls.TextBlock>().Any(text => text.Text == "待确认变更"));
+        FindButton(desktop.TaskWindow, "open:" + acceptedTask.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(window, "document.querySelector('.pending-changes')?.textContent.includes('待确认新要求') && document.querySelector('.pending-changes').textContent.includes('查看建议')");
+        var pendingRequirement = workspace.Snapshot(requirementAt).Items.Single(i => i.Kind == "review" && i.Id == "synthetic-new-requirement-review");
+        workspace.Execute(new(workspace.AccountId, "accept-review", pendingRequirement.Id, "synthetic-accept-new-requirement",
+            pendingRequirement.Version, Date: acceptedTask.Due, Time: acceptedTask.Time, TimeKind: acceptedTask.TimeKind,
+            TargetTaskVersion: newRequirement.Version), requirementAt.AddSeconds(1));
+        runtime.Refresh();
+        await desktop.RefreshAsync();
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Any(i => i.Id == acceptedTask.Id && i.ChangeLabel == "新要求") == true);
+        FindButton(desktop.TaskWindow, "open:" + acceptedTask.Id).RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Button.ClickEvent));
+        await WaitAsync(window, "document.querySelector('.change-history')?.textContent.includes('确认新要求') && document.querySelector('.change-history').textContent.includes('补交实验数据')");
+        await WaitAsync(() => !workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == acceptedTask.Id).Unread);
+        await WaitAsync(() => desktop.Snapshot?.Tasks.Any(i => i.Id == acceptedTask.Id && i.ChangeLabel is null) == true);
         var reopened = new AccountWorkspace(dataRoot, workspace.AccountId);
         if (reopened.Snapshot(DateTimeOffset.UtcNow).Items.Count(i => i.Kind == "task") != 2)
             throw new InvalidDataException("重开工作区没有保留事项。");
@@ -124,8 +167,9 @@ internal static class SmokeCheck
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == 2);
         // Exercise the actual resize event and persisted layout, without moving the user's pointer.
         var saved = desktop.Layout;
-        FindThumb(desktop.TaskWindow).RaiseEvent(new DragDeltaEventArgs(20, 12));
-        FindThumb(desktop.TaskWindow).RaiseEvent(new DragCompletedEventArgs(20, 12, false));
+        var resizeThumb = FindThumb(desktop.TaskWindow);
+        resizeThumb.RaiseEvent(new DragDeltaEventArgs(20, 12));
+        resizeThumb.RaiseEvent(new DragCompletedEventArgs(20, 12, false));
         var resized = desktop.Layout;
         if (resized.Tasks.Width <= saved.Tasks.Width || resized.Tasks.Height <= saved.Tasks.Height)
             throw new InvalidOperationException("正式卡片缩放事件未更新窗口。");
@@ -139,7 +183,8 @@ internal static class SmokeCheck
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
             checks = new[] { "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
-                "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict" },
+                "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
+                "change-history", "change-read", "desktop-new-requirement", "desktop-change-read" },
             taskCount = 2, capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
     }
 
@@ -155,7 +200,8 @@ internal static class SmokeCheck
 
     private static System.Windows.Controls.Button FindButton(Window window, string tag) => Descendants(window)
         .OfType<System.Windows.Controls.Button>().Single(button => Equals(button.Tag, tag));
-    private static Thumb FindThumb(Window window) => Descendants(window).OfType<Thumb>().First();
+    private static Thumb FindThumb(Window window) => Descendants(window).OfType<Thumb>()
+        .Single(thumb => Equals(thumb.ToolTip, "拖动调整卡片大小"));
 
     public static async Task RunReadOnlyAsync(AppRuntime runtime, string reportPath, int seconds)
     {

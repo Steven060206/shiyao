@@ -38,7 +38,7 @@ QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装�
 
 拖动卡片标题调整位置，用右下角“↘”手柄调整大小。位置和尺寸以 DIP 保存到 `%LOCALAPPDATA%/MessagePurify/App/desktop-layout.json`（schema 1），重新打开恢复；读取时按当前屏幕边界调整，坏文件或未知格式保留原文件并在界面提示。布局重载不自动覆盖原文件，用户拖动/缩放后保存。
 
-卡片附着 Explorer 桌面，不抢焦点、不设 Topmost；主窗口关闭到托盘时卡片继续运行。临期/逾期和开始时间已过分别显示，只有日期时当天仍有效；主题与主界面同步。当前状态、查看/完成、主题及保存重开已通过 Native 合成和独立窗口检查；多屏、Explorer 重启和睡眠恢复尚未验收，本轮未做物理鼠标拖动。
+卡片附着 Explorer 桌面，不抢焦点、不设 Topmost；主窗口关闭到托盘时卡片继续运行。临期/逾期和开始时间已过分别显示，只有日期时当天仍有效；主题与主界面同步。重要延期、取消、新要求和编辑在任务列表、详情及卡片显示变化标签，打开详情后按任务版本清除未读标记；待确认变更保留正式值并可打开建议。当前状态、查看/完成、主题及保存重开已通过 Native Smoke 和独立窗口检查；多屏、Explorer 重启和睡眠恢复尚未验收，本轮未做物理鼠标拖动。
 
 普通学校群通知继续保存在应用的通知列表，列表名称不表示 Windows 系统通知。历史提醒库和内部配置、计划、台账保留数据兼容，正式应用不运行系统通知投递。桌面挂载暂不可用时，设置提示用户仍可在主界面查看任务和待确认；本机合成验证不替代真实 QQ 事项验收。
 
@@ -46,7 +46,7 @@ QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装�
 
 ## 后续功能
 
-完整编辑（标题、课程、正式日期、钟点、时间类型、优先级）已完成并通过自动回归及 Native 合成验证；最新 Core 306/306、Infrastructure 455/455、Windows 203/203，Node 全量 90/90，`.tools/published/app-full-edit/` 的 Native 合成 17 项通过。下一阶段实现可读变化记录与卡片变化标记，随后完成手动新增、合并拆分、备份恢复及桌面卡片恢复；普通通知转任务已完成本地工作区、桥协议和正式页面实现，真实 QQ 场景仍待统一验收。图片下载、附件存储、OCR 队列和完整 M6 OCR 重分析改为后期独立项目；现有 OCR worker 和离线调查保留，不代表正式 OCR 功能已接入。与本机数据泄露相关的额外安全增强暂不作为当前阶段门槛。Windows 登录自动启动代码已完成，登录后的真实系统启动仍待统一验收。常驻接口真实冷启动和首次同步已通过；三个自然固定时间同步、实际游戏暂停/补同步和自动名单覆盖需验收，用户要求实际游戏验收延后；真实 QQ 课程确认后的任务端到端、桌面卡片的恢复、多屏与长期稳定性仍需实际验收。Windows 系统通知及声音已取消，应用保持 QQ 只读，绝不向 QQ 群聊或私聊发布消息。
+完整编辑（标题、课程、正式日期、钟点、时间类型、优先级）与可读变更记录/卡片变化标记已完成并通过自动回归及 Native Smoke 验证；最新 Core 306/306、Infrastructure 463/463、Windows 206/206，Node 全量 95/95（正式页面 39/39），`.tools/published/app-change-history-final/` 的报告 `.tools/desktop-validation/change-history-native-final.json` 为 `success=true`、`synthetic=true`，21 项通过。详情显示中文字段前后值、北京时间、关联原消息证据和历史顺序；重要延期/取消/新要求/编辑显示变化标签，纯催交仅追加证据，待确认变更保留正式值并提供查看建议入口。下一阶段完成手动新增、合并拆分、备份恢复及桌面卡片恢复；普通通知转任务已完成本地工作区、桥协议和正式页面实现，真实 QQ 场景仍待统一验收。图片下载、附件存储、OCR 队列和完整 M6 OCR 重分析改为后期独立项目；现有 OCR worker 和离线调查保留，不代表正式 OCR 功能已接入。与本机数据泄露相关的额外安全增强暂不作为当前阶段门槛。Windows 登录自动启动代码已完成，登录后的真实系统启动仍待统一验收。常驻接口真实冷启动和首次同步已通过；三个自然固定时间同步、实际游戏暂停/补同步和自动名单覆盖需验收，用户要求实际游戏验收延后；真实 QQ 课程确认后的任务端到端、桌面卡片的恢复、多屏与长期稳定性仍需实际验收。Windows 系统通知及声音已取消，应用保持 QQ 只读，绝不向 QQ 群聊或私聊发布消息。
 
 ## 开发和验证
 
@@ -54,15 +54,15 @@ QQ 快捷方式改造仍停止，不要求从定制图标打开 QQ；旧安装�
 
 ```powershell
 & ./.tools/dotnet/dotnet.exe restore src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --locked-mode
-& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-sync-status
+& ./.tools/dotnet/dotnet.exe publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --no-restore --configuration Release --self-contained true --output .tools/published/app-change-history-final
+& ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release
 & ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --no-restore --configuration Release
 & ./.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release
-node --test tests/project-rules.test.mjs
-node --test tests/application-ui.test.mjs tests/application-launcher.test.mjs
+node --test tests/*.test.mjs
 powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId <运行的消息提纯进程ID>
 ```
 
-托盘脚本默认只检查图标，添加 `-ExitApplication` 会实际通过托盘菜单退出该进程。最新完整编辑回归：Core Release 306/306、Infrastructure Release 455/455、Windows Release 203/203、Node 全量 90/90，均退出 0；自包含发布 `.tools/published/app-full-edit/` 成功无警告错误，`MessagePurify.exe --smoke-test --report .tools/desktop-validation/full-edit-native.json` 退出 0，报告 `success=true`、`synthetic=true`、17 项检查通过，覆盖完整编辑、重开、桌面和版本冲突。真实 QQ 场景尚未验收，不发送 QQ 或 Windows 通知；默认正式入口和正在运行版本未替换。
+托盘脚本默认只检查图标，添加 `-ExitApplication` 会实际通过托盘菜单退出该进程。最新回归：Core Release 306/306、Infrastructure Release 463/463、Windows Release 206/206、Node 全量 95/95（正式页面 39/39），均退出 0；自包含发布 `.tools/published/app-change-history-final/` 成功无警告错误，`MessagePurify.exe --smoke-test --report .tools/desktop-validation/change-history-native-final.json` 退出 0，报告 `success=true`、`synthetic=true`、21 项检查通过，覆盖完整编辑、变更历史、待确认变更、卡片标签、重开和版本冲突。真实 QQ 场景尚未验收，不发送 QQ 或 Windows 通知；默认正式入口和正在运行版本未替换。
 
 上一版托盘修复验证：Windows Release 141/141、Node 七文件 63/63、原生合成 13 项、独立桌面检查和默认入口检查均退出 0；当时 Infrastructure 未改，沿用 375/375。`.tools/desktop-validation/tray-fix-native-smoke.json` success=true、进程退出 0，覆盖工作区/桥/卡片合成操作；`python tests/app_desktop_test.py --executable .tools/published/app-tray-fix/MessagePurify.exe` 确认父窗/style。该段另用正式数据只读复查真实 QQ，9 个置顶群、48 项待确认、0 个任务/通知、当次历史 complete，未代用户确认课程或日期；这些历史结果不替代本轮真实常驻和游戏验收。
 

@@ -3,6 +3,7 @@ using MessagePurify.Core;
 using MessagePurify.Infrastructure.Processing;
 using MessagePurify.Infrastructure.Storage;
 using MessagePurify.Infrastructure.Tasks;
+using MessagePurify.Infrastructure.Application;
 using Microsoft.Data.Sqlite;
 
 namespace MessagePurify.Infrastructure.Tests;
@@ -16,6 +17,65 @@ public sealed class LinkedChangeRoutingTests : IDisposable
     private static readonly DateTimeOffset SentAt = new(2026, 10, 12, 9, 0, 0, TimeSpan.FromHours(8));
     private static readonly DateTimeOffset Now = SentAt.AddHours(1);
     private readonly string dataRoot = Path.Combine(Path.GetTempPath(), "MessagePurify-linked-routing-" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public void ChangeHistory_AutomaticReminderKeepsReadWhileNewRequirementWithSameTimeBecomesUnread()
+    {
+        var original = CreateOriginal();
+        var workspace = new AccountWorkspace(dataRoot, Account);
+        var initial = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(new(Account, "mark-read", initial.Id, "read-initial", initial.Version), Now);
+        var reminder = Change("history-reminder", RuleAction.Remind, original.Evidence[0], SentAt.AddMinutes(1));
+        Enqueue(reminder);
+        Assert.Equal(1, Router().ProcessAndRoutePending(Context(), Pinned()));
+        var reminded = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.False(reminded.Unread);
+        Assert.Null(reminded.ChangeLabel);
+        Assert.Equal("催交补充", reminded.Changes![0].Label);
+        Assert.Equal(Sender, reminded.Changes[0].Evidence[0].SenderId);
+        Assert.Empty(reminded.Changes[0].Fields);
+        var requirement = Change("same-time-requirement", RuleAction.NewRequirement, original.Evidence[0], SentAt.AddMinutes(2)) with
+        {
+            Segments = [new(SegmentKind.Text, "统计作业新增要求：10月13日18点补交实验数据"),
+                new(SegmentKind.Quote, "原通知", original.Evidence[0])]
+        };
+        Enqueue(requirement);
+        Assert.Equal(1, Router().ProcessAndRoutePending(Context(), Pinned()));
+        var changed = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal(initial.Title, changed.Title);
+        Assert.Equal(initial.Due, changed.Due);
+        Assert.Equal(initial.Time, changed.Time);
+        Assert.True(changed.Unread);
+        Assert.Equal("新要求", changed.ChangeLabel);
+        Assert.Equal("新增要求", changed.Changes![0].Label);
+        Assert.Single(changed.Changes[0].Evidence);
+        Assert.Throws<InvalidOperationException>(() => workspace.Execute(
+            new(Account, "mark-read", reminded.Id, "stale-read", reminded.Version), Now));
+        Assert.True(Assert.Single(workspace.Snapshot(Now).Items).Unread);
+        Assert.Equal(0, Router().ProcessAndRoutePending(Context(), Pinned()));
+        Assert.Equal(3, new AccountWorkspace(dataRoot, Account).Snapshot(Now).Items.Single().Changes!.Count);
+    }
+
+    [Theory]
+    [InlineData(RuleAction.Postpone, "已延期", "任务延期")]
+    [InlineData(RuleAction.Cancel, "已取消", "任务取消")]
+    public void ChangeHistory_AutomaticChangesHaveReadableEvidenceAndImportantLabels(RuleAction action, string badge, string label)
+    {
+        var original = CreateOriginal();
+        var workspace = new AccountWorkspace(dataRoot, Account);
+        var initial = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(new(Account, "mark-read", initial.Id, "read-initial", initial.Version), Now);
+        var change = Change("history-change", action, original.Evidence[0], SentAt.AddMinutes(1));
+        Enqueue(change);
+        Assert.Equal(1, Router().ProcessAndRoutePending(Context(), Pinned()));
+        var updated = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.True(updated.Unread);
+        Assert.Equal(badge, updated.ChangeLabel);
+        var history = updated.Changes![0];
+        Assert.Equal(label, history.Label);
+        Assert.Single(history.Evidence);
+        Assert.Contains(history.Fields, field => field.Field == (action == RuleAction.Cancel ? "状态" : "正式日期"));
+    }
 
     [Fact]
     public void ProcessAndRoutePending_ReverseEnqueueRoutesOriginalPostponementThenCancellation()

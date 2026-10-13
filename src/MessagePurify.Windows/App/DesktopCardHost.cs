@@ -350,6 +350,10 @@ public sealed class DesktopCardHost : IDisposable
                     Padding = new(0), Cursor = Cursors.Hand, Tag = "open:" + item.Id };
                 details.Click += async (_, _) => await open(snapshot.AccountId!, item);
                 body.Children.Add(details);
+                if (!string.IsNullOrEmpty(item.ChangeLabel))
+                    body.Children.Add(new TextBlock { Text = item.ChangeLabel, Foreground = accent,
+                        FontSize = 11, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
+                        Margin = new(0, 6, 0, 0) });
                 body.Children.Add(new TextBlock { Text = item.Course ?? item.Group, Foreground = muted,
                     TextTrimming = TextTrimming.CharacterEllipsis, Margin = new(0, 6, 0, 4) });
                 var label = isPending ? "核对原文，补齐待确认信息" :

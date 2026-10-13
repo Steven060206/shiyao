@@ -53,7 +53,7 @@ const mockScript = `(() => {
       const group=backend.snapshot.groups.find(group=>group.groupId===parameters.id);group.course=parameters.course || null;group.excluded=parameters.excluded;
     } else if(command.operation !== 'snapshot') {
       if(!item || item.version !== parameters.version) { backend.emit({id:command.id,success:false,error:'version_conflict',snapshot:backend.snapshot,status:backend.status});return; }
-      if(command.operation==='mark-read') item.unread=false;
+      if(command.operation==='mark-read') { item.unread=false;item.changeLabel=item.pendingChanges?.length ? '待确认变更' : null; }
       else {
         const transitions={'complete':'completed','undo-complete':'active','archive':'archived','restore':'active','ignore':'ignored','undo-ignore':'pending','reject':'rejected'};
         if(transitions[command.operation])item.state=transitions[command.operation];
@@ -581,9 +581,79 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       fs.writeFileSync(path.join(os.tmpdir(), 'messagepurify-application-ui-dark-scroll.png'), Buffer.from(result.data, 'base64'));
       t.diagnostic('视觉检查截图：' + screenshotPath);
     });
+    await t.test('未查看变更显示中文标记，实际打开详情后清标记并保留记录', async () => {
+      const changed = structuredClone(fixture);
+      Object.assign(changed.items[0], { id: 'history-task', version: 200, changeLabel: '已延期', changes: [{ label: '已延期', at: '2026-10-13T01:23:45Z', version: 200, fields: [{ field: '正式日期', before: '2026-12-19', after: '2026-12-20' }], evidence: [] }] });
+      await evaluate('backend.hold=true');
+      try {
+        await push(changed); await nav('tasks'); await select('start1');
+        assert.equal(await evaluate('document.querySelector(".task-row[data-id=history-task] .change-badge")?.textContent'), '已延期');
+        assert.equal(await evaluate('backend.held.some(message=>message.operation==="mark-read" && message.parameters.id==="history-task" && message.parameters.version===200)'), false, '只打开列表不确认其他事项的变更');
+        await select('history-task');
+        assert.equal(await evaluate('document.querySelector(".detail-change-label")?.textContent'), '已延期');
+        assert.match(await evaluate('document.querySelector(".change-history").textContent'), /已延期.*正式日期.*2026-12-19.*2026-12-20/s);
+      } finally { await evaluate('backend.release()'); }
+      assert.equal(await evaluate('document.querySelector(".detail-change-label")'), null);
+      assert.equal(await evaluate('document.querySelector(".task-row[data-id=history-task] .change-badge")'), null);
+      assert.match(await evaluate('document.querySelector(".change-history").textContent'), /已延期/);
+      await nav('settings'); await change('#theme-setting', 'dark'); await nav('tasks'); await select('history-task');
+      await evaluate('document.querySelector(".change-history").scrollIntoView({block:"start"})');
+      await capture('ui-change-history-dark.png');
+    });
+    await t.test('变更记录保留后端顺序、北京时间、日期精度及独立来源并转义全部字段', async () => {
+      const changed = structuredClone(fixture);
+      changed.items[0].id = 'escaped-history-task';
+      const source = { ...evidence[0], text: '<script>window.compromised=true</script>', groupName: '<img src=x onerror="window.compromised=true">', senderId: '<iframe>', imageCount: 0 };
+      changed.items[0].changes = [
+        { label: '已修改<img src=x>', at: '2026-10-13T01:23:45Z', version: 202, fields: [{ field: '<课程>', before: '数学<iframe>', after: '（未填写）' }, { field: '正式时间', before: '2026-12-20 18:30', after: '2026-12-21 · 仅有日期' }], evidence: [source] },
+        { label: '已创建', at: '2026-10-12T01:00:00Z', version: 1, fields: [], evidence: [] }
+      ];
+      await push(changed); await nav('tasks'); await select('escaped-history-task');
+      const history = await evaluate('document.querySelector(".change-history")?.textContent');
+      assert.match(history, /已修改<img src=x>.*2026.*10.*13.*09:23:45/s);
+      assert.match(history, /<课程>.*数学<iframe>.*（未填写）.*2026-12-21 · 仅有日期/s);
+      assert.match(history, /<script>window.compromised=true<\/script>/);
+      assert.ok(history.indexOf('已修改') < history.indexOf('已创建'));
+      assert.equal(await evaluate('!!window.compromised || !!document.querySelector(".change-history img,.change-history iframe,.change-history script")'), false);
+      assert.equal(await evaluate('document.querySelector(".change-history").compareDocumentPosition(document.querySelector(".source-section")) & Node.DOCUMENT_POSITION_FOLLOWING'), 4);
+    });
+    await t.test('待确认变更保留正式值和日期精度，查看建议定位原建议并保留编辑草稿', async () => {
+      const changed = structuredClone(fixture);
+      changed.items[0].id = 'pending-history-task';
+      changed.items[0].changeLabel = '待确认变更'; changed.items[0].unread = false;
+      changed.items[0].pendingChanges = [{ id: 'remind1', label: '催交待确认', due: '2026-12-25', time: null, timeKind: 'deadline', reasons: ['与手动日期冲突'] }, { id: 'cancel1', label: '取消待确认', due: null, time: null, timeKind: 'deadline', reasons: ['来源待核对'] }];
+      await push(changed); await nav('tasks'); await select('pending-history-task');
+      await change('#time-form [name=title]', '保留中的编辑标题');
+      assert.match(await evaluate('document.querySelector(".pending-changes")?.textContent'), /催交待确认.*2026-12-25.*仅有日期.*与手动日期冲突.*取消待确认.*来源待核对/s);
+      assert.equal(await evaluate('document.querySelector("#time-form [name=date]").value'), '2026-12-20');
+      assert.equal(await evaluate('document.querySelector(".detail-change-label").textContent'), '待确认变更');
+      await capture('ui-pending-changes-dark.png');
+      await click('[data-action="open-suggestion"][data-id="cancel1"]');
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'pending');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'cancel1');
+      await nav('tasks'); await select('pending-history-task');
+      assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'), '保留中的编辑标题');
+    });
+    await t.test('查看期间到达的新变更独立确认版本，旧响应不会清掉未展示的标记', async () => {
+      const changed = structuredClone(fixture);
+      Object.assign(changed.items[0], { id: 'raced-history-task', version: 301, unread: true, changeLabel: '已延期', changes: [{ label: '已延期', at: '2026-10-13T01:00:00Z', version: 301, fields: [], evidence: [] }] });
+      await evaluate('backend.hold=true');
+      try {
+        await push(changed); await nav('tasks'); await select('raced-history-task');
+        const oldRead = await evaluate('backend.held.find(message=>message.operation==="mark-read" && message.parameters.id==="raced-history-task" && message.parameters.version===301)');
+        assert.ok(oldRead);
+        await evaluate('Object.assign(backend.snapshot.items.find(item=>item.id==="raced-history-task"),{version:302,changeLabel:"新要求",changes:[{label:"新要求",at:"2026-10-13T02:00:00Z",version:302,fields:[],evidence:[]}]});backend.snapshot.generatedAt=new Date().toISOString();backend.push()');
+        await evaluate(`backend.emit({id:${JSON.stringify(oldRead.id)},success:false,error:"version_conflict",snapshot:backend.snapshot,status:backend.status})`);
+        assert.equal(await evaluate('document.querySelector(".detail-change-label")?.textContent'), '新要求');
+        assert.match(await evaluate('document.querySelector(".change-history").textContent'), /新要求/);
+        assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="mark-read" && message.parameters.id==="raced-history-task" && message.parameters.version===302).length'), 1);
+      } finally { await evaluate('backend.release()'); }
+      assert.equal(await evaluate('document.querySelector(".detail-change-label")'), null);
+      assert.match(await evaluate('document.querySelector(".change-history").textContent'), /新要求/);
+    });
     await t.test('来源、标题、群名中的 HTML 全部按纯文本展示', async () => {
       const malicious = structuredClone(fixture); malicious.items[2].title = '<img src=x onerror="window.compromised=true">'; malicious.items[2].evidence[0].text = '<script>window.compromised=true</script>'; malicious.items[2].evidence[0].groupName = '<iframe src=https://example.com>';
-      await push(malicious); await select('review1');
+      await push(malicious); await nav('pending'); await select('review1');
       assert.match(await body(), /<script>window.compromised=true<\/script>/);
       assert.equal(await evaluate('!!window.compromised || !!document.querySelector("img,iframe")'), false);
     });

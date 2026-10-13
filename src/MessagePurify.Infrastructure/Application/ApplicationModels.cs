@@ -18,7 +18,17 @@ public sealed record ApplicationItem(string Id, string Kind, string Title, strin
     long Version, string? TargetTaskId, long? TargetTaskVersion, string? UndoOperationId,
     DateTimeOffset? UndoExpiresAt, IReadOnlyList<string> ReviewReasons, string? SuggestedDue,
     string? SuggestedTime, IReadOnlyList<ApplicationEvidence> Evidence, bool Unread,
-    string Action, bool CanAccept);
+    string Action, bool CanAccept, string? ChangeLabel = null,
+    IReadOnlyList<ApplicationChange>? Changes = null,
+    IReadOnlyList<ApplicationPendingChange>? PendingChanges = null);
+
+public sealed record ApplicationChange(string Label, DateTimeOffset At, long Version,
+    IReadOnlyList<ApplicationFieldChange> Fields, IReadOnlyList<ApplicationEvidence> Evidence);
+
+public sealed record ApplicationFieldChange(string Field, string Before, string After);
+
+public sealed record ApplicationPendingChange(string Id, string Label, string? Due, string? Time,
+    string TimeKind, IReadOnlyList<string> Reasons);
 
 public sealed record ApplicationEvidence(string GroupId, string GroupName, string SenderId,
     DateTimeOffset? SentAt, string Text, int ImageCount);

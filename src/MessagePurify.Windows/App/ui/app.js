@@ -273,7 +273,7 @@ function renderList() {
   if (!visible.some(item => item.id === selectedId)) selectedId = visible[0]?.id || null;
   $('list-summary').innerHTML = `<span>${visible.length} 项${snapshot ? '' : ' · 等待本地应用'}</span><b>${pages[page]}</b>`;
   $('rows').innerHTML = visible.length ? visible.map(item => `<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
-    <div class="row-top"><h2>${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}</h2><span class="tag ${item.kind === 'review' ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${item.kind === 'review' ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
+    <div class="row-top"><h2>${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}${item.changeLabel ? `<span class="change-badge">${html(item.changeLabel)}</span>` : ''}</h2><span class="tag ${item.kind === 'review' ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${item.kind === 'review' ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
     <div class="row-meta"><span>${html(item.course || item.group || '来源待核对')}</span><span>${item.kind === 'task' ? html(dateLabel(item)) : html(states[item.state])}</span></div>
     ${item.kind === 'review' && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}</button>`).join('') : emptyMessage();
 }
@@ -299,8 +299,19 @@ function formHTML(item) {
     ${item.suggestedDue ? `<div class="change-box">建议日期：${html(item.suggestedDue)}${item.suggestedTime ? ' ' + html(item.suggestedTime) : ''}<p>建议尚未成为正式时间，核对后可填入表单。</p><button type="button" class="button small" data-action="use-suggestion">填入建议日期</button></div>` : ''}
     ${item.kind === 'task' ? '<button type="submit" class="button" data-action="edit-task">保存修改</button>' : notice ? '<button type="submit" class="button primary" data-action="convert-notice">加入任务</button>' : ''}</form>`;
 }
+function evidenceHTML(evidence) {
+  return evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('');
+}
 function sourceHTML(item) {
-  return '<h3 class="section-label">原始消息</h3>' + (item.evidence?.length ? item.evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('') : '<p class="hint">暂无可显示的原消息正文。</p>');
+  return '<section class="source-section"><h3 class="section-label">原始消息</h3>' + (item.evidence?.length ? evidenceHTML(item.evidence) : '<p class="hint">暂无可显示的原消息正文。</p>') + '</section>';
+}
+function historyHTML(item) {
+  if (!item.changes?.length) return '';
+  return `<section class="change-history"><h3 class="section-label">变更记录 <span>北京时间</span></h3><ol class="history-list">${item.changes.map(change => `<li class="history-entry"><div class="history-heading"><b>${html(change.label)}</b><time datetime="${html(change.at)}">${html(new Date(change.at).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }))}</time></div>${change.fields?.length ? `<dl class="history-fields">${change.fields.map(field => `<dt>${html(field.field)}</dt><dd><span>${html(field.before)}</span><span class="history-arrow" aria-label="改为">→</span><strong>${html(field.after)}</strong></dd>`).join('')}</dl>` : ''}${change.evidence?.length ? `<div class="history-evidence"><p class="hint">关联消息</p>${evidenceHTML(change.evidence)}</div>` : ''}</li>`).join('')}</ol></section>`;
+}
+function pendingChangesHTML(item) {
+  if (!item.pendingChanges?.length) return '';
+  return `<section class="pending-changes"><h3 class="section-label">待确认变更</h3><p class="hint">核对并接受建议前，保留当前正式信息。</p>${item.pendingChanges.map(change => `<article class="change-box"><b>${html(change.label)}</b>${change.due ? `<p>拟定${change.timeKind === 'start' ? '开始' : '截止'}：${html(dateLabel(change))}</p>` : ''}${change.reasons?.length ? `<p>${html(change.reasons.join(' · '))}</p>` : ''}<button type="button" class="button small" data-action="open-suggestion" data-id="${html(change.id)}">查看建议</button></article>`).join('')}</section>`;
 }
 function actionsHTML(item) {
   const button = (action, label, primary = false) => `<button class="button ${primary ? 'primary' : ''}" data-action="${action}">${label}</button>`;
@@ -335,13 +346,14 @@ function renderDetail() {
     const sameItem = scroll.querySelector('form')?.dataset.id === item?.id;
     retainFocus(scroll, () => {
       if (!item) scroll.innerHTML = `<div class="empty"><h2>${page === 'settings' ? '仅接收置顶群' : snapshot ? '查看事项详情' : initialMessage()[0]}</h2><p>${page === 'settings' ? '确认群课程后用于新消息。已有待确认仍需逐项核对。' : snapshot ? '选择左侧事项查看原文与操作。' : initialMessage()[1]}</p></div>`;
-      else scroll.innerHTML = `<p class="eyebrow">${html(states[item.state] || pages[page])}</p><h2 class="detail-title">${html(item.title)}</h2><p class="detail-sub">${html(item.course || '课程待核对')} · ${html(item.group || '来源待核对')}</p>
+      else scroll.innerHTML = `<p class="eyebrow">${html(states[item.state] || pages[page])}</p><h2 class="detail-title">${html(item.title)}</h2>${item.changeLabel ? `<p class="detail-change-label change-badge">${html(item.changeLabel)}</p>` : ''}<p class="detail-sub">${html(item.course || '课程待核对')} · ${html(item.group || '来源待核对')}</p>
         ${item.kind === 'task' ? `<div class="deadline-box ${item.state === 'active' && past(item) && item.timeKind !== 'start' ? 'overdue' : ''}"><small>${timeLabel(item)}</small><b>${html(dateLabel(item))}</b><small>${item.state !== 'active' ? html(states[item.state]) : past(item) ? item.timeKind === 'start' ? '开始时间已过' : '已逾期，仍保留待处理' : '按正式日期和时间精度保存'}</small></div>` : ''}
+        ${pendingChangesHTML(item)}
         ${item.kind === 'review' && item.reviewReasons?.length ? `<div class="change-box">需要核对<p>${html(item.reviewReasons.join(' · '))}</p></div>` : ''}
         <div class="detail-actions">${actionsHTML(item)}</div>
         ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
         ${item.kind === 'review' && item.state === 'pending' && !item.canAccept ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
-        ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${sourceHTML(item)}`;
+        ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${historyHTML(item)}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
     });
     footer.hidden = !item || item.kind !== 'review' || item.state !== 'pending';
@@ -454,6 +466,11 @@ document.addEventListener('click', event => {
   }
   if (action === 'select') { selectedId = button.dataset.id; detailError = null; render(); return; }
   if (action === 'refresh' || action === 'refresh-edit') { hostError = ''; request('snapshot', {}); return; }
+  if (action === 'open-suggestion') {
+    const suggestion = items().find(item => item.id === button.dataset.id && item.kind === 'review' && item.state === 'pending');
+    if (!suggestion || !snapshot) { hostError = '此建议已处理或暂不可用，请刷新后核对。'; render(); return; }
+    openItem({ accountId: snapshot.accountId, id: suggestion.id }); return;
+  }
   if (action === 'confirm-group' || action === 'exclude-group') {
     const groupId = button.closest('[data-group-id]').dataset.groupId;
     const group = snapshot?.groups.find(group => group.groupId === groupId);

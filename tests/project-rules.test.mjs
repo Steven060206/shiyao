@@ -43,7 +43,7 @@ test('OCR 后置且 QQ 只读边界保持为硬约束', () => {
   }
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /普通通知转任务已实现.*完整编辑已接入.*通过自动回归及 Native 合成验证/s);
-  assert.match(requirements, /下一项实现可读变更记录与卡片变化标记.*手动新增.*合并拆分.*备份恢复.*桌面卡片恢复/s);
+  assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*下一项为手动新增.*合并拆分.*备份恢复.*桌面卡片恢复/s);
   assert.doesNotMatch(requirements.split('## 4. 图片辅助')[0], /下一项实现图片下载与 OCR 队列/);
 });
 
@@ -54,9 +54,9 @@ test('完整编辑六字段及自动/Native 验证证据已同步', () => {
     assert.match(content, /旧 JSON|旧任务 JSON.*自动.*计算/, file);
     assert.match(content, /版本冲突.*(?:保留|草稿)/, file);
     assert.match(content, /Core(?: Release)? \*{0,2}306\/306/, file);
-    assert.match(content, /Infrastructure(?: Release)? \*{0,2}455\/455/, file);
-    assert.match(content, /Windows(?: Release)? \*{0,2}203\/203/, file);
-    assert.match(content, /Native 合成.*17 项|17 项.*(?:Native|检查)/, file);
+    assert.match(content, /Infrastructure(?: Release)? \*{0,2}(?:455\/455|463\/463)/, file);
+    assert.match(content, /Windows(?: Release)? \*{0,2}(?:203\/203|206\/206)/, file);
+    assert.match(content, /Native 合成.*(?:17|21) 项|(?:17|21) 项.*(?:Native|检查)/, file);
     assert.match(content, /真实 QQ.*(?:后置|尚未验收|仍待)/, file);
   }
   const handoff = read('docs/HANDOFF.md');
@@ -64,6 +64,17 @@ test('完整编辑六字段及自动/Native 验证证据已同步', () => {
   assert.match(handoff, /同账号同群.*原证据/);
   assert.match(handoff, /仅标题匹配仍要求课程一致/);
   assert.match(read('src/MessagePurify.Windows/App/README.md'), /Node 全量 \d+\/\d+/);
+});
+
+test('可读变更记录与卡片变化标记已同步', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
+    const content = read(file);
+    assert.match(content, /(?:可读变更记录|变更记录).*变化(?:标记|标签)/, file);
+    assert.match(content, /北京时间/, file);
+    assert.match(content, /(?:Native Smoke|Native 合成).*21 项|21 项.*(?:Native Smoke|Native 合成)/, file);
+  }
+  assert.match(read('docs/requirements.md'), /纯催交只追加证据/);
+  assert.match(read('src/MessagePurify.Windows/App/README.md'), /待确认变更.*正式值.*建议入口/);
 });
 
 test('用户 A 已确认两卡片渠道，全部 Windows 系统弹窗和声音取消', () => {

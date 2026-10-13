@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 namespace MessagePurify.Infrastructure.Tasks;
 
 /// <summary>账号独立的正式事项、待确认建议及操作历史；每次写入原子提交。</summary>
-public sealed class AccountTaskStore
+public sealed partial class AccountTaskStore
 {
     public string AccountId { get; }
     public string DatabasePath { get; }
@@ -223,7 +223,7 @@ public sealed class AccountTaskStore
         ValidateId(reviewId);
         ValidateId(taskId);
         if (confirmedTime is not null) ValidateTime(confirmedTime);
-        return Write<TaskItem>(operationId, new { Kind = "accept-review", ReviewId = reviewId, TaskId = taskId,
+        return Write<TaskItem>(operationId, new { Kind = "accept-review", Action = reviewAction(reviewId), ReviewId = reviewId, TaskId = taskId,
             ExpectedReviewVersion = expectedReviewVersion, ExpectedTaskVersion = expectedTaskVersion, Time = confirmedTime },
             "task", (connection, transaction) =>
         {
@@ -266,6 +266,12 @@ public sealed class AccountTaskStore
             Update(connection, transaction, "reviews", reviewId, accepted);
             return new(task, taskId, new { Review = review, Task = previous }, new { Review = accepted, Task = task });
         }, now);
+
+        RuleAction reviewAction(string id)
+        {
+            var review = FindReview(id) ?? throw new KeyNotFoundException("待确认事项不存在。");
+            return review.Candidate.Action;
+        }
     }
 
     private TaskItem AcceptLinked(TaskItem previous, RuleCandidate candidate, TaskTime? confirmedTime, DateTimeOffset now)

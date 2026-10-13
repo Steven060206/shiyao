@@ -2,11 +2,15 @@
 
 ## 当前范围决定（2026-10-12）
 
-OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立项目，本阶段不以 OCR 完成为门槛。额外的本机数据安全增强同样后置；测试仍必须保持 QQ/NapCat 只读，软件不得向 QQ 群聊或私聊发送消息。普通通知转任务及六字段完整编辑已由工作区、桥协议和正式页面专项覆盖；下一阶段先实现可读变更记录与卡片变化标记，再完成手动新增、合并拆分、备份恢复和桌面卡片恢复。
+OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立项目，本阶段不以 OCR 完成为门槛。额外的本机数据安全增强同样后置；测试仍必须保持 QQ/NapCat 只读，软件不得向 QQ 群聊或私聊发送消息。普通通知转任务、六字段完整编辑及可读变更记录/卡片变化标记已由工作区、桥协议、正式页面和 Native Smoke 专项覆盖；下一阶段完成手动新增、合并拆分、备份恢复和桌面卡片恢复。
 
 ## 本轮完整编辑实现与验证（2026-10-13）
 
-完整编辑覆盖标题、课程、正式日期、钟点、时间类型和优先级。测试覆盖版本化 `edit-task`、操作幂等、原始证据与前后审计、手动时间保护、旧 JSON 优先级兼容、版本冲突保留全部草稿、刷新响应按起始账号/任务绑定，以及编辑或清空课程后同账号同群原证据引用仍可关联（仅标题匹配仍要求课程一致，跨群/跨账号/歧义拒绝）。最新 Release 回归：Core **306/306**、Infrastructure **455/455**、Windows **203/203**；Node 全量 **90/90**（含正式页面 **35/35**），均退出 0。自包含发布 `.tools/published/app-full-edit/` 无警告错误；`MessagePurify.exe --smoke-test --report .tools/desktop-validation/full-edit-native.json` 退出 0，报告 `success=true`、`synthetic=true`，17 项检查通过，覆盖编辑、重开、桌面及版本冲突。真实 QQ 编辑场景统一后置；默认正式入口及正在运行版本未替换，测试未发送 QQ 或 Windows 通知。
+完整编辑覆盖标题、课程、正式日期、钟点、时间类型和优先级。测试覆盖版本化 `edit-task`、操作幂等、原始证据与前后审计、手动时间保护、旧 JSON 优先级兼容、版本冲突保留全部草稿、刷新响应按起始账号/任务绑定，以及编辑或清空课程后同账号同群原证据引用仍可关联（仅标题匹配仍要求课程一致，跨群/跨账号/歧义拒绝）。最新 Release 回归：Core **306/306**、Infrastructure **463/463**、Windows **206/206**；Node 全量 **95/95**（含正式页面 **39/39**），均退出 0。自包含发布 `.tools/published/app-change-history-final/` 无警告错误；`MessagePurify.exe --smoke-test --report .tools/desktop-validation/change-history-native-final.json` 退出 0，报告 `success=true`、`synthetic=true`，21 项检查通过，覆盖编辑、变更历史、待确认变更、卡片标签、重开及版本冲突。真实 QQ 编辑场景统一后置；默认正式入口及正在运行版本未替换，测试未发送 QQ 或 Windows 通知。
+
+## 本轮可读变更记录与卡片标记（2026-10-13）
+
+测试覆盖从 `operations` 审计还原中文字段前后值、北京时间、原消息证据和顺序；延期/取消/新要求/编辑产生重要变化标签，催交补充仅追加证据；待确认变更保留正式日期并可打开建议；`mark-read` 按任务版本工作，旧版本不能清除后来变化。正式页面专项覆盖详情转义、历史显示、日期精度、待确认建议定位和新变化保留；Native Smoke 覆盖重开、卡片标签、变化读取及滚动条存在时仍精确触发缩放手柄。报告为 `.tools/desktop-validation/change-history-native-final.json`，success=true、synthetic=true、21 项通过。
 
 ## 本轮 Windows 登录自动启动实现（2026-10-12）
 
@@ -147,7 +151,7 @@ node --test tests/project-rules.test.mjs tests/probe-packaging.test.mjs tests/na
 
 新产物 `--smoke-test --report .tools/desktop-validation/native-smoke-final.json` 真实运行并核对进程 ExitCode=0、success=true：snapshot、complete、undo-complete、explicit-date、accept-review、native-bridge、reopen、desktop-data、desktop-theme、desktop-open-item、desktop-complete、desktop-layout、pending-hide 共 13 项通过。`native-smoke-final.png` 和 `native-smoke-final-cards.png` 已查看。Python 检查枚举本次进程两个卡片子窗，parentClass=`SHELLDLL_DefView`、child/noActivate=true、topmost=false，任务可见、待确认空隐藏；对旧 app-reminders 的同项检查曾实际失败，旧版无正式卡片。独立 PowerShell 执行 `packaging/app/Start-MessagePurify.ps1 -CheckOnly` 后读取 ExitCode=0、Ready/AuthenticationReady=true，报告 `.tools/desktop-validation/launcher-check.json`。
 
-Core/OCR/demo 本轮未改，沿用上段已实际通过的 Core 301/301、OCR pip check/unittest 25/25、demo 108，不记为本轮重跑。桌面合成使用临时账号，本轮未重测真实 QQ 数量，沿用上段 9 个置顶群/40 项待确认两次结果，未代用户确认课程/日期。拖动复用已验证几何、缩放使用实际 Thumb 事件；本轮未做物理鼠标拖动，多屏、Explorer 重启和睡眠恢复尚未验收。重挂载代码、模拟边界/DPI布局回归不代表长期稳定性或真实任务端到端完成，完整变化标记仍待实施。源码/测试在仓库；本机报告与截图位于忽略目录 `.tools/desktop-validation/`。最终 Node 七文件 63/63、diff/staged check 退出 0，本轮已用对应 Git commit 保存；最终提交标识以 Git 日志为准。
+Core/OCR/demo 本轮未改，OCR/demo 沿用历史结果；本轮 Core 306/306、Infrastructure 463/463、Windows 206/206、Node 全量 95/95 均已实际执行并退出 0。桌面合成使用临时账号，本轮未重测真实 QQ 数量，沿用上段 9 个置顶群/40 项待确认两次结果，未代用户确认课程/日期。缩放使用按提示定位的实际 WPF Thumb 事件；本轮未做物理鼠标拖动，多屏、Explorer 重启和睡眠恢复尚未验收。源码/测试在仓库；本机报告与截图位于忽略目录 `.tools/desktop-validation/`。
 
 ## 历史验证记录
 

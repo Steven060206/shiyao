@@ -8,6 +8,36 @@ public sealed class DesktopCardTests
     private static readonly DateTimeOffset Now = new(2026, 10, 12, 10, 0, 0, TimeSpan.FromHours(8));
 
     [Theory]
+    [InlineData("task", "active")]
+    [InlineData("review", "pending")]
+    public void ChangeLabelAloneRefreshesTheCardWithoutChangingTaskVersion(string kind, string state)
+    {
+        var item = Item("changed", kind, state);
+        var original = DesktopCardProjection.Build(Snapshot(item), Connected());
+        var changed = DesktopCardProjection.Build(Snapshot(item with { ChangeLabel = "待确认变更" }), Connected());
+        var cleared = DesktopCardProjection.Build(Snapshot(item with { ChangeLabel = null }), Connected());
+
+        Assert.NotEqual(DesktopCardProjection.RenderSignature(original, "dark", null, null, Now),
+            DesktopCardProjection.RenderSignature(changed, "dark", null, null, Now));
+        Assert.Equal(DesktopCardProjection.RenderSignature(original, "dark", null, null, Now),
+            DesktopCardProjection.RenderSignature(cleared, "dark", null, null, Now));
+        Assert.Equal(item.Version, kind == "task" ? changed.Tasks.Single().Version : changed.Pending.Single().Version);
+    }
+
+    [Fact]
+    public void ReadChangeLabelsAndHistoryDoNotChangeCardFilteringOrSourceData()
+    {
+        var task = Item("new-requirement") with { ChangeLabel = "新要求", Unread = true };
+        var cancelled = Item("cancelled", state: "cancelled") with { ChangeLabel = "已取消" };
+        var cards = DesktopCardProjection.Build(Snapshot(task, cancelled), Connected());
+
+        Assert.Same(task, Assert.Single(cards.Tasks));
+        Assert.Equal("新要求", cards.Tasks.Single().ChangeLabel);
+        Assert.Equal("已取消", cancelled.ChangeLabel);
+        Assert.Empty(cards.Pending);
+    }
+
+    [Theory]
     [InlineData("deadline", "12:00", "2026-10-12T11:59:59+08:00", "2026-10-12T12:00:00+08:00")]
     [InlineData("start", "12:00", "2026-10-12T03:59:59Z", "2026-10-12T04:00:00Z")]
     [InlineData("deadline", null, "2026-10-12T23:59:59+08:00", "2026-10-13T00:00:00+08:00")]

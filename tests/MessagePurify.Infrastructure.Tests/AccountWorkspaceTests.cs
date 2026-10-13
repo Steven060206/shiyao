@@ -189,6 +189,123 @@ public sealed class AccountWorkspaceTests : IDisposable
     }
 
     [Fact]
+    public void ChangeHistory_EditShowsFieldsAndSurvivesReopenWithoutDuplicateOperation()
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        workspace.Execute(Command("mark-read", task), Now);
+        var command = Command("edit-task", task, "history-edit") with
+        { Title = "修订报告", Course = null, Date = "2026-10-20", Time = "18:30", TimeKind = "start", Priority = 1 };
+        workspace.Execute(command, Now.AddMinutes(1));
+        workspace.Execute(command, Now.AddMinutes(2));
+        var changed = Assert.Single(Workspace().Snapshot(Now).Items);
+        Assert.True(changed.Unread);
+        Assert.Equal("已修改", changed.ChangeLabel);
+        var history = Assert.IsAssignableFrom<IReadOnlyList<ApplicationChange>>(changed.Changes);
+        Assert.Equal(2, history.Count);
+        var edit = history[0];
+        Assert.Equal("修改任务", edit.Label);
+        Assert.Equal(Now.AddMinutes(1), edit.At);
+        Assert.Equal(changed.Version, edit.Version);
+        Assert.Contains(edit.Fields, field => field.Field == "标题" && field.Before == "统计作业" && field.After == "修订报告");
+        Assert.Contains(edit.Fields, field => field.Field == "课程" && field.Before == "数学" && field.After == "未分类");
+        Assert.Contains(edit.Fields, field => field.Field == "正式日期" && field.After == "2026-10-20");
+        Assert.Contains(edit.Fields, field => field.Field == "钟点" && field.Before == "未填写" && field.After == "18:30");
+        Assert.Contains(edit.Fields, field => field.Field == "时间类型" && field.After == "开始时间");
+        Assert.Contains(edit.Fields, field => field.Field == "优先级" && field.Before == "自动分级" && field.After == "P1");
+        Assert.Single(history[1].Evidence);
+        Assert.Empty(edit.Evidence);
+        Assert.Empty(new AccountWorkspace(root, "123").Snapshot(Now).Items);
+        workspace.Execute(Command("mark-read", changed), Now);
+        var read = Assert.Single(Workspace().Snapshot(Now).Items);
+        Assert.False(read.Unread);
+        Assert.Null(read.ChangeLabel);
+        Assert.Equal(2, read.Changes!.Count);
+    }
+
+    [Fact]
+    public void ChangeHistory_NoVisibleEditDoesNotCreateImportantUnreadOrHistory()
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        workspace.Execute(Command("mark-read", task), Now);
+        workspace.Execute(Command("accept-time", task) with { Date = task.Due, TimeKind = task.TimeKind }, Now);
+        var changed = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal(task.Version + 1, changed.Version);
+        Assert.False(changed.Unread);
+        Assert.Null(changed.ChangeLabel);
+        Assert.Single(changed.Changes!);
+    }
+
+    [Fact]
+    public void ChangeHistory_LinkedReviewShowsPendingAndAcceptedSnapshots()
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        workspace.Execute(Command("mark-read", task), Now);
+        Tasks().SavePending("postpone-review", Candidate("报告延期", Date(20), RuleAction.Postpone,
+            RuleDisposition.Change, task.Id), "save-postpone", Now);
+        var snapshot = workspace.Snapshot(Now);
+        var pendingTask = snapshot.Items.Single(item => item.Kind == "task");
+        Assert.Equal("待确认变更", pendingTask.ChangeLabel);
+        var proposal = Assert.Single(pendingTask.PendingChanges!);
+        Assert.Equal("postpone-review", proposal.Id);
+        Assert.Equal("2026-10-20", proposal.Due);
+        Assert.Equal("2026-10-13", pendingTask.Due);
+        var review = snapshot.Items.Single(item => item.Kind == "review");
+        workspace.Execute(Command("accept-review", review) with
+        { Date = "2026-10-20", TimeKind = "deadline", TargetTaskVersion = task.Version }, Now.AddMinutes(1));
+        var changed = workspace.Snapshot(Now).Items.Single(item => item.Kind == "task");
+        Assert.Empty(changed.PendingChanges!);
+        Assert.Equal("已延期", changed.ChangeLabel);
+        var latest = changed.Changes![0];
+        Assert.Equal("确认延期", latest.Label);
+        Assert.Contains(latest.Fields, field => field.Field == "正式日期" && field.Before == "2026-10-13" && field.After == "2026-10-20");
+        Assert.Throws<InvalidOperationException>(() => workspace.Execute(Command("mark-read", task), Now));
+        Assert.Equal("已延期", workspace.Snapshot(Now).Items.Single(item => item.Kind == "task").ChangeLabel);
+    }
+
+    [Fact]
+    public void ChangeHistory_InitialReviewAcceptanceAndRepeatedCreationShowOneCreationRecord()
+    {
+        var workspace = Workspace();
+        var candidate = Candidate(time: null, disposition: RuleDisposition.Pending);
+        Tasks().SavePending("new-review", candidate, "save-review", Now);
+        var review = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(Command("accept-review", review) with { Date = "2026-10-13", TimeKind = "deadline" }, Now);
+        var task = workspace.Snapshot(Now).Items.Single(item => item.Kind == "task");
+        Assert.Single(task.Changes!);
+        Assert.Equal("确认并加入任务", task.Changes![0].Label);
+        Assert.Null(task.ChangeLabel);
+        Assert.True(task.Unread);
+        var other = new AccountWorkspace(Path.Combine(root, "separate"), Account);
+        var store = new AccountTaskStore(Path.Combine(root, "separate"), Account);
+        store.CreateTask("duplicate-task", Candidate(time: Date()), "first-create", Now);
+        store.CreateTask("other-id", Candidate(time: Date()), "duplicate-create", Now.AddMinutes(1));
+        Assert.Single(Assert.Single(other.Snapshot(Now).Items).Changes!);
+    }
+
+    [Fact]
+    public void ChangeHistory_IgnoredProposalClearsPendingMarkerAndReadDoesNotClearUnresolvedProposal()
+    {
+        var workspace = Workspace();
+        var task = SeedTask(workspace);
+        Tasks().SavePending("pending-change", Candidate("延期", Date(20), RuleAction.Postpone,
+            RuleDisposition.Change, task.Id), "pending-operation", Now);
+        workspace.Execute(Command("mark-read", task), Now);
+        var snapshot = workspace.Snapshot(Now);
+        var current = snapshot.Items.Single(item => item.Kind == "task");
+        Assert.False(current.Unread);
+        Assert.Equal("待确认变更", current.ChangeLabel);
+        var review = snapshot.Items.Single(item => item.Kind == "review");
+        workspace.Execute(Command("ignore", review), Now);
+        current = workspace.Snapshot(Now).Items.Single(item => item.Kind == "task");
+        Assert.Null(current.ChangeLabel);
+        Assert.Empty(current.PendingChanges!);
+        Assert.Single(current.Changes!);
+    }
+
+    [Fact]
     public void AcceptTime_PreservesDateOnlyAndRecalculatesPriorityForActualNow()
     {
         var workspace = Workspace();

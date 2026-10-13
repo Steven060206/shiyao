@@ -123,12 +123,30 @@ public sealed class AccountWorkspace
         lock (gate)
         {
             var taskList = tasks.ListTasks();
+            var reviews = tasks.ListReviews();
+            var history = tasks.ListTaskHistory().GroupBy(entry => entry.After.Id)
+                .ToDictionary(group => group.Key, group => group.Select(TaskChangeProjection.Build)
+                    .OfType<TaskChangeProjection.Change>().ToArray(), StringComparer.Ordinal);
             var items = new List<ApplicationItem>();
             foreach (var task in taskList)
+            {
+                var changes = history.GetValueOrDefault(task.Id) ?? [];
+                var important = changes.LastOrDefault(change => change.Important);
+                var pending = reviews.Where(review => review.State == ReviewState.Pending && review.Candidate.TargetTaskId == task.Id)
+                    .Select(review => new ApplicationPendingChange(review.Id, TaskChangeProjection.SuggestionLabel(review.Candidate.Action),
+                        FormatDate(review.Candidate.Time ?? review.Candidate.SuggestedTime),
+                        FormatTime(review.Candidate.Time ?? review.Candidate.SuggestedTime),
+                        (review.Candidate.Time?.Kind ?? review.Candidate.SuggestedTime?.Kind ?? task.Time.Kind).ToString().ToLowerInvariant(),
+                        review.Candidate.ReviewReasons)).ToArray();
                 items.Add(Item(task.Id, "task", task.Title, task.Course, task.State.ToString().ToLowerInvariant(),
                     task.Time, task.Version, task.Evidence, task.Action, now,
-                    undoId: task.UndoOperationId, undoExpires: task.UndoExpiresAt, priorityOverride: task.PriorityOverride));
-            foreach (var review in tasks.ListReviews().Where(review => review.State is ReviewState.Pending or ReviewState.Ignored))
+                    undoId: task.UndoOperationId, undoExpires: task.UndoExpiresAt, priorityOverride: task.PriorityOverride,
+                    unreadVersion: important?.Entry.After.Version ?? task.Version,
+                    changeLabel: important?.Badge, changes: changes.Reverse().Select(change => new ApplicationChange(
+                        change.Label, change.Entry.At, change.Entry.After.Version, change.Fields, Evidence(change.Entry.Evidence))).ToArray(),
+                    pendingChanges: pending));
+            }
+            foreach (var review in reviews.Where(review => review.State is ReviewState.Pending or ReviewState.Ignored))
             {
                 var candidate = review.Candidate;
                 var target = taskList.FirstOrDefault(task => task.Id == candidate.TargetTaskId);
@@ -164,17 +182,14 @@ public sealed class AccountWorkspace
         TaskTime? time, long version, IReadOnlyList<MessageKey> evidenceKeys, RuleAction action,
         DateTimeOffset now, string? target = null, long? targetVersion = null, string? undoId = null,
         DateTimeOffset? undoExpires = null, IReadOnlyList<string>? reasons = null,
-        TaskTime? suggested = null, bool canAccept = false, int? priorityOverride = null)
+        TaskTime? suggested = null, bool canAccept = false, int? priorityOverride = null,
+        long? unreadVersion = null, string? changeLabel = null, IReadOnlyList<ApplicationChange>? changes = null,
+        IReadOnlyList<ApplicationPendingChange>? pendingChanges = null)
     {
         var sources = evidenceKeys.Distinct().Select(key => (Key: key, Stored: messages.Find(key))).ToArray();
-        var evidence = sources.Select(source =>
-        {
-            var message = source.Stored?.Message;
-            return new ApplicationEvidence(source.Key.GroupId, GroupName(source.Key.GroupId), message?.SenderId ?? "",
-                message?.SentAt, message is null ? "原消息暂不可用" : string.Join("\n",
-                    message.Segments.Where(segment => segment.Kind != SegmentKind.Image).Select(segment => segment.Text)),
-                message?.Segments.Count(segment => segment.Kind == SegmentKind.Image) ?? 0);
-        }).ToArray();
+        var evidence = Evidence(evidenceKeys);
+        var unread = !settings.ReadVersions.TryGetValue(ReadKey(kind, id), out var readVersion)
+            || readVersion < (unreadVersion ?? version);
         // 每个候选的完整行动正文保留后果及否定；P0 数值饱和也不丢失明确后果。
         var clearConsequence = sources.Any(source =>
             source.Stored?.Extraction?.Candidates.Any(candidate => (candidate.Title == title || candidate.TargetTaskId == id) &&
@@ -183,9 +198,18 @@ public sealed class AccountWorkspace
             state, FormatDate(time), FormatTime(time), (time?.Kind ?? suggested?.Kind ?? Core.TimeKind.Deadline)
                 .ToString().ToLowerInvariant(), priorityOverride ?? (time is null ? null : PriorityCalculator.Calculate(time, now, clearConsequence)),
             version, target, targetVersion, undoId, undoExpires, reasons ?? [], FormatDate(suggested),
-            FormatTime(suggested), evidence, !settings.ReadVersions.TryGetValue(ReadKey(kind, id), out var readVersion)
-                || readVersion < version, action.ToString().ToLowerInvariant(), canAccept);
+            FormatTime(suggested), evidence, unread, action.ToString().ToLowerInvariant(), canAccept,
+            pendingChanges?.Count > 0 ? "待确认变更" : unread ? changeLabel : null, changes, pendingChanges);
     }
+
+    private ApplicationEvidence[] Evidence(IReadOnlyList<MessageKey> keys) => keys.Distinct().Select(key =>
+        {
+            var message = messages.Find(key)?.Message;
+            return new ApplicationEvidence(key.GroupId, GroupName(key.GroupId), message?.SenderId ?? "",
+                message?.SentAt, message is null ? "原消息暂不可用" : string.Join("\n",
+                    message.Segments.Where(segment => segment.Kind != SegmentKind.Image).Select(segment => segment.Text)),
+                message?.Segments.Count(segment => segment.Kind == SegmentKind.Image) ?? 0);
+        }).ToArray();
 
     public void Execute(WorkspaceCommand command, DateTimeOffset now)
     {
