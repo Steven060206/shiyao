@@ -111,6 +111,7 @@ internal static partial class SmokeCheck
         if (workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(i => i.Id == task.Id).ChangeLabel is not null)
             throw new InvalidOperationException("已展示的编辑历史没有清除变化标记。");
         // An incoming task change must not silently upgrade the version of the form draft.
+        await WaitAsync(window, "![...requests.values()].some(item => item.operation === 'edit-task') && draftFor(selected()).version === " + edited.Version);
         workspace.Execute(new(workspace.AccountId, "edit-task", task.Id, "native-concurrent-edit", edited.Version,
             Date: editedDate, Time: "18:30", TimeKind: "start", Title: "同步更新的数学报告", Course: "数学实验", Priority: 3), DateTimeOffset.UtcNow);
         runtime.Refresh();

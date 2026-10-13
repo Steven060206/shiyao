@@ -1,4 +1,5 @@
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
@@ -21,7 +22,8 @@ internal static partial class SmokeCheck
         "desktop-rounded-transparent-corners", "desktop-empty-compact", "desktop-content-height-restored",
         "desktop-slim-scrollbar", "desktop-theme-scroll-preserved", "desktop-snap-horizontal", "desktop-snap-vertical-compact",
         "desktop-snap-detach", "desktop-snap-layout-reopen", "desktop-hidden-card-no-snap",
-        "desktop-transparency-page", "desktop-transparency-text", "desktop-transparency-reopen", "desktop-transparency-backup"];
+        "desktop-transparency-page", "desktop-transparency-text", "desktop-transparency-reopen", "desktop-transparency-backup",
+        "main-titlebar-dark", "main-titlebar-light", "main-titlebar-reopen", "main-native-window-controls"];
 
     private static bool HasDesktopTheme(Window window, bool dark, int? transparency = null)
     {
@@ -146,7 +148,13 @@ internal static partial class SmokeCheck
             await WaitAsync(window, "snapshot !== null && initialized");
             await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
             await WaitAsync(window, "document.querySelector('#desktop-transparency-setting') !== null");
+            window.ShowMainWindow();
+            await ChangeSettingAsync(window, "theme-setting", "light");
+            await WaitAsync(window, "document.documentElement.dataset.theme === 'light' && ![...requests.values()].some(item => item.operation === 'set-appearance')");
+            CaptureTitlebar(window, Path.Combine(captureRoot, "main-titlebar-light.png"), false);
             await ChangeSettingAsync(window, "theme-setting", "dark");
+            await WaitAsync(window, "document.documentElement.dataset.theme === 'dark' && ![...requests.values()].some(item => item.operation === 'set-appearance')");
+            CaptureTitlebar(window, Path.Combine(captureRoot, "main-titlebar-dark.png"), true);
             await ChangeTransparencyAsync(window, "60");
             await desktop.RefreshAsync();
             try { await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true, 60) && HasDesktopTheme(desktop.PendingWindow, true, 60)); }
@@ -175,9 +183,36 @@ internal static partial class SmokeCheck
             await WaitAsync(reopened, "document.querySelector('#desktop-transparency-setting')?.value === '60'");
             await desktop.RefreshAsync();
             await WaitAsync(() => HasDesktopTheme(desktop.TaskWindow, true, 60));
+            reopened.ShowMainWindow();
+            CaptureTitlebar(reopened, Path.Combine(captureRoot, "main-titlebar-reopen.png"), true);
         }
         finally { reopened.AppearanceChanged -= desktop.SetAppearance; reopened.Exiting = true; reopened.Close(); }
     }
+
+    private static void CaptureTitlebar(AppWindow window, string capture, bool dark)
+    {
+        var handle = new WindowInteropHelper(window).Handle;
+        if (((long)DesktopNative.GetWindowLongPtr(handle, -16) & 0x00CF0000) != 0x00CF0000)
+            throw new InvalidOperationException("标题栏更新移除了原生窗口控制或缩放。");
+        if (!GetRecoveryWindowRect(handle, out var rect)) throw new InvalidOperationException("无法读取主窗口边界。");
+        DwmFlush();
+        using var pixels = new System.Drawing.Bitmap(rect.Right - rect.Left, rect.Bottom - rect.Top);
+        using var graphics = System.Drawing.Graphics.FromImage(pixels);
+        var dc = graphics.GetHdc();
+        try { if (!PrintTitlebarWindow(handle, dc, 2)) throw new InvalidOperationException("无法截取原生标题栏。"); }
+        finally { graphics.ReleaseHdc(dc); }
+        pixels.Save(capture, System.Drawing.Imaging.ImageFormat.Png);
+        var color = pixels.GetPixel(90, 16);
+        var expected = dark ? System.Drawing.Color.Black : System.Drawing.Color.FromArgb(237, 241, 238);
+        if (Math.Abs(color.R - expected.R) > 5 || Math.Abs(color.G - expected.G) > 5 || Math.Abs(color.B - expected.B) > 5)
+            throw new InvalidOperationException($"主窗口标题栏未跟随主题：dark={dark}、color={color}。");
+    }
+
+    [DllImport("user32.dll", EntryPoint = "PrintWindow")]
+    private static extern bool PrintTitlebarWindow(IntPtr window, IntPtr dc, uint flags);
+
+    [DllImport("dwmapi.dll", ExactSpelling = true)]
+    private static extern int DwmFlush();
 
     private static void CheckPanelGap(DesktopCardHost desktop, double scale, string capture)
     {

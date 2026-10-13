@@ -4,7 +4,19 @@
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、固定时刻/游戏实测、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 当前接续（缩小吸附间距与独立任务栏分组，2026-10-13，已修复、部署并实机核对）
+### 当前接续（主窗口标题栏主题同步，2026-10-13，已修复、部署并实机核对）
+
+接续基线e860411，初始工作区干净，原正式实例PID52336运行于 `.tools/published/app-card-controls/`；已有2 DIP卡片间距与MessagePurify.Shiyao独立任务栏标识保持有效。用户截图指出主窗口顶上的白色标题栏丑；根因是网页深色主题已应用，WPF原生窗口标题栏未同步主题。已新增WindowTheme，使用Windows DWM原生标题栏颜色、文字及边框属性，与初始偏好、页面主题切换及重开同步；system/缺失主题读取Windows应用主题，保留原生窗口操作，旧Windows不支持颜色属性时不阻止启动。AppWindow保留独立窗口身份初始化并接入主题桥。依据微软DWM属性官方说明（https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute），已用agent-reach阅读核对。
+
+最终验证：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Windows.Tests --no-restore --configuration Release` 419/419；`node --test tests/*.test.mjs` 152/152，退出0。隔离与正式目录自包含Release publish均退出0；隔离版 `--smoke-test --report .tools/titlebar-validation/settle/native-smoke-final.json` 105项通过，最终正式版 `python tests/app_desktop_test.py --executable .tools/published/app-card-controls/MessagePurify.exe` 105项Native及真实父窗/styles检查通过、退出0。新增四项Native检查覆盖浅深标题栏真实像素、重开和原生窗口控制/缩放样式；main-titlebar-dark/light/reopen.png三张已实际查看。深色标题栏黑色、浅色淡灰绿，重开深色保持。正式脚本日志 `desktop-formal-passing.log`，Windows及Node最终日志均位于 `.tools/titlebar-validation/`。
+
+实际部署：四库SQLite Backup API和布局/界面/账号设置先保护于 `before-reopen/`，旧PID52336经托盘正常退出；同目录发布后正常后台启动PID58592。该发布版首次及一次重试在原有编辑冲突Smoke场景超时：源码只等正式存储及历史已读，却未等上一笔编辑回执处理结束，随后注入并发更新可能被迟到成功回执重建草稿。SmokeCheck已补“上一笔edit-task请求处理结束且草稿版本匹配”的等待条件，隔离105项通过；PID58592再次经托盘正常退出，第二份四库/设置保护快照 `before-final-publish/` 保存后正式目录再次发布，最终正常后台实例PID61372。两次托盘退出日志均Success=true、ExitVerified=true；没有强制结束应用，入口路径和自启动开关未迁移。两入口目标/参数/ICO和Run值与前轮备份相同，入口及实际主窗口仍使用MessagePurify.Shiyao。
+
+最终真实核对：PID61372两卡片parentClass=SHELLDLL_DefView、visible/child/noActivate=true、topmost=false；任务完整记录、布局文件字节及界面偏好与原重开前相同，四库integrity=ok。当前桌面scale=1.5，保存x=1390.4 DIP转换为2086px，完整510px窗口会超出2560px工作区，原有Fit规则将实际x约束为2050px；y/尺寸与保存值按当前缩放一致。先前辅助脚本仅比较原始坐标因此失败，已按当前工作区Fit核对通过，不能写成原始坐标完全一致。真实主窗口已唤回，PrintWindow实际标题栏像素为(0,0,0)，`real-main-titlebar-final.png`已实际查看；`real-titlebar-final.json`、`window-identity-final.json`、`entries-final.json`、`real-desktop-final.json`、`real-data-check-final.json`保存证据，卡片截图 `real-desktop-cards-final.png`。未代确认、编辑或完成真实事项，QQ继续只读。本轮不扩展自然固定时刻、实际游戏、多屏/Explorer或长期稳定性验收，审美反馈待用户提供。
+
+失败记录保留：首次并行test/publish争用DLL，后续改顺序构建；DWM颜色读取不受支持，改用PrintWindow真实像素验证；一次新报告目录未预建导致截图路径不存在，目录建立后重跑通过。maintain-context-hygiene本机技能目录未找到，已人工核对有效需求、实际源码、发布目录、入口及新报告，不删除文件。提交说明 `fix: match native titlebar to application theme`，标识以Git日志为准。
+
+### 上一段（缩小吸附间距与独立任务栏分组，2026-10-13，已修复、部署并实机核对）
 
 接续基线a689449，初始工作区干净。用户反馈卡片吸附后中间空隙过大；实际源码按窗口边界吸附，面板两侧各5 DIP外边距形成10 DIP可见空隙。四方向目标已靠近8 DIP，使面板留约2 DIP；已更新几何回归，新增100%/125%/200%缩放下四向面板间距测试及真实WPF面板边缘检查。
 
@@ -841,6 +853,7 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 
 | 记录日期 | 变更 | 依据与状态 |
 | --- | --- | --- |
+| 2026-10-13 | 主窗口标题栏和边框跟随主题 | 用户指出顶部白色标题栏突兀；DWM同步初始/切换/重开主题并保留原生控制。Windows419、Node152、最终正式Native105项及真实父窗/styles检查通过；原目录发布，两次托盘正常退出后最终PID61372运行，真实标题栏黑色、任务/布局/偏好保留、四库正常。原有Smoke编辑场景补回执等待；当前150%缩放的实际卡片位置按工作区Fit核对，详见当前接续。 |
 | 2026-10-13 | 缩小吸附间距并修复独立任务栏分组 | 面板间距10 DIP改为约2 DIP，四向/DPI/紧凑卡片验证通过；进程、主窗口与两入口统一MessagePurify.Shiyao，实际拾要/Codex独立分组通过。Windows415、Node152、正式Native101项通过，原目录发布、数据保护后重开PID52336；布局、任务及界面偏好保留，四库正常。退出脚本NaN失败和进程标识不足的中间结果保留，不记为正常托盘退出；详见最新段。 |
 | 2026-10-13 | 增加卡片四向吸附及底色透明度滑块 | 用户选择左右仅顶部平齐并保留高度，上下按可见高度衔接；16 DIP边缘阈值，拖离解除，原schema 1布局持久化。透明度0%～100%只改变底色，重开/备份恢复兼容。Windows410、Infrastructure681、页面79、正式Native100项通过，自包含发布及真实入口迁移/托盘正常退出重开完成；新版PID19968实际布局与任务记录未变，四库完整性正常，详情见最新接续。 |
 | 2026-10-13 | 优化桌面卡片外观并修复小数布局恢复 | 用户反馈纯黑大框突兀；改半透明圆角、轻量列表/控件，空待办缩短可见高度。新增7项Native及小数坐标读取/保存回归；Windows391/391、Node151/151、最终代码91项Native及Release发布通过。入口/Run迁移并备份，旧实例正常托盘退出后保护四库及设置，新版PID41884正常后台运行；真实两窗口位置/尺寸与原布局一致，布局字节和任务记录未变、四库完整性正常，最终桌面截图已查看。稳定性及真实登录仍未验收；详见最新接续。 |

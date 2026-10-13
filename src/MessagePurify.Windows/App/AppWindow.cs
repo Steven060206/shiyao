@@ -44,7 +44,12 @@ public sealed class AppWindow : Window
         autoStartEnabled = AppStartupPreferences.Load(dataRoot);
         if (registerStartup && StartupRegistration.IsEnabled() != autoStartEnabled) StartupRegistration.SetEnabled(autoStartEnabled);
         Title = "拾要";
-        SourceInitialized += (_, _) => AppIdentity.SetWindow(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        SourceInitialized += (_, _) =>
+        {
+            var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            AppIdentity.SetWindow(handle);
+            WindowTheme.Apply(handle, WindowTheme.InitialDark(initialPreferences?.Theme));
+        };
         Icon = System.Windows.Media.Imaging.BitmapFrame.Create(new Uri("pack://application:,,,/ui/assets/shiyao.ico"));
         Width = 1360; Height = 880; MinWidth = 1000; MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -136,6 +141,8 @@ public sealed class AppWindow : Window
                 if (request.Parameters.TryGetProperty("preferenceTheme", out var preferenceTheme)
                     && (initialPreferences is null || initialPreferencesSent))
                     SaveInterfacePreferences(new(preferenceTheme.GetString()!, request.Parameters.GetProperty("preferenceMotion").GetString()!, transparency));
+                WindowTheme.Apply(new System.Windows.Interop.WindowInteropHelper(this).Handle,
+                    request.Parameters.GetProperty("theme").GetString() == "dark");
                 AppearanceChanged?.Invoke(request.Parameters.GetProperty("theme").GetString()!,
                     request.Parameters.GetProperty("reducedMotion").GetBoolean(), transparency);
                 Post(new { id = request.Id, success = true });
