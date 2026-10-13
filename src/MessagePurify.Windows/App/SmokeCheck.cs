@@ -14,7 +14,7 @@ using Microsoft.Web.WebView2.Core;
 namespace MessagePurify.Windows.App;
 
 /// <summary>仅验证模式使用合成账号，正式启动绝不载入样例。</summary>
-internal static class SmokeCheck
+internal static partial class SmokeCheck
 {
     public static AccountWorkspace CreateWorkspace(string dataRoot)
     {
@@ -207,6 +207,7 @@ internal static class SmokeCheck
         await CheckTaskStructureAsync(window, workspace, runtime, desktop, dataRoot, task.Id, acceptedTask.Id);
         await CheckCrossGroupMergeSuggestionsAsync(window, workspace, runtime, desktop, dataRoot);
         await CheckCacheCleanupAsync(window, workspace, runtime, dataRoot);
+        var backupSmoke = await CheckBackupRestoreAsync(window, workspace, runtime, desktop, dataRoot, reportFile);
         var expectedCards = workspace.Snapshot(DateTimeOffset.UtcNow);
         await desktop.RefreshAsync();
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == expectedCards.Items.Count(item => item.Kind == "task" && item.State == "active")
@@ -229,13 +230,14 @@ internal static class SmokeCheck
                 "cross-group-merge-confirm", "cross-group-merge-evidence-old-id", "cross-group-merge-suggestion-hide",
                 "cache-cleanup-page", "cache-cleanup-old-chat", "cache-cleanup-task-evidence",
                 "cache-cleanup-review-evidence", "cache-cleanup-notice-evidence", "cache-cleanup-reopen",
-                "cache-cleanup-replay-dedup" },
+                "cache-cleanup-replay-dedup" }.Concat(BackupChecks).ToArray(),
             taskCount = final.Items.Count(item => item.Kind == "task" && item.State != "merged"),
             activeTaskCount = final.Items.Count(item => item.Kind == "task" && item.State == "active"),
             mergedTaskCount = final.Items.Count(item => item.State == "merged"),
             pendingCount = final.Items.Count(item => item.Kind == "review" && item.State == "pending"),
             mergeSuggestionCount = final.Items.Count(item => item.Kind == "merge-review" && item.State == "pending"),
             cacheCleanup = final.CacheCleanup,
+            backup = backupSmoke,
             capture, cardsCapture, desktop = desktop.Inspect() }, AppWindow.JsonOptions));
     }
 

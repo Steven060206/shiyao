@@ -37,6 +37,7 @@ public sealed class DesktopCardHost : IDisposable
     private DateTimeOffset lastRefresh;
     private DesktopCardsSnapshot? current;
     private string? signature, operationError;
+    private long? renderedGeneration;
     public string State { get; private set; } = "waiting";
     public string? Error { get; private set; }
     public event Action? StatusChanged;
@@ -67,7 +68,7 @@ public sealed class DesktopCardHost : IDisposable
 
     public async Task RefreshAsync()
     {
-        if (disposed || refreshing) return;
+        if (disposed || refreshing || runtime.IsRestoring) return;
         refreshing = true;
         try
         {
@@ -76,13 +77,26 @@ public sealed class DesktopCardHost : IDisposable
             if (Interlocked.Exchange(ref dirty, 0) == 0 && now - lastRefresh < TimeSpan.FromSeconds(30)) return;
             var snapshot = await Task.Run(() => runtime.Workspace?.Snapshot(now));
             if (disposed) return;
+            if (runtime.IsRestoring) { OnChanged(); return; }
+            if (snapshot is not null && renderedGeneration is not null && renderedGeneration != snapshot.Generation)
+            {
+                var restoredLayout = layouts.Load(ParentBounds(), scale);
+                tasks!.SetBounds(restoredLayout.Tasks);
+                pending!.SetBounds(restoredLayout.Pending);
+                operationError = null;
+                signature = null;
+            }
+            renderedGeneration = snapshot?.Generation;
             current = DesktopCardProjection.Build(snapshot, runtime.Status);
             lastRefresh = now;
             var nextSignature = DesktopCardProjection.RenderSignature(current, theme, operationError, layouts.Error, now);
             if (signature == nextSignature) return;
             signature = nextSignature;
-            tasks!.Render(current, false, theme, operationError ?? layouts.Error, now, OpenAsync, CompleteAsync);
-            pending!.Render(current, true, theme, operationError ?? layouts.Error, now, OpenAsync, CompleteAsync);
+            var generation = snapshot?.Generation ?? 0;
+            tasks!.Render(current, false, theme, operationError ?? layouts.Error, now,
+                (account, item) => OpenAsync(account, item, generation), (account, item) => CompleteAsync(account, item, generation));
+            pending!.Render(current, true, theme, operationError ?? layouts.Error, now,
+                (account, item) => OpenAsync(account, item, generation), (account, item) => CompleteAsync(account, item, generation));
         }
         catch (Exception exception) when (exception is IOException or InvalidDataException or InvalidOperationException or Microsoft.Data.Sqlite.SqliteException)
         {
@@ -150,6 +164,7 @@ public sealed class DesktopCardHost : IDisposable
 
     private void SaveLayout()
     {
+        if (runtime.IsRestoring) return;
         if (tasks is not null && pending is not null) layouts.Save(Layout, scale);
         signature = null;
         OnChanged();
@@ -162,19 +177,21 @@ public sealed class DesktopCardHost : IDisposable
         SaveLayout();
     }
 
-    private async Task OpenAsync(string accountId, ApplicationItem item)
+    private async Task OpenAsync(string accountId, ApplicationItem item, long generation)
     {
+        if (runtime.IsRestoring || runtime.Workspace?.Generation != generation) return;
         try { await openItem(accountId, item.Id); }
         catch (InvalidOperationException) { operationError = "主界面尚未就绪，请稍后重试。"; OnChanged(); }
     }
 
-    private async Task CompleteAsync(string accountId, ApplicationItem item)
+    private async Task CompleteAsync(string accountId, ApplicationItem item, long generation)
     {
         try
         {
+            if (runtime.IsRestoring) throw new InvalidOperationException();
             var workspace = runtime.Workspace ?? throw new InvalidOperationException();
             await Task.Run(() => workspace.Execute(new(accountId, "complete", item.Id,
-                Guid.NewGuid().ToString("N"), item.Version), DateTimeOffset.UtcNow));
+                Guid.NewGuid().ToString("N"), item.Version, Generation: generation), DateTimeOffset.UtcNow));
             operationError = null;
             runtime.Refresh();
         }

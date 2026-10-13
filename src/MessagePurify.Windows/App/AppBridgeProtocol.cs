@@ -13,13 +13,14 @@ public static class AppBridgeProtocol
     {
         "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
         "reject", "accept-review", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart",
-        "merge-tasks", "keep-separate", "split-task", "clean-cache"
+        "merge-tasks", "keep-separate", "split-task", "clean-cache", "export-backup", "inspect-backup",
+        "restore-backup", "cancel-backup", "open-backup-location"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {
         "accountId", "id", "operationId", "version", "date", "time", "timeKind",
         "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled", "title", "priority",
-        "mergeWithId", "mergeWithVersion", "mergeSelection", "newItemId", "state", "evidenceIndexes"
+        "mergeWithId", "mergeWithVersion", "mergeSelection", "newItemId", "state", "evidenceIndexes", "generation", "motion", "previewId", "preferenceTheme", "preferenceMotion"
     };
 
     public static bool IsTrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -39,9 +40,13 @@ public static class AppBridgeProtocol
                 || !UniqueObject(parameters) || parameters.EnumerateObject().Any(p => !ParameterNames.Contains(p.Name))) return false;
             if (operation == "set-appearance")
             {
-                if (parameters.EnumerateObject().Count() != 2 || !Text(parameters, "theme", 8, out var theme)
+                var hasPreferences = parameters.TryGetProperty("preferenceTheme", out _);
+                if (parameters.EnumerateObject().Count() != (hasPreferences ? 4 : 2) || !Text(parameters, "theme", 8, out var theme)
                     || theme is not ("light" or "dark") || !parameters.TryGetProperty("reducedMotion", out var motion)
                     || motion.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) return false;
+                if (hasPreferences && (!Text(parameters, "preferenceTheme", 8, out var preferenceTheme) || preferenceTheme is not ("system" or "light" or "dark")
+                    || !Text(parameters, "preferenceMotion", 8, out var preferenceMotion) || preferenceMotion is not ("system" or "reduce"))) return false;
+                if (parameters.EnumerateObject().Any(p => p.Name is not ("theme" or "reducedMotion" or "preferenceTheme" or "preferenceMotion"))) return false;
                 request = new(id, operation, parameters.Clone());
                 return true;
             }
@@ -52,6 +57,29 @@ public static class AppBridgeProtocol
                 request = new(id, operation, parameters.Clone());
                 return true;
             }
+            if (operation is "export-backup" or "inspect-backup" or "restore-backup" or "cancel-backup" or "open-backup-location")
+            {
+                var names = operation switch
+                {
+                    "export-backup" => new[] { "accountId", "generation", "theme", "motion" },
+                    "inspect-backup" => new[] { "accountId", "generation" },
+                    "restore-backup" => new[] { "accountId", "generation", "previewId", "theme", "motion" },
+                    "cancel-backup" => new[] { "accountId", "previewId" },
+                    _ => new[] { "accountId" }
+                };
+                if (parameters.EnumerateObject().Count() != names.Length || parameters.EnumerateObject().Any(p => !names.Contains(p.Name))
+                    || !Text(parameters, "accountId", 64, out var backupAccount) || backupAccount.Any(c => c is < '0' or > '9')) return false;
+                if (names.Contains("generation") && (!parameters.TryGetProperty("generation", out var generation)
+                    || !generation.TryGetInt64(out var generationNumber) || generationNumber < 0)) return false;
+                if (names.Contains("previewId") && !Text(parameters, "previewId", 128, out _)) return false;
+                if (names.Contains("theme") && (!Text(parameters, "theme", 8, out var backupTheme) || backupTheme is not ("system" or "light" or "dark")
+                    || !Text(parameters, "motion", 8, out var backupMotion) || backupMotion is not ("system" or "reduce"))) return false;
+                request = new(id, operation, parameters.Clone());
+                return true;
+            }
+            if (parameters.EnumerateObject().Any(p => p.Name is "motion" or "previewId" or "preferenceTheme" or "preferenceMotion")) return false;
+            if (parameters.TryGetProperty("generation", out var commandGeneration)
+                && (!commandGeneration.TryGetInt64(out var generationValue) || generationValue < 0)) return false;
             if (parameters.EnumerateObject().Any(p => p.Name is "theme" or "reducedMotion")) return false;
             if (operation != "snapshot")
             {
@@ -61,7 +89,7 @@ public static class AppBridgeProtocol
                     || number < (operation is "confirm-group" or "create-task" or "clean-cache" ? 0 : 1)
                     || operation is "create-task" or "clean-cache" && number != 0) return false;
             }
-            if (operation == "clean-cache" && (parameters.EnumerateObject().Count() != 4
+            if (operation == "clean-cache" && (parameters.EnumerateObject().Count() != (parameters.TryGetProperty("generation", out _) ? 5 : 4)
                 || parameters.GetProperty("id").GetString() != "cache")) return false;
             if (operation is "merge-tasks" or "keep-separate")
             {

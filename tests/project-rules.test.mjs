@@ -274,6 +274,19 @@ test('M4 生命周期进度明确区分存储验证和消息宿主联调', () =>
   assert.match(read('docs/HANDOFF.md'), /恢复工作时先读.*docs\/HANDOFF\.md.*再读.*docs\/requirements\.md/);
 });
 
+test('账号备份恢复记录区分本地快照和未下载原图', () => {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md']) {
+    const content = read(file);
+    assert.match(content, /备份.*(?:恢复|实施)/s, file);
+    assert.match(content, /未下载原图|原图尚未下载|未包含原图/, file);
+    assert.match(content, /不完整/, file);
+    assert.match(content, /(?:真实.*(?:未切换|未操作)|隔离合成)/, file);
+  }
+  const plan = read('docs/superpowers/plans/2026-10-13-backup-restore.md');
+  for (const term of ['SQLite Backup API', '恢复前', '回滚', '撤销期限', 'Generation', '游戏'])
+    assert.ok(plan.toLowerCase().includes(term.toLowerCase()), term);
+});
+
 test('M4 首轮候选路由状态明确本地分流、课程确认和后续实现边界', () => {
   for (const file of ['docs/requirements.md', 'tests/README.md']) {
     const content = read(file);

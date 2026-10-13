@@ -69,6 +69,23 @@ const mockScript = `(() => {
     if (backend.failNext && command.operation !== 'snapshot' && command.operation !== 'mark-read') {
       const error=backend.failNext;backend.failNext=null;backend.emit({id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
     }
+    if(command.operation==='export-backup') {
+      backend.exportedSnapshot=clone(backend.snapshot);
+      backend.backupResult={accountId:parameters.accountId,path:'C:/backups/current.zip',createdAt:'2026-10-13T03:00:00Z',isComplete:false,missingImageCount:2,taskCount:2,reviewCount:3,noticeCount:1};
+      backend.emit({id:command.id,success:true,backupResult:backend.backupResult,snapshot:backend.snapshot});return;
+    }
+    if(command.operation==='inspect-backup') {
+      if(backend.cancelFile){backend.cancelFile=false;backend.emit({id:command.id,success:true,cancelled:true});return;}
+      backend.backupPreview={id:'preview-1',generation:parameters.generation,preview:backend.backupResult,applicationSettings:{autoStartEnabled:false,theme:'light',motion:'reduce',desktopLayoutJson:null}};
+      backend.emit({id:command.id,success:true,backupPreview:backend.backupPreview});return;
+    }
+    if(command.operation==='cancel-backup') {backend.backupPreview=null;backend.emit({id:command.id,success:true});return;}
+    if(command.operation==='open-backup-location'){backend.emit({id:command.id,success:true});return;}
+    if(command.operation==='restore-backup') {
+      backend.snapshot={...clone(backend.exportedSnapshot),generation:(backend.snapshot.generation||0)+1,generatedAt:new Date().toISOString()};
+      backend.backupPreview=null;backend.backupResult={...backend.backupResult,preRestoreBackupPath:'C:/backups/before.zip'};
+      backend.emit({id:command.id,success:true,snapshot:backend.snapshot,backupResult:backend.backupResult,preferences:{theme:'light',motion:'reduce'},startupEnabled:false,isRestoring:false});return;
+    }
     if(command.operation==='clean-cache') {
       backend.snapshot.cacheCleanup={accountId:parameters.accountId,completedAt:'2026-10-13T02:30:00Z',cutoff:'2026-10-06T02:30:00Z',deletedMessages:backend.cleanupDeleted ?? 12,retainedOldMessages:3,remainingMessages:15};
       backend.snapshot.cacheCleanupError=null;backend.snapshot.generatedAt=new Date().toISOString();
@@ -187,7 +204,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelectorAll(".task-row").length'), 0);
       assert.deepEqual(await evaluate('backend.messages[0]'), { id: await evaluate('backend.messages[0].id'), operation: 'snapshot', parameters: {} });
       assert.deepEqual(await evaluate('backend.messages.map(message=>message.operation)'), ['snapshot', 'set-appearance']);
-      assert.deepEqual(await evaluate('backend.messages[1].parameters'), { theme: 'dark', reducedMotion: false });
+      assert.deepEqual(await evaluate('backend.messages[1].parameters'), { theme: 'dark', reducedMotion: false, preferenceTheme:'system',preferenceMotion:'system' });
       assert.equal(await evaluate('document.documentElement.dataset.theme'), 'dark');
       assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(0, 0, 0)');
     });
@@ -369,7 +386,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await capture('manual-task-form-dark.png');
       await click('[data-action="create-task"]');
       const command = await evaluate('backend.messages.filter(message=>message.operation==="create-task").at(-1)');
-      assert.deepEqual(command.parameters, {accountId:'12345',id:command.parameters.id,operationId:command.parameters.operationId,version:0,title:'口头报告',course:'自定义课程',date:'2026-12-22',time:null,timeKind:'deadline',priority:null});
+      assert.deepEqual(command.parameters, {accountId:'12345',generation:0,id:command.parameters.id,operationId:command.parameters.operationId,version:0,title:'口头报告',course:'自定义课程',date:'2026-12-22',time:null,timeKind:'deadline',priority:null});
       assert.ok(command.parameters.id); assert.ok(command.parameters.operationId);
       assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), command.parameters.id);
       assert.match(await evaluate('document.querySelector(".task-row.selected").textContent'), /自定义课程.*手动添加/s);
@@ -482,7 +499,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await change('#time-form [name=timeKind]', 'start'); await change('#time-form [name=priority]', '1');
       await click('[data-action="edit-task"]');
       const command = await evaluate('backend.messages.filter(message=>message.operation==="edit-task").at(-1)');
-      assert.deepEqual(command.parameters, { accountId: '12345', id: 'edit1', operationId: command.parameters.operationId, version: 1, title: '实验报告修订版', course: '数学', date: '2026-12-31', time: '18:30', timeKind: 'start', priority: 1 });
+      assert.deepEqual(command.parameters, { accountId: '12345', generation: 0, id: 'edit1', operationId: command.parameters.operationId, version: 1, title: '实验报告修订版', course: '数学', date: '2026-12-31', time: '18:30', timeKind: 'start', priority: 1 });
       assert.equal(await evaluate('document.querySelector(".detail-title").textContent'), '实验报告修订版');
       assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'), '实验报告修订版');
       await evaluate('document.querySelector("#time-form").scrollIntoView({block:"start"})');
@@ -597,7 +614,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       const appearance = () => evaluate('backend.messages.filter(message=>message.operation==="set-appearance").at(-1)');
       await change('#theme-setting', 'light'); await change('#motion-setting', 'reduce');
       let command = await appearance();
-      assert.deepEqual(command.parameters, { theme: 'light', reducedMotion: true });
+      assert.deepEqual(command.parameters, { theme: 'light', reducedMotion: true, preferenceTheme:'light',preferenceMotion:'reduce' });
       assert.match(command.id, /^[\da-f-]{36}$/i);
       assert.deepEqual(Object.keys(command).sort(), ['id', 'operation', 'parameters']);
       await change('#theme-setting', 'system'); await change('#motion-setting', 'system');
@@ -875,7 +892,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await capture('ui-merge-conflicts-dark.png');
       await click('[data-action="merge-tasks"]');
       const command=await evaluate('backend.messages.filter(message=>message.operation==="merge-tasks").at(-1)');
-      assert.deepEqual(command.parameters,{accountId:'12345',id:'merge-current',version:10,operationId:command.parameters.operationId,mergeWithId:'merge-other',mergeWithVersion:10,mergeSelection:selection,priority:0});
+      assert.deepEqual(command.parameters,{accountId:'12345',generation:0,id:'merge-current',version:10,operationId:command.parameters.operationId,mergeWithId:'merge-other',mergeWithVersion:10,mergeSelection:selection,priority:0});
       assert.equal(await evaluate('document.querySelectorAll(".task-row[data-id=merge-other]").length'),0);
       assert.match(await evaluate('document.querySelector(".source-section").textContent'),/当前来源.*另一来源/s);
       assert.match(await evaluate('document.querySelector(".merged-sources").textContent'),/考试/);
@@ -918,7 +935,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelectorAll("#merge-task-form .merge-field.conflict").length'),5);
       await click('[data-action="keep-separate"]');
       const command=await evaluate('backend.messages.filter(message=>message.operation==="keep-separate").at(-1)');
-      assert.deepEqual(command.parameters,{accountId:'12345',id:'separate-current',version:30,operationId:command.parameters.operationId,mergeWithId:'separate-other',mergeWithVersion:30});
+      assert.deepEqual(command.parameters,{accountId:'12345',generation:0,id:'separate-current',version:30,operationId:command.parameters.operationId,mergeWithId:'separate-other',mergeWithVersion:30});
       assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="separate-current").state'),'active');
       await nav('completed');assert.equal(await evaluate('document.querySelector(".task-row[data-id=separate-other]").dataset.id'),'separate-other');
       await nav('tasks');await select('separate-current');await click('[data-action="open-merge"]');await change('#merge-task-form [name=mergeWithId]','separate-other');
@@ -944,7 +961,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await change('#split-task-form [name=date]','2026-12-28');await change('#split-task-form [name=course]','');await change('#split-task-form [name=time]','18:30');await change('#split-task-form [name=timeKind]','start');await change('#split-task-form [name=priority]','1');
       await click('[data-action="split-task"]');
       const command=await evaluate('backend.messages.filter(message=>message.operation==="split-task").at(-1)');
-      assert.deepEqual(command.parameters,{accountId:'12345',id:'split-validation',version:40,operationId:command.parameters.operationId,newItemId:command.parameters.newItemId,title:'独立数据表',course:'',date:'2026-12-28',time:'18:30',timeKind:'start',priority:1,state:'cancelled',evidenceIndexes:[]});
+      assert.deepEqual(command.parameters,{accountId:'12345',generation:0,id:'split-validation',version:40,operationId:command.parameters.operationId,newItemId:command.parameters.newItemId,title:'独立数据表',course:'',date:'2026-12-28',time:'18:30',timeKind:'start',priority:1,state:'cancelled',evidenceIndexes:[]});
       assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="split-validation").state'),'active');
       assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="split-validation").evidence.length'),1);
       await click(`[data-action="open-related"][data-id="${command.parameters.newItemId}"]`);
@@ -1099,7 +1116,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
     await t.test('建议保持独立发送双方版本，刷新和重开不再提示该建议',async()=>{
       const original=mergeSuggestionSnapshot('merge-separate');await push(original);await nav('pending');await select('merge-separate-suggestion');await click('[data-action=open-merge-suggestion]');await click('[data-action=keep-separate]');
       const command=await evaluate('backend.messages.filter(message=>message.operation==="keep-separate").at(-1)');
-      assert.deepEqual(command.parameters,{accountId:'12345',id:'merge-separate-first',version:110,operationId:command.parameters.operationId,mergeWithId:'merge-separate-second',mergeWithVersion:120});
+      assert.deepEqual(command.parameters,{accountId:'12345',generation:0,id:'merge-separate-first',version:110,operationId:command.parameters.operationId,mergeWithId:'merge-separate-second',mergeWithVersion:120});
       await nav('pending');assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
       await click('[data-action=refresh]');await push(original);await nav('pending');
       assert.equal(await evaluate('document.querySelectorAll(".task-row").length'),0);
@@ -1175,7 +1192,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.match(await evaluate('document.querySelector("#cache-cleanup-result").textContent'),/尚无成功清理/);
       await evaluate('backend.hold=true');await click('[data-action=clean-cache]');
       const command=await evaluate('backend.messages.filter(message=>message.operation==="clean-cache").at(-1)');
-      assert.deepEqual(command.parameters,{accountId:'12345',id:'cache',operationId:command.parameters.operationId,version:0});
+      assert.deepEqual(command.parameters,{accountId:'12345',generation:0,id:'cache',operationId:command.parameters.operationId,version:0});
       assert.match(command.parameters.operationId,/\S/);
       assert.equal(await evaluate('document.querySelector("[data-action=clean-cache]").disabled'),true);
       assert.match(await evaluate('document.querySelector("[data-action=clean-cache]").textContent'),/正在清理/);
@@ -1260,6 +1277,63 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
         await push({...current,cacheCleanup:newer});
         assert.equal(await evaluate('document.querySelector("#cache-cleanup-error").hidden'),true);
       }finally{await evaluate('window.setTimeout=window.originalCacheRecoverySetTimeout;backend.release()');}
+    });
+    await t.test('备份设置导出并展示不完整原图范围，预览必须显式确认整份覆盖',async()=>{
+      await push({...structuredClone(fixture),generation:0});await nav('settings');
+      await change('#theme-setting','light');await change('#motion-setting','reduce');
+      assert.ok(await evaluate('!!document.querySelector("[data-action=export-backup]")'));
+      await click('[data-action=export-backup]');
+      assert.match(await evaluate('document.querySelector("#backup-result").textContent'),/不完整.*2.*原图/);
+      const command=await evaluate('backend.messages.filter(message=>message.operation==="export-backup").at(-1)');
+      assert.deepEqual(command.parameters,{accountId:'12345',generation:0,theme:'light',motion:'reduce'});
+      await click('[data-action=inspect-backup]');
+      assert.match(await evaluate('document.querySelector("#backup-preview").textContent'),/12345.*全部.*历史.*自动启动.*布局.*主题/s);
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="restore-backup").length'),0);
+      await click('[data-action=cancel-backup]');
+      assert.equal(await evaluate('!!document.querySelector("[data-action=restore-backup]")'),false);
+      await evaluate('backend.cancelFile=true');await click('[data-action=inspect-backup]');
+      assert.equal(await evaluate('!!document.querySelector("[data-action=restore-backup]")'),false);
+    });
+    await t.test('恢复超时保持覆盖锁，成功刷新清除旧草稿并恢复偏好，迟到旧快照不能倒回',async()=>{
+      await nav('tasks');await select('task1');await change('#time-form [name=title]','恢复前草稿');
+      const oldSnapshot=await evaluate('structuredClone(backend.snapshot)');
+      await nav('settings');await click('[data-action=inspect-backup]');await evaluate('backend.hold=true');
+      await evaluate('window.originalBackupSetTimeout=window.setTimeout;window.setTimeout=(handler,ms,...args)=>{const id=window.originalBackupSetTimeout(handler,ms,...args);if(ms===15000)window.backupTimeout={id,handler};return id}');
+      try{
+        await click('[data-action=restore-backup]');await evaluate('clearTimeout(window.backupTimeout.id);window.backupTimeout.handler()');
+        assert.equal(await evaluate('document.querySelector("[data-action=restore-backup]").disabled'),true);
+        assert.match(await evaluate('document.querySelector("#backup-error").textContent'),/尚未确认.*等待/);
+        await nav('tasks');await select('task1');assert.equal(await evaluate('document.querySelector("[data-action=complete]").disabled'),true);
+        await evaluate('backend.release()');await nav('tasks');await select('task1');
+        assert.equal(await evaluate('document.querySelector("#time-form [name=title]").value'),'实验报告');
+        assert.equal(await evaluate('JSON.parse(localStorage.getItem("message-purify-preferences")).theme'),'light');
+        await evaluate(`backend.emit({type:'state',snapshot:${JSON.stringify({...oldSnapshot,generatedAt:'2099-01-01T00:00:00Z'})}})`);
+        await click('[data-action=complete]');
+        assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="complete").at(-1).parameters.generation'),1);
+        await nav('settings');assert.match(await evaluate('document.querySelector("#backup-result").textContent'),/恢复前备份/);
+      }finally{await evaluate('window.setTimeout=window.originalBackupSetTimeout;backend.release()');}
+    });
+    await t.test('旧账号备份预览应答不能显示到新账号，恢复失败保留原数据及独立错误',async()=>{
+      await push({...structuredClone(fixture),generation:1});await nav('settings');await evaluate('backend.hold=true');await click('[data-action=inspect-backup]');
+      const late=await evaluate('backend.held.at(-1)');await evaluate('backend.held=[];backend.hold=false');
+      await push({...structuredClone(fixture),accountId:'67890',generation:0});await nav('settings');
+      await evaluate(`backend.emit({id:${JSON.stringify(late.id)},success:true,backupPreview:{id:'old',generation:1,preview:{...backend.backupResult,accountId:'12345'}}})`);
+      assert.equal(await evaluate('!!document.querySelector("[data-action=restore-backup]")'),false);
+      await push({...structuredClone(fixture),generation:1});await nav('settings');await click('[data-action=inspect-backup]');
+      await evaluate('backend.failNext="备份校验失败，原数据已保留。"');await click('[data-action=restore-backup]');
+      assert.match(await evaluate('document.querySelector("#backup-error").textContent'),/校验失败.*原数据已保留/);
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="task1").title'),'实验报告');
+    });
+    await t.test('宿主一次性恢复的界面偏好写入本地，后续推送保留用户新选择',async()=>{
+      await nav('settings');await evaluate('backend.emit({type:"state",preferences:{theme:"dark",motion:"reduce"},snapshot:backend.snapshot})');
+      assert.equal(await evaluate('document.documentElement.dataset.theme'),'dark');
+      assert.deepEqual(await evaluate('JSON.parse(localStorage.getItem("message-purify-preferences"))'),{theme:'dark',motion:'reduce'});
+      await change('#theme-setting','system');await change('#motion-setting','system');
+      const appearance=await evaluate('backend.messages.filter(message=>message.operation==="set-appearance").at(-1).parameters');
+      assert.equal(appearance.preferenceTheme,'system');assert.equal(appearance.preferenceMotion,'system');
+      await evaluate('backend.push()');
+      assert.equal(await evaluate('document.querySelector("#theme-setting").value'),'system');
+      assert.equal(await evaluate('document.querySelector("#motion-setting").value'),'system');
     });
     assert.deepEqual(browserErrors, []);
   } finally {

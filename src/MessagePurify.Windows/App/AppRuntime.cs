@@ -1,6 +1,7 @@
 using System.IO;
 using MessagePurify.Infrastructure.Application;
 using MessagePurify.Infrastructure.NapCat;
+using MessagePurify.Infrastructure.Backup;
 
 namespace MessagePurify.Windows.App;
 
@@ -12,6 +13,8 @@ public sealed class AppRuntime
     private readonly InstalledGameCatalog gameCatalog;
     private readonly ResidentSyncController syncController;
     private Task? running;
+    private int restoring;
+    public bool IsRestoring => Volatile.Read(ref restoring) != 0;
     public AccountWorkspace? Workspace { get; private set; }
     public MessageHostStatus Status { get; private set; } = new("disconnected", "unknown", "paused", "pending", null, DateTimeOffset.UtcNow, [])
     { Scheduled = true };
@@ -21,6 +24,7 @@ public sealed class AppRuntime
     {
         this.dataRoot = Path.GetFullPath(dataRoot);
         Directory.CreateDirectory(this.dataRoot);
+        AccountBackupService.RecoverInterrupted(this.dataRoot);
         gameCatalog = new(Path.Combine(this.dataRoot, "game-catalog.json"));
         syncController = new(gameCatalog);
         Workspace = workspace;
@@ -37,6 +41,29 @@ public sealed class AppRuntime
     public void Start() => running ??= Task.Run(RunAsync);
 
     public void Refresh() => Changed?.Invoke();
+
+    public async Task<BackupResult> RestoreBackupAsync(PreparedAccountBackup prepared,
+        BackupApplicationSettings currentSettings, Action<BackupApplicationSettings>? applySettings = null)
+    {
+        if (Interlocked.CompareExchange(ref restoring, 1, 0) != 0)
+            throw new InvalidOperationException("正在恢复备份，请等待结果。");
+        Changed?.Invoke();
+        try
+        {
+            var workspace = Workspace ?? throw new InvalidOperationException("尚未连接到 QQ 账号。");
+            var result = await Task.Run(() => workspace.RestoreBackup(prepared, currentSettings,
+                DateTimeOffset.UtcNow, applySettings));
+            // The existing host keeps the same workspace. Queued reception resumes after its gate opens.
+            var now = DateTimeOffset.UtcNow;
+            syncController.Request(new(SyncRequestKind.Startup, now, now));
+            return result;
+        }
+        finally
+        {
+            Volatile.Write(ref restoring, 0);
+            Changed?.Invoke();
+        }
+    }
 
     private async Task RunAsync()
     {

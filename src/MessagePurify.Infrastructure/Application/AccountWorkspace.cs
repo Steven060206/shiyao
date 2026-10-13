@@ -10,7 +10,7 @@ using MessagePurify.Infrastructure.Tasks;
 namespace MessagePurify.Infrastructure.Application;
 
 /// <summary>同一账号的收件、规则路由、界面操作及快照使用同一串行入口。</summary>
-public sealed class AccountWorkspace
+public sealed partial class AccountWorkspace
 {
     private readonly object gate = new();
     private readonly AccountMessageStore messages;
@@ -28,6 +28,7 @@ public sealed class AccountWorkspace
 
     public AccountWorkspace(string dataRoot, string accountId)
     {
+        backup = new(dataRoot, accountId);
         messages = new(dataRoot, accountId);
         tasks = new(dataRoot, accountId);
         router = new(messages, tasks);
@@ -226,7 +227,7 @@ public sealed class AccountWorkspace
                 });
             }
             return new(AccountId, items, groups, now, reminders.Synchronize(now),
-                router.ReadCacheCleanupResult(), cacheCleanupError);
+                router.ReadCacheCleanupResult(), cacheCleanupError, Generation);
         }
     }
 
@@ -269,6 +270,8 @@ public sealed class AccountWorkspace
         {
             ArgumentNullException.ThrowIfNull(command);
             if (command.AccountId != AccountId) throw new ArgumentException("操作账号不属于当前工作区。", nameof(command));
+            if ((command.Generation ?? 0) != Generation)
+                throw new InvalidOperationException("工作区已恢复，请重新读取后再操作。");
             ArgumentException.ThrowIfNullOrWhiteSpace(command.Id);
             ArgumentException.ThrowIfNullOrWhiteSpace(command.OperationId);
             switch (command.Operation)

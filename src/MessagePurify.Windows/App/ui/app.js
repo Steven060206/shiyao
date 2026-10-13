@@ -22,7 +22,7 @@ applyPreferences();
 requestAnimationFrame(() => requestAnimationFrame(() => { document.documentElement.dataset.ready = 'true'; }));
 function syncAppearance() {
   applyPreferences();
-  request('set-appearance', { theme: document.documentElement.dataset.theme, reducedMotion: preferences.motion === 'reduce' || systemMotion.matches });
+  request('set-appearance', { theme: document.documentElement.dataset.theme, reducedMotion: preferences.motion === 'reduce' || systemMotion.matches, preferenceTheme: preferences.theme, preferenceMotion: preferences.motion });
 }
 systemTheme.addEventListener('change', syncAppearance);
 systemMotion.addEventListener('change', syncAppearance);
@@ -32,13 +32,19 @@ let desktop = { state: 'waiting', error: null }, pendingOpenItem = null;
 let filters = { search: '', course: '', state: 'active' }, detailSignature = '', settingsSignature = '', lastFilterPage = null;
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
 let manualOpen = false, structureOpen = null, mergedSourceId = null;
+let isRestoring = false, backupPreview = null;
 const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), structureDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
 const cacheCleanupErrors = new Map();
+const backupErrors = new Map(), backupResults = new Map(), generations = new Map();
+const backupOperations = ['export-backup', 'inspect-backup', 'restore-backup', 'cancel-backup', 'open-backup-location'];
 const bridge = window.chrome?.webview;
 const uuid = () => crypto.randomUUID();
 const items = () => snapshot?.items || [];
 const selected = () => items().find(item => item.id === selectedId);
 const loadedAccount = () => typeof snapshot?.accountId === 'string' && Boolean(snapshot.accountId.trim());
+const generation = () => snapshot?.generation || 0;
+const backupBusy = () => [...requests.values()].some(pending => backupOperations.includes(pending.operation) && pending.accountId === snapshot?.accountId);
+const restoreLocked = () => isRestoring || [...requests.values()].some(pending => pending.operation === 'restore-backup' && pending.accountId === snapshot?.accountId);
 const cacheCleanupBusyKey = accountId => `${accountId}/cache-cleanup`;
 const manualDraft = () => manualDrafts.get(snapshot?.accountId);
 const structureKey = (accountId, id, mode) => `${accountId}/${id}/${mode}`;
@@ -94,8 +100,11 @@ function setCacheCleanupError(accountId, message, startedAt = Date.now(), incomi
   cacheCleanupErrors.set(accountId, { message, afterCompletedAt: Math.max(previous || 0, incoming || 0) || startedAt });
 }
 function request(operation, parameters, itemId = null) {
+  if (restoreLocked() && !['snapshot', 'set-appearance', 'open-backup-location'].includes(operation)) return;
+  if (parameters.accountId && !['cancel-backup', 'open-backup-location'].includes(operation)) parameters = { ...parameters, generation: generation() };
   if (!bridge) {
-    if (operation === 'clean-cache') { setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable')); renderSettings(); }
+    if (backupOperations.includes(operation)) { backupErrors.set(parameters.accountId, errorLabel('bridge_unavailable')); renderSettings(); }
+    else if (operation === 'clean-cache') { setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable')); renderSettings(); }
     else { hostError = errorLabel('bridge_unavailable'); renderStatus(); }
     return;
   }
@@ -106,6 +115,11 @@ function request(operation, parameters, itemId = null) {
   const structureDraftKey = structural ? structureOpen?.accountId === parameters.accountId && structureOpen.id === itemId ? structureOpen.draftKey : structureKey(parameters.accountId, itemId, operation === 'split-task' ? 'split' : 'merge') : null;
   const timer = setTimeout(() => {
     const pending = requests.get(id); if (!pending) return;
+    if (backupOperations.includes(pending.operation)) {
+      pending.timedOut = true;
+      backupErrors.set(pending.accountId, '操作结果尚未确认，请等待本地应用完成；刷新可核对最新结果。');
+      render(); return;
+    }
     if (pending.structural) {
       pending.timedOut = true;
       const draft = structureDrafts.get(pending.structureDraftKey);
@@ -123,17 +137,18 @@ function request(operation, parameters, itemId = null) {
     render();
   }, 15000);
   const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen?.draftKey } : null;
-  requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, structural, structureDraftKey, structureOperationId: parameters.operationId, startedAt });
+  requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, generation: parameters.generation, structural, structureDraftKey, structureOperationId: parameters.operationId, startedAt });
   try { bridge.postMessage({ id, operation, parameters }); }
   catch {
     clearTimeout(timer); requests.delete(id); if (busyKey) busy.delete(busyKey);
-    if (operation === 'clean-cache') setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable'), startedAt);
+    if (backupOperations.includes(operation)) backupErrors.set(parameters.accountId, errorLabel('bridge_unavailable'));
+    else if (operation === 'clean-cache') setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable'), startedAt);
     else if (structural && structureDrafts.get(structureDraftKey)) structureDrafts.get(structureDraftKey).error = errorLabel('bridge_unavailable');
     else if (operation === 'create-task' && manualDraft()?.id === itemId) manualDraft().error = errorLabel('bridge_unavailable');
     else hostError = errorLabel('bridge_unavailable');
   }
   updateDetailControls(); renderStatus();
-  if (operation === 'clean-cache' && page === 'settings') renderSettings();
+  if ((operation === 'clean-cache' || backupOperations.includes(operation)) && page === 'settings') renderSettings();
 }
 function command(operation, item, extra = {}) {
   if (!snapshot || !item || busy.has(item.id)) return;
@@ -144,7 +159,7 @@ function releaseBusy(pending) {
   if (pending.busyKey && ![...requests.values()].some(request => request.busyKey === pending.busyKey && !request.timedOut)) busy.delete(pending.busyKey);
 }
 function markRead(item) {
-  if (!item?.unread || !snapshot) return;
+  if (!item?.unread || !snapshot || restoreLocked()) return;
   const key = `${snapshot.accountId}/${item.id}/${item.version}`;
   if (readAttempts.has(key)) return;
   readAttempts.add(key);
@@ -178,9 +193,22 @@ function receive(message) {
   if (!message || typeof message !== 'object') return;
   if (message.type === 'open-item') { openItem(message); return; }
   const pending = requests.get(message.id);
+  if (message.snapshot && (message.snapshot.generation || 0) < (generations.get(message.snapshot.accountId) || 0)) return;
   if (pending) {
     clearTimeout(pending.timer); requests.delete(message.id);
     releaseBusy(pending);
+    if (pending.accountId === snapshot?.accountId && pending.generation !== undefined && pending.generation !== generation()
+      && pending.operation !== 'restore-backup') { render(); return; }
+    if (backupOperations.includes(pending.operation)) {
+      if (pending.accountId !== snapshot?.accountId || message.backupPreview?.preview?.accountId && message.backupPreview.preview.accountId !== pending.accountId) { render(); return; }
+      if (!message.success) backupErrors.set(pending.accountId, errorLabel(message.error));
+      else {
+        backupErrors.delete(pending.accountId);
+        if (pending.operation === 'inspect-backup') backupPreview = message.cancelled ? null : message.backupPreview;
+        if (pending.operation === 'cancel-backup' || pending.operation === 'restore-backup') backupPreview = null;
+        if (message.backupResult?.accountId === pending.accountId) backupResults.set(pending.accountId, message.backupResult);
+      }
+    }
     if (pending.operation === 'set-appearance') {
       if (!message.success) { hostError = errorLabel(message.error); renderStatus(); }
       return;
@@ -249,18 +277,37 @@ function receive(message) {
       }
     }
   } else if (message.type !== 'state') return;
+  if (message.type === 'state' && message.backupPreview === null) backupPreview = null;
+  if (typeof message.isRestoring === 'boolean') isRestoring = message.isRestoring;
+  if (message.backupResult && snapshot && message.backupResult.accountId === snapshot.accountId) backupResults.set(snapshot.accountId, message.backupResult);
+  if (message.preferences && (!pending?.accountId || pending.accountId === snapshot?.accountId)) {
+    if (['system', 'light', 'dark'].includes(message.preferences.theme)) preferences.theme = message.preferences.theme;
+    if (['system', 'reduce'].includes(message.preferences.motion)) preferences.motion = message.preferences.motion;
+    try { localStorage.setItem(preferencesKey, JSON.stringify(preferences)); } catch { toast('界面偏好暂时无法保存。'); }
+    syncAppearance();
+  }
   if (message.type === 'state' && message.error) hostError = errorLabel(message.error);
   if (['attached', 'waiting', 'unavailable'].includes(message.desktop?.state)) desktop = message.desktop;
   if (message.status && (!status || Date.parse(message.status.updatedAt) >= Date.parse(status.updatedAt) || !status.updatedAt)) status = message.status;
   if (typeof message.startupEnabled === 'boolean') startupEnabled = message.startupEnabled;
   if (message.snapshot) {
     const incoming = message.snapshot;
-    const older = snapshot && Date.parse(incoming.generatedAt) < Date.parse(snapshot.generatedAt);
+    const changedGeneration = snapshot?.accountId === incoming.accountId && (incoming.generation || 0) > generation();
+    const older = !changedGeneration && snapshot && Date.parse(incoming.generatedAt) < Date.parse(snapshot.generatedAt);
     if (!older) {
+      generations.set(incoming.accountId, incoming.generation || 0);
+      if (changedGeneration) {
+        for (const [id, pendingRequest] of requests) if (pendingRequest.accountId === incoming.accountId && pendingRequest.operation !== 'restore-backup') { clearTimeout(pendingRequest.timer); requests.delete(id); }
+        busy.clear(); drafts.clear(); groupDrafts.clear(); readAttempts.clear(); manualDrafts.delete(incoming.accountId);
+        for (const [key] of structureDrafts) if (key.startsWith(incoming.accountId + '/')) structureDrafts.delete(key);
+        manualOpen = false; structureOpen = null; mergedSourceId = null; detailError = null; backupPreview = null; detailSignature = ''; settingsSignature = '';
+      }
       const cleanupError = cacheCleanupErrors.get(incoming.accountId);
       if (cleanupError && !incoming.cacheCleanupError && incoming.cacheCleanup?.accountId === incoming.accountId
         && Date.parse(incoming.cacheCleanup.completedAt) > cleanupError.afterCompletedAt) cacheCleanupErrors.delete(incoming.accountId);
       if (snapshot && snapshot.accountId !== incoming.accountId) {
+        if (backupPreview) request('cancel-backup', { accountId: snapshot.accountId, previewId: backupPreview.id });
+        backupPreview = null; isRestoring = false;
         drafts.clear(); groupDrafts.clear(); readAttempts.clear(); selectedId = null; initialized = false;
         manualOpen = false; structureOpen = null; mergedSourceId = null; detailError = null;
       }
@@ -585,6 +632,7 @@ function renderDetail() {
 }
 function updateDetailControls() {
   const item = selected();
+  $('detail-pane').querySelectorAll('input,select').forEach(element => { element.disabled = restoreLocked(); });
   const error = $('detail-error');
   if (error) { const message = detailError?.id === item?.id ? detailError.message : ''; error.textContent = message; error.hidden = !message; if ($('detail-pane').querySelector('.confirmation-bar').classList.contains('error-only')) $('detail-pane').querySelector('.confirmation-bar').hidden = !message; }
   const refresh = $('detail-pane').querySelector('[data-action="refresh-edit"]');
@@ -621,11 +669,15 @@ function renderSettings() {
   const cleanup = snapshot?.cacheCleanup?.accountId === snapshot?.accountId ? snapshot.cacheCleanup : null;
   const cleanupError = cacheCleanupErrors.get(snapshot?.accountId)?.message || snapshot?.cacheCleanupError || '';
   const cleanupBusy = busy.has(cacheCleanupBusyKey(snapshot?.accountId));
-  const signature = JSON.stringify([snapshot?.accountId, pinnedGroups, cleanup, cleanupError, cleanupBusy, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
+  const result = backupResults.get(snapshot?.accountId), backupError = backupErrors.get(snapshot?.accountId) || '';
+  const preview = backupPreview?.preview?.accountId === snapshot?.accountId ? backupPreview : null;
+  const backingUp = backupBusy(), restoring = restoreLocked();
+  const signature = JSON.stringify([snapshot?.accountId, generation(), pinnedGroups, cleanup, cleanupError, cleanupBusy, result, preview, backupError, backingUp, restoring, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
   if (signature === settingsSignature) return;
   retainFocus($('settings-panel'), () => {
     $('settings-panel').innerHTML = `<section class="settings-section"><h2>界面</h2><div class="setting-row"><span>主题</span><select id="theme-setting"><option value="system">跟随 Windows</option><option value="light">浅色</option><option value="dark">深色</option></select></div><div class="setting-row"><span>动画</span><select id="motion-setting"><option value="system">跟随系统</option><option value="reduce">减少动画</option></select></div></section>
       <section class="settings-section"><h2>启动</h2><div class="setting-row"><span>登录 Windows 后自动启动</span><select id="autostart-setting"><option value="on">开启</option><option value="off">关闭</option></select></div><p class="hint">开启后登录 Windows 时在托盘后台运行，桌面卡片继续显示。</p></section>
+      <section class="settings-section backup-section"><h2>备份与恢复</h2><p>导出当前 QQ 账号的全部本地数据和历史。恢复会整份覆盖当前账号，并先自动生成恢复前备份。</p><p class="hint">凭据不包含在备份内，恢复后请核对 QQ 连接设置。尚未下载的图片只保留引用，请在 QQ 查看原图。</p><p id="backup-result">${result ? `${result.preRestoreBackupPath ? '恢复完成' : '最近导出'}：${html(syncTimeLabel(result.createdAt, '时间待确认'))} · ${backupCompleteness(result)}<br>${html(result.path)}${result.preRestoreBackupPath ? `<br>恢复前备份：${html(result.preRestoreBackupPath)}` : ''}` : '尚无备份记录。'}</p><p id="backup-error" class="error" role="alert" ${backupError ? '' : 'hidden'}>${html(backupError)}</p><div class="detail-actions"><button class="button small" data-action="export-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>导出备份</button><button class="button small" data-action="inspect-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>恢复备份</button><button class="button small" data-action="open-backup-location" ${!result || backingUp ? 'disabled' : ''}>打开备份位置</button></div>${preview ? `<div id="backup-preview" class="backup-preview" data-account-id="${html(preview.preview.accountId)}" data-created-at="${html(preview.preview.createdAt)}" data-task-count="${html(preview.preview.taskCount)}" data-review-count="${html(preview.preview.reviewCount)}" data-notice-count="${html(preview.preview.noticeCount)}"><h3>确认恢复范围</h3><p>QQ 账号：${html(preview.preview.accountId)} · ${html(syncTimeLabel(preview.preview.createdAt, '时间待确认'))}</p><p>任务 ${html(preview.preview.taskCount)} 项 · 待确认 ${html(preview.preview.reviewCount)} 项 · 通知 ${html(preview.preview.noticeCount)} 项</p><p>覆盖此账号全部数据、所有状态和历史，包括证据引用、课程关联、人工修改、提醒台账及原撤销期限。</p><p>共用设置也将恢复：自动启动、桌面卡片布局、主题与动画。</p><p>${backupCompleteness(preview.preview)}</p><p class="hint">不会合并当前历史，不重置撤销期限，也不发送旧提醒。</p><div class="detail-actions"><button class="button primary" data-action="restore-backup" ${backingUp || restoring ? 'disabled' : ''}>${restoring ? '正在恢复…' : '确认覆盖并恢复'}</button><button class="button" data-action="cancel-backup" ${backingUp || restoring ? 'disabled' : ''}>取消</button></div></div>` : ''}${restoring ? '<p class="hint" role="status">账号正在恢复，请等待结果。事项和卡片操作已暂停。</p>' : backingUp ? '<p class="hint" role="status">正在处理备份，请等待结果。</p>' : ''}</section>
       <section class="settings-section"><h2>清理消息缓存</h2><p>仅清理最近 7 天分析窗口之外、已处理且没有保留引用的临时消息。任务、待确认、普通通知的原始证据和处理记录长期保留；未处理消息及其引用也会保留。</p><p id="cache-cleanup-result">${cleanup ? `最近成功清理：${html(syncTimeLabel(cleanup.completedAt, '时间待确认'))} · 实际删除 ${html(cleanup.deletedMessages)} 条消息。` : '尚无成功清理记录。'}</p><p id="cache-cleanup-error" class="hint" role="alert" ${cleanupError ? '' : 'hidden'}>${html(cleanupError)}</p><button class="button small" data-action="clean-cache" ${!loadedAccount() || cleanupBusy ? 'disabled' : ''}>${cleanupBusy ? '正在清理…' : '清理消息缓存'}</button></section>
       <section class="settings-section"><h2>课程与置顶群</h2><p>按真实置顶群名称确认课程；无需先填写课程名单。关联变更用于新消息，已有待确认仍需逐项核对。</p>
       ${pinnedGroups.length ? pinnedGroups.map(group => {
@@ -635,10 +687,16 @@ function renderSettings() {
       <section class="settings-section"><h2>${status?.scheduled ? '同步状态' : '接收状态'}</h2><p>${html($('connection-status').textContent)} · ${html($('receiving-status').textContent)}</p>${status?.scheduled ? `<p>上次成功同步（本次运行）：<span id="last-successful-sync">${html(syncTimeLabel(status.lastSuccessfulSyncAt, '本次运行尚无成功同步'))}</span></p><p>下次计划同步：<span id="next-scheduled-sync">${html(syncTimeLabel(status.nextScheduledSyncAt, '计划时间待确认'))}</span></p><p class="hint">每日 08:00、12:00、20:00（北京时间）；游戏期间延后同步。</p>` : `<p>${html($('history-status').textContent)}</p>`}${status?.historyFailures?.length ? '<p>未完成历史读取：</p>' + status.historyFailures.map(failure => `<p>${html(pinnedGroups.find(group => group.groupId === failure.groupId)?.name || failure.groupId)} · ${html(errorLabel(failure.reason))}</p>`).join('') : ''}</section>
       <section class="settings-section"><h2>桌面卡片提醒</h2><p>通过桌面卡片提醒，不播放声音或发送系统通知。</p><p>任务与待确认使用两张常驻桌面卡片，普通群通知仍在通知列表查看。</p><p id="desktop-status">${desktop.state === 'attached' ? '两张桌面卡片已挂载。' : desktop.state === 'unavailable' ? '桌面卡片暂不可用，仍可在主界面查看任务和待确认。' : '桌面卡片正在等待挂载。'}</p></section>`;
     $('theme-setting').value = preferences.theme; $('motion-setting').value = preferences.motion; $('autostart-setting').value = startupEnabled ? 'on' : 'off';
+    $('settings-panel').querySelectorAll('select,input').forEach(element => { element.disabled = restoring; });
+    $('settings-panel').querySelectorAll('.group-setting button,[data-action=clean-cache]').forEach(button => { if (restoring) button.disabled = true; });
   });
   settingsSignature = signature;
 }
-function render() { renderStatus(); renderNav(); renderList(); renderDetail(); }
+function backupCompleteness(result) { return result.isComplete ? '本地备份校验通过。' : `不完整：未包含 ${html(result.missingImageCount)} 张原图，未包含原图文件，仅保留图片引用。`; }
+function render() {
+  renderStatus(); renderNav(); renderList(); renderDetail();
+  if (restoreLocked()) document.querySelectorAll('#detail-pane button,#detail-pane input,#detail-pane select,[data-action=new-task]').forEach(element => { element.disabled = true; });
+}
 function validateTime(item) {
   const draft = draftFor(item);
   let message = '';
@@ -704,6 +762,7 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('change', event => {
   const element = event.target;
+  if (restoreLocked() && ['theme-setting', 'motion-setting', 'autostart-setting'].includes(element.id)) return;
   if (element.id === 'course-filter') { filters.course = element.value; render(); }
   else if (element.id === 'state-filter') { filters.state = element.value; render(); }
   else if (element.id === 'theme-setting' || element.id === 'motion-setting') {
@@ -745,6 +804,17 @@ document.addEventListener('click', event => {
   }
   if (action === 'select') { manualOpen = false; structureOpen = null; mergedSourceId = null; selectedId = button.dataset.id; detailError = null; render(); return; }
   if (action === 'refresh' || action === 'refresh-edit' || action === 'refresh-structure') { hostError = ''; request('snapshot', {}); return; }
+  if (backupOperations.includes(action)) {
+    if (!loadedAccount() || backupBusy()) return;
+    backupErrors.delete(snapshot.accountId);
+    const parameters = { accountId: snapshot.accountId };
+    if (['export-backup', 'restore-backup'].includes(action)) Object.assign(parameters, preferences);
+    if (['restore-backup', 'cancel-backup'].includes(action)) {
+      if (!backupPreview || backupPreview.generation !== generation()) return;
+      parameters.previewId = backupPreview.id;
+    }
+    request(action, parameters); render(); return;
+  }
   if (action === 'clean-cache') {
     if (!loadedAccount() || busy.has(cacheCleanupBusyKey(snapshot.accountId))) return;
     cacheCleanupErrors.delete(snapshot.accountId);

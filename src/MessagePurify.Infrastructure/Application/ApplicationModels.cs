@@ -11,12 +11,13 @@ public sealed record WorkspaceCommand(string AccountId, string Operation, string
     double? ReminderHours = null, int? ReminderDays = null, string? ReminderClock = null,
     long? ReminderVersion = null, string? Title = null, int? Priority = null,
     string? MergeWithId = null, long? MergeWithVersion = null, TaskMergeSelection? MergeSelection = null,
-    string? NewItemId = null, string? State = null, IReadOnlyList<int>? EvidenceIndexes = null);
+    string? NewItemId = null, string? State = null, IReadOnlyList<int>? EvidenceIndexes = null,
+    long? Generation = null);
 
 public sealed record ApplicationSnapshot(string AccountId, IReadOnlyList<ApplicationItem> Items,
     IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt,
     IReadOnlyList<TaskReminderPlan> Reminders, CacheCleanupResult? CacheCleanup = null,
-    string? CacheCleanupError = null);
+    string? CacheCleanupError = null, long Generation = 0);
 
 public sealed record ApplicationItem(string Id, string Kind, string Title, string? Course,
     string Group, string State, string? Due, string? Time, string TimeKind, int? Priority,

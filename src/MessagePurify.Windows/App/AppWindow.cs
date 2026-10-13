@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Threading;
 using MessagePurify.Infrastructure.Application;
+using MessagePurify.Infrastructure.Backup;
 using MessagePurify.Infrastructure.Tasks;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.Wpf;
@@ -15,6 +16,14 @@ public sealed class AppWindow : Window
     internal readonly WebView2 Browser = new();
     private readonly AppRuntime runtime;
     private readonly string dataRoot;
+    private readonly bool registerStartup;
+    private readonly IBackupFileDialogs backupFileDialogs;
+    private PreparedAccountBackup? backupPreview;
+    private long backupPreviewGeneration;
+    private bool backupBusy;
+    private readonly InterfacePreferences? initialPreferences;
+    private bool initialPreferencesSent;
+    private sealed record InterfacePreferences(string Theme, string Motion);
     private readonly DispatcherTimer updates = new() { Interval = TimeSpan.FromSeconds(1) };
     private int dirty = 1;
     private bool posting;
@@ -25,12 +34,15 @@ public sealed class AppWindow : Window
     public event Action<string, bool>? AppearanceChanged;
     public object DesktopStatus { get; set; } = new { state = "waiting", error = (string?)null };
 
-    public AppWindow(AppRuntime runtime, string dataRoot, bool hidden, bool registerStartup = true)
+    public AppWindow(AppRuntime runtime, string dataRoot, bool hidden, bool registerStartup = true, IBackupFileDialogs? backupFileDialogs = null)
     {
         this.runtime = runtime;
         this.dataRoot = dataRoot;
+        this.registerStartup = registerStartup;
+        this.backupFileDialogs = backupFileDialogs ?? new BackupFileDialogs();
+        initialPreferences = LoadInterfacePreferences();
         autoStartEnabled = AppStartupPreferences.Load(dataRoot);
-        if (registerStartup && autoStartEnabled && !StartupRegistration.IsEnabled()) StartupRegistration.SetEnabled(true);
+        if (registerStartup && StartupRegistration.IsEnabled() != autoStartEnabled) StartupRegistration.SetEnabled(autoStartEnabled);
         Title = "消息提纯";
         Width = 1360; Height = 880; MinWidth = 1000; MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -38,8 +50,16 @@ public sealed class AppWindow : Window
         if (hidden) { Opacity = 0; ShowInTaskbar = false; }
         runtime.Changed += OnChanged;
         Loaded += async (_, _) => await InitializeAsync();
-        Closing += (_, args) => { if (!Exiting) { args.Cancel = true; Hide(); } };
-        Closed += (_, _) => { disposed = true; updates.Stop(); runtime.Changed -= OnChanged; Browser.Dispose(); };
+        Closing += (_, args) =>
+        {
+            if (!Exiting)
+            {
+                args.Cancel = true;
+                if (!backupBusy) { ReleaseBackupPreview(); Post(new { type = "state", backupPreview = (object?)null }); }
+                Hide();
+            }
+        };
+        Closed += (_, _) => { disposed = true; ReleaseBackupPreview(); updates.Stop(); runtime.Changed -= OnChanged; Browser.Dispose(); };
         updates.Tick += async (_, _) =>
         {
             if (posting || Interlocked.Exchange(ref dirty, 0) == 0 || Browser.CoreWebView2 is null) return;
@@ -105,8 +125,13 @@ public sealed class AppWindow : Window
         var error = (string?)null;
         try
         {
+            if (runtime.IsRestoring && request!.Operation is not ("snapshot" or "open-backup-location"))
+                throw new InvalidOperationException("账号正在恢复，请等待结果后再操作。");
             if (request!.Operation == "set-appearance")
             {
+                if (request.Parameters.TryGetProperty("preferenceTheme", out var preferenceTheme)
+                    && (initialPreferences is null || initialPreferencesSent))
+                    SaveInterfacePreferences(new(preferenceTheme.GetString()!, request.Parameters.GetProperty("preferenceMotion").GetString()!));
                 AppearanceChanged?.Invoke(request.Parameters.GetProperty("theme").GetString()!,
                     request.Parameters.GetProperty("reducedMotion").GetBoolean());
                 Post(new { id = request.Id, success = true });
@@ -118,18 +143,23 @@ public sealed class AppWindow : Window
                 var previous = autoStartEnabled;
                 try
                 {
-                    StartupRegistration.SetEnabled(enabled);
+                    if (registerStartup) StartupRegistration.SetEnabled(enabled);
                     AppStartupPreferences.Save(dataRoot, enabled);
                     autoStartEnabled = enabled;
                     Post(new { id = request.Id, success = true, startupEnabled = autoStartEnabled });
                 }
                 catch (Exception exception)
                 {
-                    try { StartupRegistration.SetEnabled(previous); } catch { }
+                    try { if (registerStartup) StartupRegistration.SetEnabled(previous); } catch { }
                     var code = exception is InvalidOperationException { Message: "startup-registration-unavailable" }
                         ? "startup-registration-unavailable" : "startup-settings-unavailable";
                     Post(new { id = request.Id, success = false, error = code, startupEnabled = autoStartEnabled });
                 }
+                return;
+            }
+            if (request!.Operation is "export-backup" or "inspect-backup" or "restore-backup" or "cancel-backup" or "open-backup-location")
+            {
+                await HandleBackupAsync(request);
                 return;
             }
             if (request!.Operation != "snapshot")
@@ -147,7 +177,8 @@ public sealed class AppWindow : Window
                     MergeWithVersion: p.TryGetProperty("mergeWithVersion", out var mergeVersion) ? mergeVersion.GetInt64() : null,
                     MergeSelection: p.TryGetProperty("mergeSelection", out var selection) ? selection.Deserialize<TaskMergeSelection>(JsonOptions) : null,
                     NewItemId: Optional(p, "newItemId"), State: Optional(p, "state"),
-                    EvidenceIndexes: p.TryGetProperty("evidenceIndexes", out var indexes) ? indexes.Deserialize<int[]>() : null);
+                    EvidenceIndexes: p.TryGetProperty("evidenceIndexes", out var indexes) ? indexes.Deserialize<int[]>() : null,
+                    Generation: p.TryGetProperty("generation", out var generation) ? generation.GetInt64() : 0);
                 await Task.Run(() => workspace.Execute(command, DateTimeOffset.UtcNow));
                 runtime.Refresh();
             }
@@ -168,8 +199,113 @@ public sealed class AppWindow : Window
         ApplicationSnapshot? snapshot = null;
         try { snapshot = await Task.Run(() => runtime.Workspace?.Snapshot(DateTimeOffset.UtcNow)); }
         catch (Exception) { error ??= "读取本地数据失败，原数据已保留。"; }
-        if (requestId is null) Post(new { type = "state", snapshot, status = runtime.Status, desktop = DesktopStatus, startupEnabled = autoStartEnabled, error });
-        else Post(new { id = requestId, success = error is null, error, snapshot, status = runtime.Status, desktop = DesktopStatus, startupEnabled = autoStartEnabled });
+        var preferences = initialPreferencesSent ? null : initialPreferences;
+        initialPreferencesSent = true;
+        if (requestId is null) Post(new { type = "state", snapshot, status = runtime.Status, desktop = DesktopStatus, startupEnabled = autoStartEnabled, isRestoring = runtime.IsRestoring, backupResult = runtime.Workspace?.LastBackup, preferences, error });
+        else Post(new { id = requestId, success = error is null, error, snapshot, status = runtime.Status, desktop = DesktopStatus, startupEnabled = autoStartEnabled, isRestoring = runtime.IsRestoring, backupResult = runtime.Workspace?.LastBackup, preferences });
+    }
+
+    private async Task HandleBackupAsync(AppBridgeRequest request)
+    {
+        var workspace = runtime.Workspace ?? throw new InvalidOperationException("尚未连接到 QQ 账号。");
+        var p = request.Parameters;
+        var accountId = p.GetProperty("accountId").GetString()!;
+        if (workspace.AccountId != accountId) throw new InvalidOperationException("account_mismatch");
+        if (p.TryGetProperty("generation", out var generation) && generation.GetInt64() != workspace.Generation)
+            throw new InvalidOperationException("账号数据已恢复，请刷新后重新确认。");
+        if (backupBusy) throw new InvalidOperationException("备份操作正在进行，请等待结果。");
+        if (request.Operation == "cancel-backup")
+        {
+            if (backupPreview is null || backupPreview.Id != p.GetProperty("previewId").GetString() || backupPreview.Preview.AccountId != accountId)
+                throw new InvalidOperationException("恢复预览已失效，请重新选择备份。");
+            ReleaseBackupPreview(); Post(new { id = request.Id, success = true }); return;
+        }
+        if (request.Operation == "open-backup-location")
+        {
+            var result = workspace.LastBackup ?? throw new InvalidOperationException("尚无备份结果。");
+            var directory = Path.GetDirectoryName(result.Path);
+            if (directory is null || !Directory.Exists(directory)) throw new InvalidOperationException("备份位置已不存在，请核对本地文件。");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe") { Arguments = $"\"{directory}\"", UseShellExecute = true });
+            Post(new { id = request.Id, success = true }); return;
+        }
+        backupBusy = true;
+        try
+        {
+            if (request.Operation == "export-backup")
+            {
+                var path = backupFileDialogs.SelectExportPath(this, $"消息提纯-{accountId}-{DateTime.Now:yyyyMMdd-HHmmss}.zip");
+                if (path is null) { Post(new { id = request.Id, success = true, cancelled = true }); return; }
+                var settings = CurrentBackupSettings(p);
+                var result = await Task.Run(() => workspace.ExportBackup(path, settings, DateTimeOffset.UtcNow));
+                Post(new { id = request.Id, success = true, backupResult = result });
+            }
+            else if (request.Operation == "inspect-backup")
+            {
+                ReleaseBackupPreview();
+                var path = backupFileDialogs.SelectImportPath(this);
+                if (path is null) { Post(new { id = request.Id, success = true, cancelled = true }); return; }
+                var prepared = await Task.Run(() => workspace.InspectBackup(path));
+                if (disposed || runtime.Workspace != workspace || workspace.Generation != generation.GetInt64())
+                {
+                    prepared.Dispose(); throw new InvalidOperationException("恢复预览已失效，请重新选择备份。");
+                }
+                backupPreview = prepared; backupPreviewGeneration = workspace.Generation;
+                Post(new { id = request.Id, success = true, backupPreview = new { prepared.Id, generation = backupPreviewGeneration, prepared.Preview, prepared.ApplicationSettings } });
+            }
+            else
+            {
+                var prepared = backupPreview;
+                if (prepared is null || prepared.Id != p.GetProperty("previewId").GetString() || prepared.Preview.AccountId != accountId
+                    || backupPreviewGeneration != workspace.Generation) throw new InvalidOperationException("恢复预览已失效，请重新选择备份。");
+                var settings = CurrentBackupSettings(p);
+                var result = await runtime.RestoreBackupAsync(prepared, settings, restored =>
+                {
+                    if (registerStartup) StartupRegistration.SetEnabled(restored.AutoStartEnabled);
+                    autoStartEnabled = restored.AutoStartEnabled;
+                });
+                var restoredPreferences = new { theme = prepared.ApplicationSettings.Theme, motion = prepared.ApplicationSettings.Motion };
+                ReleaseBackupPreview();
+                var snapshot = await Task.Run(() => workspace.Snapshot(DateTimeOffset.UtcNow));
+                Post(new { id = request.Id, success = true, backupResult = result, snapshot, preferences = restoredPreferences, startupEnabled = autoStartEnabled, isRestoring = false });
+            }
+            runtime.Refresh();
+        }
+        finally { backupBusy = false; }
+    }
+
+    private BackupApplicationSettings CurrentBackupSettings(JsonElement parameters)
+    {
+        var path = Path.Combine(dataRoot, "desktop-layout.json");
+        return new(autoStartEnabled, parameters.GetProperty("theme").GetString()!, parameters.GetProperty("motion").GetString()!,
+            File.Exists(path) ? File.ReadAllText(path) : null);
+    }
+
+    private void ReleaseBackupPreview()
+    {
+        var prepared = backupPreview; backupPreview = null;
+        if (prepared is null) return;
+        try { prepared.Dispose(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+    }
+
+    private InterfacePreferences? LoadInterfacePreferences()
+    {
+        var path = Path.Combine(dataRoot, "interface-preferences.json");
+        try
+        {
+            if (!File.Exists(path)) return null;
+            var value = JsonSerializer.Deserialize<InterfacePreferences>(File.ReadAllText(path), JsonOptions);
+            return value is { Theme: "system" or "light" or "dark", Motion: "system" or "reduce" } ? value : null;
+        }
+        catch (Exception exception) when (exception is JsonException or IOException or UnauthorizedAccessException) { return null; }
+    }
+
+    private void SaveInterfacePreferences(InterfacePreferences value)
+    {
+        Directory.CreateDirectory(dataRoot);
+        var path = Path.Combine(dataRoot, "interface-preferences.json");
+        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        try { File.WriteAllText(temporary, JsonSerializer.Serialize(value, JsonOptions)); File.Move(temporary, path, overwrite: true); }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
     public async Task OpenItemAsync(string accountId, string id)
