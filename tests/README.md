@@ -1,5 +1,19 @@
 # 项目检查
 
+## 无人值守观察（2026-10-13）
+
+`watch_application.ps1` 仅观察已有正常应用，不启动/退出应用、不发送 QQ 消息、不处理事项。按 PID 和启动时刻核对进程身份，每次记录 CPU、内存、句柄、响应状态及两张卡片真实 parent/styles；UIA 只保存白名单同步提示和数量，不保存事项标题、原文、凭据或原始异常。报告原子更新，失败退出 1，不终止被观察进程。仅适用于 Windows 桌面会话。
+
+启动正常后台实例后，可运行：
+
+```powershell
+powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/watch_application.ps1 -ProcessId <应用PID> -Report .tools/unattended-validation/watch-2h.json -Seconds 7200 -IntervalSeconds 30
+```
+
+报告 `completed/success` 仅表示观察完成且采样中的两张卡片附着有效；连接提示和 `responding` 须逐样本核对，不能把退出 0 等同于持续在线、无卡顿或长期稳定性通过。卡片无数量时 `itemCount=null`，不能据此猜任务数。
+
+本轮真实冷启动、完整历史读取、正常两卡片/托盘检查及5秒观察通过；两小时观察未启动。16:23 时 QQ/应用均已退出，原因未确定；四库完整性正常，启动前任务记录和课程关系未变。详细命令、状态及本机报告见 `docs/HANDOFF.md`。`application-watch.test.mjs` 覆盖拒绝其他进程、已退出 PID 的安全失败报告及不终止被观察进程。
+
 ## 桌面恢复（2026-10-13）
 
 布局/系统消息专项68/68，Release 全量 Core306/306、Infrastructure675/675、Windows390/390，Node139/139（页面77、文档43），均退出0。`DesktopPlacementTests`、`DesktopLayoutTests` 和 `DesktopSystemMessagesTests` 覆盖各屏可见工作区域、空隙/任务栏/负坐标、单卡片保存保留另一张原DIP、屏幕返回、坏文件和恢复事件过滤。专项先实际失败，再实施通过。

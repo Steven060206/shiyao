@@ -8,6 +8,18 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('无人值守首轮记录保护数据及退出未知，不能替代两小时连续验收', () => {
+  const requirements = read('docs/requirements.md').split('历史真实事项验收')[0];
+  const handoff = read('docs/HANDOFF.md').split('### 上一段')[0];
+  for (const content of [requirements, handoff]) {
+    assert.match(content, /两小时连续观察未启动、仍未验收/);
+    assert.match(content, /退出原因未(?:确定|定)/);
+    assert.match(content, /0\s*个待办、1\s*个已完成任务/);
+    assert.match(content, /70\s*项未处理/);
+    assert.match(content, /四库完整性|四库integrity=ok/);
+  }
+});
+
 test('同步状态记录真实批次时间和本次运行范围，固定时刻与游戏实测仍另行验收', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
     const content = read(file);
