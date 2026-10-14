@@ -4,6 +4,20 @@
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
+### GitHub 更新同步（2026-10-14，beta.2构建验证已完成，待上传）
+
+用户明确要求软件更新后，GitHub也要同步。后续每次软件更新，都同步 GitHub 源码和 Release 下载包；已有直接上传授权持续有效，无需重复确认，规则已写入AGENTS.md与需求。完成测试、验证和Git commit后推送main，从干净的自包含发布目录构建下载包，上传后核对附件状态和公开下载链接。失败或尚未完成时如实记录，不把本地实现记为远端已发布。
+
+本轮开始时只读核对：本地git status --short为空，HEAD为c496dc2，新增e48639e、d4ae69d、d46ed07、c496dc2四项提交；当时GitHub main为7affe498bf3e8f328dcc6c9fd483c2ffbd63cf28，最新Release为v0.1.0-beta.1。本次准备发布0.1.0-beta.2，包含保留忽略与确认、消息倒序、回收站及空待办卡片隐藏。构建与本机解压包验证已完成，GitHub上传尚未完成。保持现有正式应用和个人数据，使用隔离发布与合成配置，没有发起真实QQ同步。
+
+实际执行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release`306/306；相同参数依次对Infrastructure与Windows测试项目执行695/695、456/456，均退出0。`node --test tests/*.test.mjs`最终173/173、退出0；新增持续同步规则回归初次发现交接遗漏“无需重复确认”，补齐后全量通过。`python -m unittest discover -s tests -p release_packaging_test.py`4/4；`.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py`25/25及同Python的 `-m pip check`通过。
+
+App csproj用 `--no-restore --configuration Release --self-contained true --output .tools/published/github-release-0.1.0-beta.2`完成publish，退出0。`python tools/build_release.py --publish-directory .tools/published/github-release-0.1.0-beta.2 --napcat-archive .tools/napcat/framework/v4.18.37/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.2`生成`.tools/releases/Shiyao-0.1.0-beta.2-win-x64.zip`，119916177字节、518条目。`python .tools/releases/beta2-validation/verify-archive.py`退出0，ZIP完整性、所有程序文件与publish逐字节一致、官方NapCat原包一致、个人数据文件未包含；首次临时检查脚本误用不存在的styles.css文件名，改为核对实际全部发布文件后通过，软件和打包器不改。
+
+解压到`.tools/releases/验包 中文空格 0.1.0-beta.2/Shiyao/`后，`python tests/app_desktop_test.py --executable .tools/releases/验包 中文空格 0.1.0-beta.2/Shiyao/app/MessagePurify.exe`退出0，115项Native与真实父窗/styles检查通过。`python .tools/releases/verify-package-beta2.py`退出0，用合成QQ路径/账号完成CheckOnly与Setup、原包解压、本机接口和桥核对；没有启动QQ或安装真实快捷方式。日志与报告位于`.tools/releases/beta2-validation/`及`.tools/releases/package-validation-beta2.json`；发布说明为`.tools/releases/release-notes-beta2.md`。其他电脑及QQ版本的试用仍待反馈。
+
+maintain-context-hygiene在两处技能目录仍无SKILL.md，按项目规则人工核对新需求、交接、实际源码、测试结果与下载包。接下来验证文档、创建commit、推main并上传beta.2，核对公开下载后记录远端结果。
+
 ### 当前接续（无待办时隐藏提醒事项卡片，2026-10-14，已实现、部署并实机核对）
 
 用户截图要求无待办时不显示“提醒事项”桌面卡片。需求与实现已同步，替代此前空卡片收紧并显示暂无待办的规则：当前账号active任务为0时隐藏，有待办时自动显示，保留位置、尺寸、主题和透明度；待确认仍按自身未处理项决定显示。DesktopCardHost.Render原来只隐藏空待确认，现对两种卡片均按条目数量决定显示；构造窗口时先创建原生句柄和设置位置，首次有内容后再Show，空账号或桌面恢复重建不短暂显示空卡片。产物为src/MessagePurify.Windows/App/DesktopCardHost.cs、SmokeCheck.DesktopAppearance.cs、README.md及tests/app_desktop_test.py。
@@ -962,6 +976,7 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 
 | 记录日期 | 变更 | 依据与状态 |
 | --- | --- | --- |
+| 2026-10-14 | 软件更新须持续同步GitHub源码和下载包 | 用户明确要求，已有直接上传授权持续有效；规则、需求与新增回归已同步。beta.2构建、Core306、Infrastructure695、Windows456、Node173、OCR25、Python打包4与解压版Native115已通过；GitHub上传仍待完成 |
 | 2026-10-14 | 所有消息列表改按最新原消息时间倒序，替代优先级/截止日期排序 | 主窗口各列表与两桌面卡片统一规则，手动任务用创建时间；Core306、Infrastructure695、Windows456、Node171、OCR25、Python打包4项及113项Native通过，正式原目录部署并后台重开。任务/忽略/历史和布局保留 |
 | 2026-10-14 | 明确启动同步跳过已忽略原消息并保留已确认事项 | 复用已有持久化路由回执和事项状态；新增重开后按次同步三种任务状态及忽略撤销过期四项回归，Infrastructure694、Core306、Windows454、Node170、OCR25、Python打包4项通过。需求及交接同步；验证使用隔离合成账号，提交标识以Git日志为准 |
 | 2026-10-14 | 用户选择A，公开源码并授权直接上传；首个测试版发布完成 | 新增便携QQ配置、首次Setup、独立下载包、使用说明与完整第三方许可；Core306、Infrastructure690、Windows454、Node170、Python打包4项及解压版113项Native通过。提交c221e66推main，公开仓库shiyao和v0.1.0-beta.1 Release含119915264字节uploaded附件；不含个人材料，本机正式入口与数据保留，跨电脑试用仍待反馈 |

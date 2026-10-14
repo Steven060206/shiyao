@@ -8,6 +8,16 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('软件更新持续同步GitHub源码与下载包，上传验证不足时保留真实状态', () => {
+  for (const file of documents) {
+    const content = read(file);
+    assert.match(content, /后续每次软件更新，都同步 GitHub 源码和 Release 下载包/, file);
+    assert.match(content, /(?:无需重复确认|无需再次确认)/, file);
+    assert.match(content, /(?:附件上传状态和公开下载链接|附件状态和公开下载链接)/, file);
+    assert.match(content, /(?:失败或尚未完成|上传失败或尚未完成).*如实记录/, file);
+  }
+});
+
 test('同学分发与GitHub公开发布授权同步，并保留个人数据边界', () => {
   const requirements = read('docs/requirements.md').split('## 11. 同学分发与 GitHub 下载')[1]?.split('## 参考来源')[0];
   const handoff = read('docs/HANDOFF.md').split('### 同学分发与 GitHub 发布准备')[1]?.split('### 本轮修复前 QQ 连接诊断')[0];
