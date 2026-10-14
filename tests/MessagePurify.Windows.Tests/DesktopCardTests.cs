@@ -5,6 +5,23 @@ namespace MessagePurify.Windows.Tests;
 
 public sealed class DesktopCardTests
 {
+    [Theory]
+    [InlineData("queued", "pending", "等待同步")]
+    [InlineData("starting", "pending", "正在切换 QQ")]
+    [InlineData("syncing", "reading", "正在同步置顶群消息")]
+    [InlineData("restoring", "complete", "正在切回普通 QQ")]
+    [InlineData("idle", "complete", "同步完成，已切回 QQ")]
+    [InlineData("idle", "partial", "同步未补全，已切回 QQ")]
+    [InlineData("failed", "partial", "同步失败，可重试")]
+    public void SessionStatusDoesNotTreatIntentionalDisconnectAsReconnect(string phase, string history, string expected)
+    {
+        var status = new MessageHostStatus("disconnected", "unknown", "paused", history, null, Now, [])
+        { SyncPhase = phase, LastSuccessfulSyncAt = Now };
+        var cards = DesktopCardProjection.Build(Snapshot(Item("task")), status);
+        Assert.Equal(expected, cards.ConnectionText);
+        Assert.Single(cards.Tasks);
+    }
+
     private static readonly DateTimeOffset Now = new(2026, 10, 12, 10, 0, 0, TimeSpan.FromHours(8));
 
     [Fact]

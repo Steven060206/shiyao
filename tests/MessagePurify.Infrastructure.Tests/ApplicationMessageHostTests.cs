@@ -16,6 +16,149 @@ public sealed class ApplicationMessageHostTests : IDisposable
     private readonly string root = Path.Combine(Path.GetTempPath(), "MessagePurify-host-" + Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public async Task RunOnceReadsOnlyPinnedSevenDayHistoryAndClosesConnection()
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            GroupCount = 2, EmitHistoryEvents = false,
+            PinnedResponder = (_, _) => (0, Pins(First)),
+            HistoryResponder = (_, _) => (0, BoundaryHistory(Message("within-seven-days")))
+        };
+        var workspace = Workspace(confirmed: true);
+        var host = new NapCatMessageHost(workspace, server.Url);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+        var running = host.RunOnceAsync(cancellation.Token);
+        try
+        {
+            await running.WaitAsync(TimeSpan.FromSeconds(2));
+            await UntilAsync(() => !server.HasActiveConnection);
+            Assert.Equal("complete", host.Status.History);
+            Assert.Equal("disconnected", host.Status.Transport);
+            Assert.NotNull(host.Status.LastSuccessfulSyncAt);
+            Assert.Equal("task", Assert.Single(workspace.Snapshot(DateTimeOffset.UtcNow).Items).Kind);
+            Assert.Equal(1, StoredCount());
+            Assert.Equal(First, Assert.Single(server.HistoryParameters).GetProperty("group_id").GetString());
+            Assert.Equal(1, server.ConnectionCount);
+            Assert.DoesNotContain(server.Actions, action => action.StartsWith("send", StringComparison.Ordinal));
+        }
+        finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+
+    [Fact]
+    public async Task RunOnceReportsPartialHistoryWithoutConsumingScheduledRequests()
+    {
+        await using var server = new LoopbackOneBotServer
+        { EmitHistoryEvents = false, HistoryResponder = (_, _) => (1200, null) };
+        var controller = new ResidentSyncController();
+        var request = new SyncRequest(SyncRequestKind.Scheduled, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow);
+        controller.Request(request);
+        var host = new NapCatMessageHost(Workspace(), server.Url, syncController: controller);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        await host.RunOnceAsync(cancellation.Token);
+
+        Assert.Equal("partial", host.Status.History);
+        Assert.Equal("api-failed-1200", Assert.Single(host.Status.HistoryFailures).Reason);
+        Assert.Null(host.Status.LastSuccessfulSyncAt);
+        Assert.Equal(request, await controller.WaitAsync(cancellation.Token));
+        Assert.Equal(1, server.ConnectionCount);
+        Assert.Single(server.HistoryParameters);
+        Assert.Equal(0, StoredCount());
+    }
+
+    [Theory]
+    [InlineData("account", "account-mismatch")]
+    [InlineData("offline", "qq-offline")]
+    [InlineData("pins", "pinned-state-unavailable")]
+    public async Task RunOncePropagatesInitialConnectionFailuresWithoutRetry(string scenario, string expected)
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false,
+            Online = scenario != "offline",
+            AccountForConnection = _ => scenario == "account" ? "123456" : Account,
+            PinnedResponder = (_, _) => scenario == "pins" ? (1200, null) : (0, Pins(First))
+        };
+        var host = new NapCatMessageHost(Workspace(), server.Url);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var error = await Assert.ThrowsAsync<OneBotProtocolException>(() => host.RunOnceAsync(cancellation.Token));
+
+        Assert.Equal(expected, error.Code);
+        Assert.Equal(expected, host.Status.Error);
+        Assert.Equal("disconnected", host.Status.Transport);
+        Assert.Equal(1, server.ConnectionCount);
+        Assert.Empty(server.HistoryParameters);
+    }
+
+    [Fact]
+    public async Task RunOncePropagatesMalformedHistoryProtocolInsteadOfReportingCompletedBatch()
+    {
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false,
+            HistoryResponder = (_, _) => (0, new { messages = new[]
+            { new { message_type = "group", self_id = Account, group_id = First, message_id = "broken" } } })
+        };
+        var host = new NapCatMessageHost(Workspace(), server.Url);
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var error = await Assert.ThrowsAsync<OneBotProtocolException>(() => host.RunOnceAsync(cancellation.Token));
+
+        Assert.Equal("missing-field", error.Code);
+        Assert.Equal("missing-field", host.Status.Error);
+        Assert.Null(host.Status.LastSuccessfulSyncAt);
+        Assert.Equal(0, StoredCount());
+        Assert.Equal(1, server.ConnectionCount);
+    }
+
+    [Theory]
+    [InlineData(true, true, "game-active")]
+    [InlineData(false, false, "game-catalog-unavailable")]
+    public async Task RunOnceBlockedByGameDoesNotOpenConnection(bool active, bool ready, string expected)
+    {
+        await using var server = new LoopbackOneBotServer();
+        var detector = new MutableGameDetector { Active = active, IsReady = ready };
+        var host = new NapCatMessageHost(Workspace(), server.Url, syncController: new(detector));
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var error = await Assert.ThrowsAsync<OneBotProtocolException>(() => host.RunOnceAsync(cancellation.Token));
+
+        Assert.Equal(expected, error.Code);
+        Assert.Equal(expected, host.Status.Error);
+        Assert.Equal(0, server.ConnectionCount);
+        Assert.Empty(server.Actions);
+    }
+
+    [Fact]
+    public async Task RunOnceCancelsInFlightHistoryWhenGameStartsWithoutSavingPage()
+    {
+        var detector = new MutableGameDetector();
+        var responseGate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false, HistoryResponseGate = responseGate.Task,
+            HistoryResponder = (_, _) =>
+            {
+                detector.Active = true;
+                return (0, BoundaryHistory(Message("must-not-save")));
+            }
+        };
+        var host = new NapCatMessageHost(Workspace(), server.Url, syncController: new(detector));
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+
+        var error = await Assert.ThrowsAsync<OneBotProtocolException>(() =>
+            host.RunOnceAsync(cancellation.Token).WaitAsync(TimeSpan.FromSeconds(2)));
+
+        Assert.Equal("game-active", error.Code);
+        Assert.Equal("game-active", host.Status.Error);
+        Assert.Null(host.Status.LastSuccessfulSyncAt);
+        Assert.Equal(0, StoredCount());
+        Assert.Single(server.HistoryParameters);
+        Assert.Equal(1, server.ConnectionCount);
+    }
+
+    [Fact]
     public void HostStartsPausedWithoutFabricatedConnection()
     {
         var host = new NapCatMessageHost(Workspace(), new("ws://127.0.0.1:3001/"));
@@ -327,6 +470,7 @@ public sealed class ApplicationMessageHostTests : IDisposable
     private sealed class MutableGameDetector : IGameActivityDetector
     {
         private int active;
+        public bool IsReady { get; set; } = true;
         public bool Active { get => Volatile.Read(ref active) == 1; set => Volatile.Write(ref active, value ? 1 : 0); }
         public bool IsGameRunning() => Active;
     }

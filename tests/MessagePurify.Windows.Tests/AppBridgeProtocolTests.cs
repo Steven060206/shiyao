@@ -6,6 +6,17 @@ namespace MessagePurify.Windows.Tests;
 
 public sealed class AppBridgeProtocolTests
 {
+    [Fact]
+    public void RequestsSyncWithoutRequiringAnAlreadyConnectedAccount()
+    {
+        const string json = """{"id":"sync","operation":"sync-now","parameters":{}}""";
+        Assert.True(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out var request));
+        Assert.Equal("sync-now", request!.Operation);
+        Assert.False(AppBridgeProtocol.TryParse("https://example.com/index.html", json, out _));
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl,
+            json.Replace("{}", "{\"accountId\":\"123\"}"), out _));
+    }
+
     [Theory]
     [InlineData("0", true)]
     [InlineData("60", true)]

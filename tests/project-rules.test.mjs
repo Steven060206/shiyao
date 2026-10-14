@@ -56,10 +56,10 @@ test('历史真实观察启动记录保留当时状态及固定时刻验收边�
   assert.match(read('tests/README.md'), /watch-2h\.json/);
 });
 
-test('同步状态记录真实批次时间和本次运行范围，固定时刻与游戏实测仍另行验收', () => {
+test('同步状态记录真实批次时间和本次运行范围，定时同步已取消', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
     const content = read(file);
-    assert.match(content, /同步状态显示已实现并验证/, file);
+    assert.match(content, /同步状态显示已实现并验证|正常同步结束显示“同步完成，已切回 QQ”/, file);
     assert.match(content, /上次成功同步（本次运行）/, file);
     assert.match(content, /下次计划同步/, file);
     assert.match(content, /不跨进程持久化|没有跨进程持久化/, file);
@@ -514,70 +514,65 @@ test('真实 QQ 接入报告保留历史范围、窗口异常和剩余验收', (
   assert.match(report, /M3 仍为“正在实施”/);
 });
 
-test('已确认常驻后台同步替代按次切换，停止快捷方式方向', () => {
+test('已确认点击触发同步并在完成后恢复普通 QQ', () => {
   const handoff = read('docs/HANDOFF.md');
   const requirements = read('docs/requirements.md');
-  assert.match(handoff, /已确认：QQ\/NapCat Framework 常驻，固定时间后台同步/);
-  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/integrations/napcat-setup.md', 'src/MessagePurify.Windows/App/README.md']) {
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/integrations/napcat-setup.md', 'src/MessagePurify.Windows/App/README.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
     const content = read(file);
-    assert.match(content, /固定时间/);
-    assert.match(content, /常驻.*固定时间后台同步|常驻，固定时间后台同步/);
-    assert.match(content, /停止.*快捷方式|快捷方式改造已取消|快捷方式改造.*停止/);
+    assert.match(content, /每次点击拾要.*(?:自动启动|自动执行)一轮同步|点击拾要或“自动同步”时临时启动/);
+    assert.match(content, /(?:同步完成后|完成一轮同步后).*普通 QQ/);
   }
-  assert.match(requirements, /替代每次同步切换接入环境及结束后恢复普通 QQ/);
-  assert.match(handoff, /用户选择 A：游戏导致错过同步时，结束游戏后补同步一次/);
+  assert.match(handoff, /新接入需求（2026-10-14，已实现、部署并实机核对）/);
+  assert.match(requirements, /替代 QQ\/NapCat Framework 常驻、批次后保持连接的旧方案/);
+  assert.match(handoff, /用户确认启动拾要自动同步一次/);
+  const overview = handoff.split('###')[0];
+  assert.match(overview, /同步并恢复普通 QQ 已实现、部署并实机核对/);
+  assert.match(overview, /定时同步已取消/);
+  assert.doesNotMatch(overview, /固定时刻.*未验收/);
+  assert.match(handoff, /### 本轮修复前 QQ 连接诊断（2026-10-14，历史）/);
   assert.doesNotMatch(requirements, /日常重新打开 QQ 直接双击桌面原有/);
 });
 
-test('每天三次同步、游戏期间禁止同步及退出后合并补一次保持有效', () => {
+test('点击触发同步、游戏期间禁止同步及退出后合并补一次保持有效', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/integrations/napcat-setup.md', 'src/MessagePurify.Windows/App/README.md']) {
     const end = file === 'docs/requirements.md' ? '## 3.'
       : file === 'docs/HANDOFF.md' ? '上一段恢复（'
       : file === 'docs/integrations/napcat-setup.md' ? '以下 Shell' : '## 当前可操作';
     const current = read(file).split(end)[0];
-    assert.match(current, /每天 08:00、12:00、20:00（北京时间）各同步一次，共三次/, file);
-    assert.match(current, /打游戏时禁止同步/, file);
-    assert.match(current, /常驻/, file);
-    assert.match(current, /中途开始游戏时暂停|中途游戏暂停/, file);
-    assert.match(current, /真实.*尚未验收|真实.*验收尚未完成/, file);
-    assert.match(current, /游戏导致错过同步时，结束游戏后补同步一次/, file);
-    assert.doesNotMatch(current, /游戏导致错过同步(?:后的补同步规则|时的补同步规则).*待确认/, file);
-    assert.doesNotMatch(current, /具体同步时刻.*待确认|具体时刻及.*待确认/, file);
+    assert.match(current, /每次点击拾要.*(?:自动启动|自动执行)一轮同步|点击拾要或“自动同步”时临时启动/, file);
+    assert.match(current, /打游戏时禁止同步|游戏期间禁止同步/, file);
+    assert.match(current, /普通 QQ 已运行时允许自动退出/, file);
+    assert.match(current, /取消每天 08:00、12:00、20:00 定时同步/, file);
+    assert.match(current, /后台自启动只恢复本地界面和卡片，不切换 QQ/, file);
   }
   const rules = read('docs/requirements.md').split('\n').filter(line => line.startsWith('- ')).join('\n');
-  assert.match(rules, /固定时间 08:00、12:00、20:00/, '有效需求保留三个时刻');
-  assert.match(rules, /游戏期间不得为同步切换或重启 QQ/, '游戏限制覆盖 QQ 切换');
+  assert.match(rules, /每次点击拾要时自动启动一轮同步/);
+  assert.match(rules, /打游戏时禁止同步|游戏期间禁止同步/);
   assert.match(rules, /游戏导致错过同步时，结束游戏后补同步一次/);
-  assert.match(rules, /同一游戏期间错过多个固定时间，合并为一次补同步/);
-  assert.doesNotMatch(rules, /结束游戏后补一次还是等待下个固定时间，尚待用户确认/);
-  assert.doesNotMatch(rules, /具体同步时刻.*待确认/);
+  assert.match(rules, /同步完成后结束项目专用 NapCat Framework/);
   const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
-  assert.match(next, /不重新询问.*同步时间/);
-  assert.match(next, /游戏漏同步处理已确认，不重新询问/);
-  assert.doesNotMatch(next, /游戏导致错过同步时的补同步规则.*待确认|下一步优先确认游戏导致错过同步/);
-  assert.doesNotMatch(next, /具体同步时刻.*待确认/);
+  assert.match(next, /按次切换已写入代码/);
+  assert.match(next, /固定时刻已取消/);
+  assert.doesNotMatch(next, /固定时刻同步是否保留待(?:确认|设计确认)/);
 });
 
-test('常驻 A 方案、自动维护本机游戏名单及真实验收边界分别记录', () => {
+test('临时切换方案、自动维护本机游戏名单及真实验收边界分别记录', () => {
   const requirements = read('docs/requirements.md');
-  assert.match(requirements, /用户选择 A.*(?:常驻方案|常驻.*后台)/);
-  assert.match(requirements, /不再每次同步前后切换或重开 QQ/);
+  assert.match(requirements, /用户确认每次点击拾要时自动启动一轮同步/);
+  assert.match(requirements, /同步完成后结束项目专用 NapCat Framework，恢复原本的普通 QQ/);
   assert.match(requirements, /将电脑现有游戏全部加入检测，并定期扫描电脑游戏、同步检测名单/);
-  assert.match(requirements, /默认应用启动及每日扫描一次，游戏期间延后目录扫描/);
+  assert.match(requirements, /普通 QQ 已运行时允许自动退出/);
+  assert.match(requirements, /同步失败、超时或退出应用时也尝试恢复普通 QQ/);
+  assert.match(requirements, /取消每天 08:00、12:00、20:00 定时同步/);
   const next = read('docs/HANDOFF.md').split('## 6. 未决定事项与下一步')[1].split('## 7.')[0];
-  assert.match(next, /已确认：QQ\/NapCat Framework 常驻，固定时间后台同步/);
-  assert.match(next, /不取消游戏禁止同步和补一次规则/);
-  assert.match(next, /真实常驻验收尚未完成/);
-  assert.match(next, /游戏性能及长期稳定性仍需实测/);
-  assert.doesNotMatch(next, /常玩游戏名称待用户提供|未决定：消息接口随 QQ 常驻/);
+  assert.match(next, /点击触发一次同步并在完成后恢复普通 QQ/);
+  assert.match(next, /按次切换已写入代码/);
   const spec = read('docs/superpowers/specs/2026-10-10-windows-app-design.md').split('**状态：')[0];
-  assert.match(spec, /每天 08:00、12:00、20:00（北京时间）/);
-  assert.match(spec, /打游戏时禁止同步，游戏结束后合并补同步一次/);
-  assert.match(spec, /替代每次同步切换接入环境及结束后恢复普通 QQ/);
-  assert.match(spec, /现有游戏全部加入检测.*定期扫描/);
-  assert.doesNotMatch(spec, /具体时刻.*待确认/);
+  assert.match(spec, /点击拾要或“自动同步”时临时启动/);
+  assert.match(spec, /同步完成后恢复普通 QQ/);
   const active = requirements.split('\n').filter(line => line.startsWith('- ')).join('\n');
-  assert.doesNotMatch(active, /自动切换普通 QQ 与消息接入环境|同步结束后恢复普通 QQ|游戏检测和中途开始游戏时的停止处理尚未实现/);
+  assert.match(active, /自动启动一轮同步/);
+  assert.match(active, /恢复原本的普通 QQ/);
 });
 
 test('先完成确定功能，再统一进行真实验收', () => {
@@ -588,14 +583,14 @@ test('先完成确定功能，再统一进行真实验收', () => {
     assert.match(current, /OCR.*(?:后期独立项目|后置)/s, file);
     assert.match(current, /(?:统一|真实).*验收.*(?:后置|完成后)/s, file);
     assert.match(current, /游戏禁止同步.*(?:保持有效|有效需求不变)/, file);
-    assert.match(current, /关机\/睡眠漏同步规则仍(?:是)?未决定事项|关机\/睡眠漏同步规则待确认/, file);
+    assert.match(current, /关机\/睡眠漏同步(?:规则|政策).*(?:未决定|待确认|未确认)|取消定时同步后不再补关机或睡眠期间的固定时刻/, file);
   }
 });
 
-test('真实首次同步和常驻通过，固定时刻与游戏实测仍待验收', () => {
+test('历史首次同步证据与新临时切换验收边界分别记录', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
     const content = read(file);
-    assert.match(content, /真实.*首次.*(?:后台同步|同步).*已通过|真实.*首次.*后台同步.*通过|真实首次同步.*常驻.*验收/, file);
+    assert.match(content, /真实.*首次.*(?:后台同步|同步).*已通过|真实.*首次.*后台同步.*通过|(?:验证首次后台同步|首次后台同步.*(?:验证|通过)|临时切换尚未实现|旧常驻验证只作为历史证据)|真实首次同步.*常驻.*验收/, file);
     assert.match(content, /自然.*固定.*(?:尚未验收|未验收|未完成)|自然.*到点验收/, file);
     assert.match(content, /实际游戏.*(?:验收延后|统一.*后置|仍需实测|尚未验收)/s, file);
     assert.match(content, /48 项待确认/, file);

@@ -134,6 +134,12 @@ public sealed class AppWindow : Window
         {
             if (runtime.IsRestoring && request!.Operation is not ("snapshot" or "open-backup-location"))
                 throw new InvalidOperationException("账号正在恢复，请等待结果后再操作。");
+            if (request!.Operation == "sync-now")
+            {
+                var started = runtime.RequestSync();
+                Post(new { id = request.Id, success = true, syncRequested = started, status = runtime.Status });
+                return;
+            }
             if (request!.Operation == "set-appearance")
             {
                 var transparency = request.Parameters.TryGetProperty("desktopTransparency", out var value) && value.ValueKind != JsonValueKind.Null

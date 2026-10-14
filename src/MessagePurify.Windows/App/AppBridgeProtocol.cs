@@ -11,7 +11,7 @@ public static class AppBridgeProtocol
     public const string PageUrl = "https://" + Host + "/index.html";
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
-        "snapshot", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
+        "snapshot", "sync-now", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
         "reject", "accept-review", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart",
         "merge-tasks", "keep-separate", "split-task", "clean-cache", "export-backup", "inspect-backup",
         "restore-backup", "cancel-backup", "open-backup-location"
@@ -38,6 +38,12 @@ public static class AppBridgeProtocol
                 || !Text(root, "id", 128, out var id) || !Text(root, "operation", 32, out var operation)
                 || !Operations.Contains(operation) || !root.TryGetProperty("parameters", out var parameters)
                 || !UniqueObject(parameters) || parameters.EnumerateObject().Any(p => !ParameterNames.Contains(p.Name))) return false;
+            if (operation == "sync-now")
+            {
+                if (parameters.EnumerateObject().Any()) return false;
+                request = new(id, operation, parameters.Clone());
+                return true;
+            }
             if (operation == "set-appearance")
             {
                 var hasPreferences = parameters.TryGetProperty("preferenceTheme", out _);

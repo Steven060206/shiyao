@@ -20,11 +20,13 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
     public int GroupCount { get; init; } = 1;
     public bool EmitHistoryEvents { get; init; } = true;
     public int ConnectionCount { get; private set; }
+    public bool HasActiveConnection => socket?.State == WebSocketState.Open;
     public Func<int, string>? AccountForConnection { get; init; }
     public Func<int, int, (int Retcode, object? Data)>? PinnedResponder { get; set; }
     public int PinnedReads { get; private set; }
     public IReadOnlyList<object> EventsOnFirstPinnedRead { get; init; } = [];
     public Func<JsonElement, int, (int Retcode, object? Data)>? HistoryResponder { get; set; }
+    public Task? HistoryResponseGate { get; init; }
     public List<JsonElement> HistoryParameters { get; } = [];
     public void Disconnect() => socket?.Abort();
 
@@ -80,6 +82,7 @@ internal sealed class LoopbackOneBotServer : IAsyncDisposable
                 foreach (var groupEvent in EventsOnFirstPinnedRead) await SendAsync(groupEvent);
             if (action == "get_group_msg_history")
             {
+                if (HistoryResponseGate is not null) await HistoryResponseGate.WaitAsync(stopping.Token);
                 if (EmitHistoryEvents && historyRetcode == 0)
                 {
                     var message = FirstHistoryMessage(data, request.RootElement.GetProperty("params"));

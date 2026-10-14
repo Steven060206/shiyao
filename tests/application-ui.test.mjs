@@ -91,6 +91,7 @@ const mockScript = `(() => {
       backend.snapshot.cacheCleanupError=null;backend.snapshot.generatedAt=new Date().toISOString();
       backend.emit({id:command.id,success:true,snapshot:backend.snapshot,status:backend.status});return;
     }
+    if(command.operation==='sync-now') { backend.emit({id:command.id,success:true,syncRequested:true,status:{...backend.status,syncPhase:'queued'}});return; }
     const item=backend.snapshot?.items.find(item=>item.id===parameters.id);
     if(['merge-tasks','split-task','keep-separate'].includes(command.operation)) {
       const saved=backend.structureRequests[parameters.operationId];
@@ -236,6 +237,31 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'cancel1', '快照之后兑现桌面打开请求');
     });
     await waitFor('!!document.querySelector(".task-row")');
+    await t.test('自动同步按钮请求一轮，切回 QQ 后正常空闲且不显示重连', async () => {
+      await evaluate(`backend.status={...${JSON.stringify(status)},transport:"disconnected",qq:"unknown",receiving:"paused",scheduled:false,syncPhase:"idle",history:"complete",historyFailures:[],lastSuccessfulSyncAt:"2026-10-14T02:10:00Z",nextScheduledSyncAt:null};backend.push()`);
+      assert.equal(await evaluate('document.querySelector("#connection-status").textContent'), '普通 QQ 模式');
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '同步完成，已切回 QQ');
+      assert.equal(await evaluate('document.querySelector("[data-action=sync-now]").disabled'), false);
+      await nav('settings');
+      assert.equal(await evaluate('document.querySelector("#last-successful-sync").textContent'), '2026-10-14 10:10（北京时间）');
+      assert.match(await evaluate('document.querySelector("#settings-panel").textContent'), /点击.*自动同步.*切回/);
+      assert.equal(await evaluate('document.querySelector("#next-scheduled-sync")'), null);
+      const before = await evaluate('backend.messages.filter(m=>m.operation==="sync-now").length');
+      await click('[data-action=sync-now]');
+      assert.equal(await evaluate('backend.messages.filter(m=>m.operation==="sync-now").length'), before + 1);
+      assert.deepEqual(await evaluate('backend.messages.findLast(m=>m.operation==="sync-now").parameters'), {});
+      for (const [syncPhase, label] of [['queued','等待同步'],['starting','正在切换 QQ'],['syncing','正在同步置顶群消息'],['restoring','正在切回普通 QQ']]) {
+        await evaluate(`backend.status.syncPhase=${JSON.stringify(syncPhase)};backend.push()`);
+        assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), label);
+        assert.equal(await evaluate('document.querySelector("[data-action=sync-now]").disabled'), true);
+      }
+      await evaluate('backend.status.syncPhase="idle";backend.push()');
+      assert.equal(await evaluate('document.querySelector("[data-action=sync-now]").disabled'), false);
+      await evaluate('backend.status.syncPhase="failed";backend.status.error="sync-timeout";backend.push()');
+      assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '同步失败，可重试');
+      assert.match(await evaluate('document.querySelector("#host-error").textContent'), /超时.*普通 QQ/);
+      await evaluate(`backend.status=${JSON.stringify(status)};backend.push()`); await nav('pending');
+    });
     await t.test('常驻同步区分空闲、读取、未补全和连接故障', async () => {
       await evaluate(`backend.status={...${JSON.stringify(status)},scheduled:true,receiving:"paused",history:"complete",historyFailures:[]};backend.push()`);
       assert.equal(await evaluate('document.querySelector("#receiving-status").textContent'), '等待下次同步');

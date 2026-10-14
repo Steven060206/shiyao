@@ -12,6 +12,7 @@ public sealed record MessageHostStatus(string Transport, string Qq, string Recei
     string History, string? Error, DateTimeOffset UpdatedAt, IReadOnlyList<HistoryFailure> HistoryFailures)
 {
     public bool Scheduled { get; init; }
+    public string? SyncPhase { get; init; }
     public DateTimeOffset? LastSuccessfulSyncAt { get; init; }
     public DateTimeOffset? NextScheduledSyncAt { get; init; }
 }
@@ -41,6 +42,7 @@ public sealed class NapCatMessageHost
         public readonly HashSet<string> Queued = new(StringComparer.Ordinal);
         public readonly Dictionary<string, string> Failures = new(StringComparer.Ordinal);
         public bool HistoryRunning;
+        public bool SingleBatch;
         public string CompletedHistory = "pending";
         public DateTimeOffset RefreshedAt;
         public string BatchId = "history-" + Guid.NewGuid().ToString("N");
@@ -68,6 +70,57 @@ public sealed class NapCatMessageHost
     public event Action<MessageHostStatus>? StatusChanged;
     public event Action? DataChanged;
     public MessageHostStatus Status => Volatile.Read(ref status);
+
+    /// <summary>只执行一轮七天历史同步；请求由调用端调度，完成后释放接口连接。</summary>
+    public async Task RunOnceAsync(CancellationToken cancellationToken)
+    {
+        if (Interlocked.Exchange(ref running, 1) != 0) throw new InvalidOperationException("消息宿主已运行。");
+        using var session = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        string? pauseReason = null;
+        async Task WatchPermissionAsync()
+        {
+            if (syncController is null) return;
+            while (!session.IsCancellationRequested)
+            {
+                if (!syncController.CanSync)
+                {
+                    pauseReason = syncController.PauseReason;
+                    session.Cancel();
+                    return;
+                }
+                try { await Task.Delay(TimeSpan.FromMilliseconds(100), session.Token); }
+                catch (OperationCanceledException) when (session.IsCancellationRequested) { return; }
+            }
+        }
+        var permissionWatch = WatchPermissionAsync();
+        Publish("connecting", "unknown", "paused", "pending", null, []);
+        try
+        {
+            EnsureSyncAllowed();
+            await using var client = await OneBotClient.ConnectAsync(endpoint, accessToken, cancellationToken: session.Token);
+            await RunConnectionAsync(client, session.Token, singleBatch: true);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception exception)
+        {
+            var reason = pauseReason ?? (exception is SyncPausedException ? syncController!.PauseReason : SafeFailure(exception));
+            var previous = Status;
+            Publish("disconnected", reason == "qq-offline" ? "offline" : "unknown", "paused",
+                previous.History == "reading" ? "partial" : previous.History, reason, previous.HistoryFailures);
+            if (pauseReason is not null || exception is SyncPausedException)
+                throw new OneBotProtocolException(reason);
+            throw;
+        }
+        finally
+        {
+            session.Cancel();
+            await permissionWatch;
+            var previous = Status;
+            Publish("disconnected", previous.Qq, "paused", previous.History == "reading" ? "partial" : previous.History,
+                previous.Error, previous.HistoryFailures);
+            Volatile.Write(ref running, 0);
+        }
+    }
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
@@ -105,19 +158,21 @@ public sealed class NapCatMessageHost
         }
     }
 
-    private async Task RunConnectionAsync(OneBotClient client, CancellationToken cancellationToken)
+    private async Task RunConnectionAsync(OneBotClient client, CancellationToken cancellationToken, bool singleBatch = false)
     {
         using var session = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         using var state = new ConnectionState();
+        state.SingleBatch = singleBatch;
         state.CompletedHistory = Status.History;
-        state.HistoryRunning = syncController is null;
+        state.HistoryRunning = singleBatch || syncController is null;
         foreach (var failure in Status.HistoryFailures) state.Failures[failure.GroupId] = failure.Reason;
         Task? consuming = null;
         try
         {
-            await RefreshAsync(client, state, session.Token, queueHistory: syncController is null);
+            await RefreshAsync(client, state, session.Token, queueHistory: singleBatch || syncController is null);
+            if (singleBatch) EnsureSyncAllowed();
             consuming = ConsumeAsync(client, state, session);
-            if (syncController is not null)
+            if (syncController is not null && !singleBatch)
             {
                 await RunResidentBatchesAsync(client, state, session.Token);
                 return;
@@ -126,7 +181,10 @@ public sealed class NapCatMessageHost
             {
                 session.Token.ThrowIfCancellationRequested();
                 if (!await AdvanceHistoryAsync(client, state, session.Token))
+                {
+                    if (singleBatch) return;
                     await Task.Delay(RefreshInterval, session.Token);
+                }
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && consuming is { IsFaulted: true })
@@ -407,7 +465,8 @@ public sealed class NapCatMessageHost
             throw new OneBotProtocolException("history-page-limit");
         }
         catch (OneBotProtocolException exception) when (exception.Code is "account-mismatch" or "pinned-state-invalid"
-            or "pinned-state-unavailable" or "qq-offline" or "qq-unhealthy")
+            or "pinned-state-unavailable" or "qq-offline" or "qq-unhealthy"
+            || state.SingleBatch && !exception.Code.StartsWith("history-", StringComparison.Ordinal) && exception.Code != "unpinned")
         {
             await state.Gate.WaitAsync(cancellationToken);
             try

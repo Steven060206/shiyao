@@ -235,10 +235,17 @@ internal static partial class SmokeCheck
             && desktop.Snapshot.Pending.Count == expectedCards.Items.Count(item => item.Kind is "review" or "merge-review" && item.State == "pending"));
         desktop.Capture(cardsCapture);
         var final = workspace.Snapshot(DateTimeOffset.UtcNow);
+        await WaitAsync(window, "document.querySelector('[data-action=sync-now]')?.disabled === false");
+        if (desktop.Snapshot?.ConnectionText != "等待同步")
+            throw new InvalidOperationException("正常空闲被错误显示成断线重连。");
+        await EvaluateAsync(window, "document.querySelector('[data-action=sync-now]').click()");
+        await WaitAsync(() => runtime.Status.SyncPhase == "queued");
+        await WaitAsync(window, "document.querySelector('[data-action=sync-now]').disabled && ![...requests.values()].some(item => item.operation === 'sync-now')");
+        // Synthetic runtime is never started: bridge validation must not touch real QQ.
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
-            checks = new[] { "branding", "taskbar-identity", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+            checks = new[] { "branding", "taskbar-identity", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",
@@ -627,7 +634,8 @@ internal static partial class SmokeCheck
         await Task.Delay(TimeSpan.FromSeconds(seconds));
         var snapshot = runtime.Workspace?.Snapshot(DateTimeOffset.UtcNow);
         var status = runtime.Status;
-        var success = snapshot is not null && status.Transport == "connected" && status.Qq == "online";
+        var success = snapshot is not null && status.Error is null && status.History == "complete"
+            && status.LastSuccessfulSyncAt is not null;
         var safeStatus = new { status.Transport, status.Qq, status.Receiving, status.History, status.Error,
             status.Scheduled, status.LastSuccessfulSyncAt, status.NextScheduledSyncAt,
             failures = status.HistoryFailures.Select(f => f.Reason).ToArray() };

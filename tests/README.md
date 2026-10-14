@@ -1,5 +1,10 @@
 # 项目检查
 
+## 2026-10-14 按次 QQ 同步交付验证
+
+正式入口已切换到最新版 .tools/published/app-card-controls/，保留原路径和后台自启动开关；取消定时同步，只在点击软件或“自动同步”时切换QQ。Core306、Infrastructure690、Windows446、Node153全量通过；隔离及正式exe108项Native/父窗检查通过。真实AppRuntime无QQ与已有普通QQ分别23.61/24.93秒完成；正式软件启动和按钮各同步一次、恢复普通QQ，3001/6099关闭，界面显示完成和北京时间，无下次计划说明。日志和安全报告.tools/sync-session-validation/。原任务记录、布局和主题偏好未变，未代确认真实事项；真实Windows登录自启动仍未验收，实际游戏和长期稳定性后置。
+
+
 ## 最新正式入口：拾要（2026-10-13）
 
 正式入口已切换到最新版 `.tools/published/app-card-controls/`，21:18桌面/开始菜单及已启用Run更新并备份，保持开关和--background。旧PID41884经托盘正常退出、四库及设置保护后正常后台启动新版PID19968；两卡片实际附着、布局/任务记录未变，四库完整性正常。Windows410/410、Infrastructure681/681、页面79/79、最终发布Native100项及真实父窗/styles检查通过。真实Windows登录自启动仍未验收。

@@ -19,6 +19,7 @@ public static class Program
         using var mutex = new Mutex(true, "Local\\MessagePurify.Application", out var first);
         if (!first && !check)
         {
+            if (background) return 0;
             try { using var client = new NamedPipeClientStream(".", "MessagePurify.Application", PipeDirection.Out); client.Connect(1000); client.WriteByte(1); }
             catch (Exception exception) when (exception is IOException or TimeoutException) { }
             return 0;
@@ -54,10 +55,11 @@ public static class Program
                 runtime = new(dataRoot, synthetic);
                 window = new(runtime, dataRoot, check || background, registerStartup: !check);
                 var menu = new Forms.ContextMenuStrip();
-                menu.Items.Add("打开拾要", null, (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow));
+                void OpenAndSync() { runtime.RequestSync(); window.ShowMainWindow(); }
+                menu.Items.Add("打开拾要", null, (_, _) => application.Dispatcher.Invoke(OpenAndSync));
                 menu.Items.Add("退出", null, async (_, _) => await application.Dispatcher.InvokeAsync(Exit).Task.Unwrap());
                 tray.ContextMenuStrip = menu;
-                tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow);
+                tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(OpenAndSync);
                 if (!check || synthetic is not null)
                 {
                     desktop = new(runtime, dataRoot, window.OpenItemAsync);
@@ -71,7 +73,8 @@ public static class Program
                     await desktop.RefreshAsync();
                 }
                 window.Show();
-                if (!arguments.Contains("--smoke-test")) runtime.Start();
+                if (arguments.Contains("--read-only-check")) runtime.StartReadOnlyCheck();
+                else if (!arguments.Contains("--smoke-test")) runtime.Start(syncOnStartup: !background);
                 if (check)
                 {
                     await window.Ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
@@ -85,7 +88,7 @@ public static class Program
                     await Exit();
                 }
                 // Keep the tray and shutdown token alive until the application exits.
-                else await ListenAsync(window, stopping.Token);
+                else await ListenAsync(window, runtime, stopping.Token);
             }
             catch (Exception exception)
             {
@@ -105,7 +108,7 @@ public static class Program
         return exitCode;
     }
 
-    private static async Task ListenAsync(AppWindow window, CancellationToken cancellationToken)
+    private static async Task ListenAsync(AppWindow window, AppRuntime runtime, CancellationToken cancellationToken)
     {
         while (!cancellationToken.IsCancellationRequested)
         {
@@ -115,7 +118,10 @@ public static class Program
                     await server.WaitForConnectionAsync(cancellationToken);
                 var signal = new byte[1];
                 if (await server.ReadAsync(signal, cancellationToken) == 1)
+                {
+                    runtime.RequestSync();
                     await window.Dispatcher.InvokeAsync(window.ShowMainWindow);
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
             catch (IOException) { }

@@ -5,28 +5,43 @@ using MessagePurify.Infrastructure.Backup;
 
 namespace MessagePurify.Windows.App;
 
-/// <summary>初次从只读登录接口确定账号；以后始终使用保留的账号，不自动切换。</summary>
+/// <summary>按次切换 QQ；本地事项在同步之外仍可用，账号不自动切换。</summary>
 public sealed class AppRuntime
 {
     private readonly string dataRoot;
     private readonly CancellationTokenSource stopping = new();
     private readonly InstalledGameCatalog gameCatalog;
     private readonly ResidentSyncController syncController;
+    private readonly Func<IQqSyncSession> sessionFactory;
+    private readonly Func<CancellationToken, Task<MessageHostStatus>> syncBatch;
+    private readonly TimeSpan syncTimeout;
+    private readonly bool injectedBatch;
     private Task? running;
     private int restoring;
+    private int syncRequested;
+    private string? accessToken;
     public bool IsRestoring => Volatile.Read(ref restoring) != 0;
     public AccountWorkspace? Workspace { get; private set; }
     public MessageHostStatus Status { get; private set; } = new("disconnected", "unknown", "paused", "pending", null, DateTimeOffset.UtcNow, [])
-    { Scheduled = true };
+    { SyncPhase = "idle" };
     public event Action? Changed;
 
     public AppRuntime(string dataRoot, AccountWorkspace? workspace = null)
+        : this(dataRoot, workspace, null, null, null, null) { }
+
+    internal AppRuntime(string dataRoot, AccountWorkspace? workspace, Func<IQqSyncSession>? sessionFactory,
+        IGameActivityDetector? gameDetector, Func<CancellationToken, Task<MessageHostStatus>>? syncBatch,
+        TimeSpan? syncTimeout)
     {
         this.dataRoot = Path.GetFullPath(dataRoot);
         Directory.CreateDirectory(this.dataRoot);
         AccountBackupService.RecoverInterrupted(this.dataRoot);
         gameCatalog = new(Path.Combine(this.dataRoot, "game-catalog.json"));
-        syncController = new(gameCatalog);
+        syncController = new(gameDetector ?? gameCatalog);
+        this.sessionFactory = sessionFactory ?? (() => new QqSyncSession());
+        this.syncBatch = syncBatch ?? RunBatchAsync;
+        this.syncTimeout = syncTimeout ?? TimeSpan.FromMinutes(5);
+        injectedBatch = syncBatch is not null;
         Workspace = workspace;
         var accountPath = Path.Combine(this.dataRoot, "active-account.txt");
         if (Workspace is null && File.Exists(accountPath))
@@ -38,7 +53,43 @@ public sealed class AppRuntime
         }
     }
 
-    public void Start() => running ??= Task.Run(RunAsync);
+    public void Start(bool syncOnStartup = true)
+    {
+        if (running is not null) return;
+        if (syncOnStartup) RequestSync();
+        running = Task.Run(RunAsync);
+    }
+
+    // The diagnostic mode reads the existing interface without starting or stopping QQ.
+    public void StartReadOnlyCheck()
+    {
+        running ??= Task.Run(async () =>
+        {
+            try
+            {
+                if (!injectedBatch)
+                {
+                    await gameCatalog.RefreshIfDueAsync(DateTimeOffset.UtcNow, stopping.Token);
+                    ReadAccessToken();
+                }
+                var result = await syncBatch(stopping.Token);
+                SetStatus(result with { SyncPhase = null });
+            }
+            catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+            catch (Exception exception)
+            { SetStatus(Status with { SyncPhase = null, Transport = "disconnected", Error = SafeFailure(exception) }); }
+        });
+    }
+
+    /// <summary>重复点击合并到当前请求；不叠加 QQ 重启。</summary>
+    public bool RequestSync()
+    {
+        if (stopping.IsCancellationRequested || IsRestoring || Interlocked.CompareExchange(ref syncRequested, 1, 0) != 0) return false;
+        var now = DateTimeOffset.UtcNow;
+        syncController.Request(new(SyncRequestKind.Startup, now, now));
+        SetStatus(Status with { SyncPhase = "queued", Error = null });
+        return true;
+    }
 
     public void Refresh() => Changed?.Invoke();
 
@@ -51,12 +102,8 @@ public sealed class AppRuntime
         try
         {
             var workspace = Workspace ?? throw new InvalidOperationException("尚未连接到 QQ 账号。");
-            var result = await Task.Run(() => workspace.RestoreBackup(prepared, currentSettings,
+            return await Task.Run(() => workspace.RestoreBackup(prepared, currentSettings,
                 DateTimeOffset.UtcNow, applySettings));
-            // The existing host keeps the same workspace. Queued reception resumes after its gate opens.
-            var now = DateTimeOffset.UtcNow;
-            syncController.Request(new(SyncRequestKind.Startup, now, now));
-            return result;
         }
         finally
         {
@@ -67,66 +114,33 @@ public sealed class AppRuntime
 
     private async Task RunAsync()
     {
-        var endpoint = new Uri("ws://127.0.0.1:3001/");
-        var timeZone = TimeZoneInfo.FindSystemTimeZoneById("Asia/Shanghai");
-        var scheduler = new ScheduledSyncRunner(syncController,
-            new ScheduledSyncPlanner(timeZone), gameCatalog);
-        var schedulerTask = Task.CompletedTask;
         var catalogTask = Task.CompletedTask;
         try
         {
-            await gameCatalog.RefreshIfDueAsync(DateTimeOffset.UtcNow, stopping.Token);
-            catalogTask = MaintainGameCatalogAsync();
-            schedulerTask = scheduler.RunAsync(stopping.Token);
+            if (!injectedBatch)
+            {
+                await gameCatalog.RefreshIfDueAsync(DateTimeOffset.UtcNow, stopping.Token);
+                catalogTask = MaintainGameCatalogAsync();
+            }
             while (!stopping.IsCancellationRequested)
             {
-                try
+                var request = await syncController.WaitAsync(stopping.Token);
+                Interlocked.Exchange(ref syncRequested, 1);
+                var resumedAfterGame = false;
+                while (!stopping.IsCancellationRequested)
                 {
-                    var accessToken = NapCatConnectionConfiguration.ReadAccessToken(
-                        Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN"),
-                        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../napcat/framework/v4.18.37/package/config")));
-                    if (Workspace is null)
+                    while (!syncController.CanSync || IsRestoring)
                     {
-                        Status = Status with { Transport = "connecting", Error = null, UpdatedAt = DateTimeOffset.UtcNow };
-                        Changed?.Invoke();
-                        await using var discovery = await OneBotClient.ConnectAsync(endpoint, accessToken, cancellationToken: stopping.Token);
-                        var state = await discovery.GetStatusAsync(stopping.Token);
-                        if (!state.Online || !state.Good) throw new OneBotProtocolException("qq-offline");
-                        var login = await discovery.GetLoginInfoAsync(stopping.Token);
-                        var workspace = new AccountWorkspace(dataRoot, login.AccountId);
-                        var temporary = Path.Combine(dataRoot, "active-account.txt.tmp");
-                        File.WriteAllText(temporary, login.AccountId);
-                        File.Move(temporary, Path.Combine(dataRoot, "active-account.txt"), true);
-                        Workspace = workspace;
+                        resumedAfterGame = true;
+                        SetStatus(Status with { SyncPhase = "deferred", Error = IsRestoring ? "backup-restoring" : syncController.PauseReason });
+                        await Task.Delay(200, stopping.Token);
                     }
-                    var host = new NapCatMessageHost(Workspace, endpoint, accessToken, syncController);
-                    host.StatusChanged += state =>
-                    {
-                        Status = !gameCatalog.IsReady && state.Error is null
-                            ? state with { Receiving = "paused", Error = "game-catalog-unavailable" } : state;
-                        Changed?.Invoke();
-                    };
-                    host.DataChanged += () => Changed?.Invoke();
-                    await host.RunAsync(stopping.Token);
+                    request = syncController.CoalescePending(request);
+                    if (!await RunSyncSessionAsync()) break;
+                    resumedAfterGame = true;
                 }
-                catch (OperationCanceledException) when (stopping.IsCancellationRequested) { break; }
-                catch (Exception exception)
-                {
-                    var error = exception switch
-                    {
-                        OneBotProtocolException protocol => protocol.Code,
-                        OneBotApiException api => "api-" + api.Retcode,
-                        OneBotRequestTimeoutException => "request-timeout",
-                        IOException or InvalidDataException => "local-data-unavailable",
-                        _ => "connection-unavailable"
-                    };
-                    Status = Status with { Transport = "disconnected", Qq = "unknown", Receiving = "paused",
-                        History = Status.History == "reading" ? "partial" : Status.History,
-                        Error = error, UpdatedAt = DateTimeOffset.UtcNow };
-                    Changed?.Invoke();
-                }
-                try { await Task.Delay(TimeSpan.FromSeconds(5), stopping.Token); }
-                catch (OperationCanceledException) when (stopping.IsCancellationRequested) { break; }
+                syncController.Acknowledge(request, resumedAfterGame);
+                Interlocked.Exchange(ref syncRequested, 0);
             }
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
@@ -134,10 +148,137 @@ public sealed class AppRuntime
         {
             stopping.Cancel();
             syncController.Complete();
-            try { await Task.WhenAll(schedulerTask, catalogTask); }
+            try { await catalogTask; }
             catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
         }
     }
+
+    // Returns true only when a game interrupted the batch, keeping its single deferred request.
+    private async Task<bool> RunSyncSessionAsync()
+    {
+        using var batch = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
+        batch.CancelAfter(syncTimeout);
+        var monitor = MonitorGameAsync(batch);
+        IQqSyncSession? session = null;
+        var defer = false;
+        string? failure = null;
+        try
+        {
+            if (!injectedBatch)
+                ReadAccessToken();
+            SetStatus(Status with { SyncPhase = "starting", Transport = "connecting", Qq = "unknown", Receiving = "paused", Error = null, HistoryFailures = [] });
+            session = sessionFactory();
+            await session.StartAsync(batch.Token);
+            batch.Token.ThrowIfCancellationRequested();
+            SetStatus(Status with { SyncPhase = "syncing" });
+            var result = await syncBatch(batch.Token);
+            SetStatus(result with { SyncPhase = "syncing", LastSuccessfulSyncAt = result.LastSuccessfulSyncAt ?? Status.LastSuccessfulSyncAt });
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+        catch (OperationCanceledException)
+        {
+            var pauseReason = await monitor;
+            defer = pauseReason is not null;
+            failure = pauseReason ?? "sync-timeout";
+        }
+        catch (Exception exception)
+        {
+            failure = exception is IOException && Status.SyncPhase == "starting"
+                ? "qq-sync-start-failed" : SafeFailure(exception);
+            defer = failure is "game-active" or "game-catalog-unavailable";
+        }
+        finally
+        {
+            batch.Cancel();
+            await monitor;
+            if (session is not null)
+            {
+                SetStatus(Status with { SyncPhase = "restoring", Transport = "disconnected", Qq = "unknown", Receiving = "paused" });
+                try { await session.DisposeAsync(); }
+                catch { failure = "qq-restore-failed"; defer = false; }
+            }
+            var partial = Status.History == "reading" ? "partial" : Status.History;
+            SetStatus(Status with { SyncPhase = defer ? "deferred" : failure is null ? "idle" : "failed",
+                Transport = "disconnected", Qq = "unknown", Receiving = "paused", History = partial, Error = failure });
+        }
+        return defer;
+    }
+
+    private async Task<string?> MonitorGameAsync(CancellationTokenSource batch)
+    {
+        try
+        {
+            while (!batch.IsCancellationRequested)
+            {
+                if (!syncController.CanSync)
+                {
+                    var reason = syncController.PauseReason;
+                    batch.Cancel();
+                    return reason;
+                }
+                await Task.Delay(200, batch.Token);
+            }
+        }
+        catch (OperationCanceledException) when (batch.IsCancellationRequested) { }
+        return null;
+    }
+
+    private async Task<MessageHostStatus> RunBatchAsync(CancellationToken cancellationToken)
+    {
+        var endpoint = new Uri("ws://127.0.0.1:3001/");
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            try
+            {
+                if (Workspace is null)
+                {
+                    await using var discovery = await OneBotClient.ConnectAsync(endpoint, accessToken, cancellationToken: cancellationToken);
+                    var state = await discovery.GetStatusAsync(cancellationToken);
+                    if (!state.Online || !state.Good) throw new OneBotProtocolException("qq-offline");
+                    var login = await discovery.GetLoginInfoAsync(cancellationToken);
+                    var workspace = new AccountWorkspace(dataRoot, login.AccountId);
+                    var temporary = Path.Combine(dataRoot, "active-account.txt.tmp");
+                    File.WriteAllText(temporary, login.AccountId);
+                    File.Move(temporary, Path.Combine(dataRoot, "active-account.txt"), true);
+                    Workspace = workspace;
+                }
+                var host = new NapCatMessageHost(Workspace, endpoint, accessToken, syncController);
+                host.StatusChanged += state => SetStatus(state with { SyncPhase = "syncing", LastSuccessfulSyncAt = state.LastSuccessfulSyncAt ?? Status.LastSuccessfulSyncAt });
+                host.DataChanged += () => Changed?.Invoke();
+                await host.RunOnceAsync(cancellationToken);
+                return host.Status;
+            }
+            catch (Exception exception) when (exception is System.Net.WebSockets.WebSocketException or OneBotRequestTimeoutException
+                or OneBotProtocolException { Code: "qq-offline" or "qq-unhealthy" or "connection-closed" })
+            {
+                SetStatus(Status with { SyncPhase = "syncing", Transport = "connecting", Error = null });
+                await Task.Delay(1000, cancellationToken);
+            }
+        }
+    }
+
+    private void SetStatus(MessageHostStatus state)
+    {
+        Status = state with { Scheduled = false, NextScheduledSyncAt = null,
+            UpdatedAt = DateTimeOffset.UtcNow };
+        Changed?.Invoke();
+    }
+
+    private void ReadAccessToken() => accessToken = NapCatConnectionConfiguration.ReadAccessToken(
+        Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN"),
+        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../napcat/framework/v4.18.37/package/config")));
+
+    private static string SafeFailure(Exception exception) => exception switch
+    {
+        OneBotProtocolException protocol => protocol.Code,
+        OneBotApiException api => "api-" + api.Retcode,
+        OneBotRequestTimeoutException => "request-timeout",
+        InvalidOperationException { Message: "connection-configuration-unavailable" } => "connection-configuration-unavailable",
+        InvalidOperationException invalid when invalid.Message.StartsWith("qq-", StringComparison.Ordinal) => invalid.Message,
+        IOException or InvalidDataException => "local-data-unavailable",
+        _ => "connection-unavailable"
+    };
 
     private async Task MaintainGameCatalogAsync()
     {

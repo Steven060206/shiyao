@@ -77,6 +77,10 @@ function errorLabel(error) {
     qq_offline: 'QQ 离线',
     game_active: '游戏运行中，同步已延后；退出游戏后合并补同步一次。',
     game_catalog_unavailable: '游戏名单尚未准备好，自动同步已暂停。',
+    sync_timeout: '本次同步超时，已尝试切回普通 QQ。请稍后重试。',
+    qq_restore_failed: '普通 QQ 恢复失败，请手动打开 QQ 后重试。已有事项已保留。',
+    qq_sync_start_failed: 'QQ 同步环境启动失败，已保留本地事项并尝试恢复普通 QQ。',
+    backup_restoring: '正在恢复备份，同步已延后。',
     pinned_groups_unavailable: '暂时无法读取置顶群范围',
     pinned_state_unavailable: '暂时无法读取置顶群范围，消息接收已暂停。',
     connection_unavailable: '暂未连接 QQ，请确认电脑上的 QQ 已登录。',
@@ -213,6 +217,14 @@ function receive(message) {
     }
     if (pending.operation === 'set-appearance') {
       if (!message.success) { hostError = errorLabel(message.error); renderStatus(); }
+      return;
+    }
+    if (pending.operation === 'sync-now') {
+      if (!message.success) hostError = errorLabel(message.error);
+      else toast(message.syncRequested ? '已请求自动同步' : '已有同步请求，请等待完成');
+      if (message.status && (!status || Date.parse(message.status.updatedAt) >= Date.parse(status.updatedAt))) status = message.status;
+      renderStatus();
+      if (page === 'settings') renderSettings();
       return;
     }
     if (pending.operation === 'set-autostart') {
@@ -369,12 +381,20 @@ function pageItems() {
 }
 function renderStatus() {
   const connected = status?.transport === 'connected';
-  $('connection-status').textContent = !status ? '等待连接' : status.transport === 'disconnected' ? '连接已断开' : status.transport === 'connecting' ? '正在连接 QQ' : status.qq === 'online' ? 'QQ 在线' : status.qq === 'offline' ? 'QQ 离线' : 'QQ 状态待确认';
-  const scheduledText = scheduledSyncLabel();
+  $('connection-status').textContent = status?.syncPhase ? status.syncPhase === 'idle' ? '普通 QQ 模式' : status.syncPhase === 'failed' ? '本次同步已停止' : '按次同步' : !status ? '等待连接' : status.transport === 'disconnected' ? '连接已断开' : status.transport === 'connecting' ? '正在连接 QQ' : status.qq === 'online' ? 'QQ 在线' : status.qq === 'offline' ? 'QQ 离线' : 'QQ 状态待确认';
+  const scheduledText = singleSyncLabel() || scheduledSyncLabel();
   $('receiving-status').textContent = scheduledText || (!status ? '正在读取本地事项' : connected && status.qq === 'online' && status.receiving === 'active' ? '正在接收置顶群消息' : '消息接收已暂停');
   $('history-status').textContent = scheduledText || ({ pending: '等待读取历史', reading: '正在读取历史', complete: '本次历史读取完成', partial: '历史读取部分未完成' })[status?.history] || '历史读取状态待确认';
   const error = hostError || (status?.error ? errorLabel(status.error) : '');
   $('host-error').textContent = error; $('host-error').hidden = !error;
+  const syncButton = document.querySelector('[data-action=sync-now]');
+  syncButton.disabled = restoreLocked() || ['queued', 'starting', 'syncing', 'restoring', 'deferred'].includes(status?.syncPhase) || [...requests.values()].some(pending => pending.operation === 'sync-now');
+}
+function singleSyncLabel() {
+  if (!status?.syncPhase) return null;
+  if (status.syncPhase === 'deferred') return status.error === 'game-active' ? '游戏中，同步已延后' : status.error === 'game-catalog-unavailable' ? '检测名单未就绪，同步已暂停' : '同步已延后';
+  if (status.syncPhase === 'idle') return status.history === 'partial' || status.historyFailures?.length ? '同步未补全，已切回 QQ' : status.lastSuccessfulSyncAt ? '同步完成，已切回 QQ' : '等待同步';
+  return { queued: '等待同步', starting: '正在切换 QQ', syncing: '正在同步置顶群消息', restoring: '正在切回普通 QQ', failed: '同步失败，可重试' }[status.syncPhase] || '等待同步';
 }
 function scheduledSyncLabel() {
   if (!status?.scheduled) return null;
@@ -689,7 +709,7 @@ function renderSettings() {
         if (!groupDrafts.has(group.groupId)) groupDrafts.set(group.groupId, group.course || group.suggestedCourse || '');
         return `<div class="group-setting" data-group-id="${html(group.groupId)}"><h3>${html(group.name)}</h3><p>建议课程：${html(group.suggestedCourse || '请核对群名称')}${group.excluded ? ' · 已排除' : group.course ? ' · 已确认' : ' · 待确认'}</p><label class="field">课程或分类<input name="course" maxlength="80" value="${html(groupDrafts.get(group.groupId))}"></label><div class="detail-actions"><button class="button primary small" data-action="confirm-group">确认关联</button><button class="button small" data-action="exclude-group">${group.excluded ? '恢复接收并确认' : '排除此群'}</button></div></div>`;
       }).join('') : '<p class="hint">尚无置顶群名单。连接 QQ 后会显示可确认的真实群。</p>'}</section>
-      <section class="settings-section"><h2>${status?.scheduled ? '同步状态' : '接收状态'}</h2><p>${html($('connection-status').textContent)} · ${html($('receiving-status').textContent)}</p>${status?.scheduled ? `<p>上次成功同步（本次运行）：<span id="last-successful-sync">${html(syncTimeLabel(status.lastSuccessfulSyncAt, '本次运行尚无成功同步'))}</span></p><p>下次计划同步：<span id="next-scheduled-sync">${html(syncTimeLabel(status.nextScheduledSyncAt, '计划时间待确认'))}</span></p><p class="hint">每日 08:00、12:00、20:00（北京时间）；游戏期间延后同步。</p>` : `<p>${html($('history-status').textContent)}</p>`}${status?.historyFailures?.length ? '<p>未完成历史读取：</p>' + status.historyFailures.map(failure => `<p>${html(pinnedGroups.find(group => group.groupId === failure.groupId)?.name || failure.groupId)} · ${html(errorLabel(failure.reason))}</p>`).join('') : ''}</section>
+      ${syncSettingsHTML(pinnedGroups)}
       <section class="settings-section"><h2>桌面卡片提醒</h2><p>通过桌面卡片提醒，不播放声音或发送系统通知。</p><p>任务与待确认使用两张常驻桌面卡片，普通群通知仍在通知列表查看。</p><p id="desktop-status">${desktop.state === 'attached' ? '两张桌面卡片已挂载。' : desktop.state === 'unavailable' ? '桌面卡片暂不可用，仍可在主界面查看任务和待确认。' : '桌面卡片正在等待挂载。'}</p></section>`;
     $('theme-setting').value = preferences.theme; $('motion-setting').value = preferences.motion; $('autostart-setting').value = startupEnabled ? 'on' : 'off';
     const transparency = preferences.desktopTransparency ?? (document.documentElement.dataset.theme === 'dark' ? 20 : 13);
@@ -698,6 +718,13 @@ function renderSettings() {
     $('settings-panel').querySelectorAll('.group-setting button,[data-action=clean-cache]').forEach(button => { if (restoring) button.disabled = true; });
   });
   settingsSignature = signature;
+}
+function syncSettingsHTML(pinnedGroups) {
+  const byClick = Boolean(status?.syncPhase);
+  const times = status?.scheduled || byClick ? `<p>上次成功同步（本次运行）：<span id="last-successful-sync">${html(syncTimeLabel(status.lastSuccessfulSyncAt, '本次运行尚无成功同步'))}</span></p>` : '';
+  const next = status?.scheduled ? `<p>下次计划同步：<span id="next-scheduled-sync">${html(syncTimeLabel(status.nextScheduledSyncAt, '计划时间待确认'))}</span></p><p class="hint">每日 08:00、12:00、20:00（北京时间）；游戏期间延后同步。</p>` : '';
+  const failures = status?.historyFailures?.length ? '<p>未完成历史读取：</p>' + status.historyFailures.map(failure => `<p>${html(pinnedGroups.find(group => group.groupId === failure.groupId)?.name || failure.groupId)} · ${html(errorLabel(failure.reason))}</p>`).join('') : '';
+  return `<section class="settings-section"><h2>${status?.scheduled || byClick ? '同步状态' : '接收状态'}</h2><p>${html($('connection-status').textContent)} · ${html($('receiving-status').textContent)}</p>${times}${next}${byClick ? '<p class="hint">点击拾要或上方“自动同步”同步一次，完成后自动切回普通 QQ；游戏期间延后同步。</p>' : !status?.scheduled ? `<p>${html($('history-status').textContent)}</p>` : ''}${failures}</section>`;
 }
 function backupCompleteness(result) { return result.isComplete ? '本地备份校验通过。' : `不完整：未包含 ${html(result.missingImageCount)} 张原图，未包含原图文件，仅保留图片引用。`; }
 function render() {
@@ -819,6 +846,7 @@ document.addEventListener('click', event => {
   }
   if (action === 'select') { manualOpen = false; structureOpen = null; mergedSourceId = null; selectedId = button.dataset.id; detailError = null; render(); return; }
   if (action === 'refresh' || action === 'refresh-edit' || action === 'refresh-structure') { hostError = ''; request('snapshot', {}); return; }
+  if (action === 'sync-now') { hostError = ''; request('sync-now', {}); return; }
   if (backupOperations.includes(action)) {
     if (!loadedAccount() || backupBusy()) return;
     backupErrors.delete(snapshot.accountId);
