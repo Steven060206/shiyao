@@ -4,6 +4,10 @@
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、固定时刻/游戏实测、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
+### 当前 QQ 连接诊断（2026-10-14）
+
+实机核对正式实例 PID 22140：QQ.exe、NapCat/Framework 进程均不存在，127.0.0.1:3001 无监听，拾要进程对该端口周期性处于 SYN_SENT。应用固定连接 `ws://127.0.0.1:3001/`，不会自动启动 QQ/NapCat；外层连接失败后每 5 秒重试，桌面卡片将所有非 connected 状态统一显示为“QQ 连接断开，正在重连”。NapCat 配置中唯一启用的本机 WebSocket 服务仍为 127.0.0.1:3001，未发现端口配置错位。当前直接根因是 QQ/NapCat Framework 未运行，不是应用已连上后被服务端主动断开。恢复步骤沿用 `docs/integrations/napcat-setup.md`：先启动 `packaging/napcat/Start-NapCat-Framework.cmd` 并保持 QQ/NapCat 常驻，确认 3001 开始监听后再观察拾要状态；本轮未启动或改动 QQ。
+
 ### 当前接续（主窗口标题栏主题同步，2026-10-13～14，已修复、部署并实机核对）
 
 接续基线e860411，初始工作区干净，原正式实例PID52336运行于 `.tools/published/app-card-controls/`；已有2 DIP卡片间距与MessagePurify.Shiyao独立任务栏标识保持有效。用户截图指出主窗口顶上的白色标题栏丑；根因是网页深色主题已应用，WPF原生窗口标题栏未同步主题。已新增WindowTheme，使用Windows DWM原生标题栏颜色、文字及边框属性，与初始偏好、页面主题切换及重开同步；system/缺失主题读取Windows应用主题，保留原生窗口操作，旧Windows不支持颜色属性时不阻止启动。AppWindow保留独立窗口身份初始化并接入主题桥。依据微软DWM属性官方说明（https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwmwindowattribute），已用agent-reach阅读核对。
