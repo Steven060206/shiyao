@@ -18,6 +18,9 @@ test('同学分发与GitHub公开发布授权同步，并保留个人数据边�
     assert.match(content, /(?:明确授权助手直接上传|明确授权上传|授权助手直接上传)/);
     assert.match(content, /不得包含.*聊天数据.*账号数据库.*Token.*登录材料/);
     assert.match(content, /QQ.*路径.*NapCat/s);
+    assert.match(content, /https:\/\/github\.com\/Steven060206\/shiyao/);
+    assert.match(content, /v0\.1\.0-beta\.1/);
+    assert.match(content, /(?:已发布|已上传)/);
   }
 });
 
