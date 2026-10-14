@@ -378,6 +378,11 @@ function receive(message) {
 }
 bridge?.addEventListener('message', event => receive(event.data));
 
+function messageTime(item) {
+  const times = [item.messageTime, ...(item.evidence || []).map(evidence => evidence.sentAt)]
+    .map(value => Date.parse(value)).filter(Number.isFinite);
+  return times.length ? Math.max(...times) : -Infinity;
+}
 function pageItems() {
   const search = filters.search.trim().toLocaleLowerCase();
   return items().filter(item => {
@@ -390,7 +395,7 @@ function pageItems() {
     return belongs && stateMatch
       && (!filters.course || item.course === filters.course)
       && (!search || [item.title, item.course, item.group, states[item.state]].some(value => String(value || '').toLocaleLowerCase().includes(search)));
-  }).sort((a, b) => (a.priority ?? 4) - (b.priority ?? 4) || String(a.due || '9999').localeCompare(String(b.due || '9999')) || String(a.time || '').localeCompare(String(b.time || '')) || String(a.title).localeCompare(String(b.title), 'zh-CN'));
+  }).sort((a, b) => messageTime(b) - messageTime(a) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 function renderStatus() {
   const connected = status?.transport === 'connected';

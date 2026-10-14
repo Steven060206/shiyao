@@ -37,12 +37,7 @@ public static class DesktopCardProjection
     }
 
     private static ApplicationItem[] Sort(IEnumerable<ApplicationItem> items) => items
-        .OrderBy(item => item.Priority ?? int.MaxValue)
-        .ThenBy(item => item.Due is null)
-        .ThenBy(item => item.Due, StringComparer.Ordinal)
-        .ThenBy(item => item.Time is null)
-        .ThenBy(item => item.Time, StringComparer.Ordinal)
-        .ThenBy(item => item.Title, StringComparer.Ordinal)
+        .OrderByDescending(item => item.MessageTime ?? item.Evidence.Max(evidence => evidence.SentAt))
         .ThenBy(item => item.Id, StringComparer.Ordinal).ToArray();
 
     private static string ConnectionText(ApplicationSnapshot? snapshot, MessageHostStatus status)

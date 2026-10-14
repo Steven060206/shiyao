@@ -727,6 +727,34 @@ public sealed class AccountWorkspaceTests : IDisposable
     }
 
     [Fact]
+    public void MessageTimeUsesLatestOriginalEvidenceAndManualCreationTime()
+    {
+        var workspace = Workspace();
+        var original = Message(text: "10月20日提交统计作业") with { SentAt = Now.AddDays(-3) };
+        Assert.True(workspace.Ingest(original, Pinned(), MessageOrigin.History, "sync", Now));
+        var review = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal(original.SentAt, review.MessageTime);
+        workspace.Execute(Command("ignore", review), Now);
+        Assert.Equal(original.SentAt, Assert.Single(workspace.Snapshot(Now).Items).MessageTime);
+        var ignored = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(Command("undo-ignore", ignored) with { UndoOperationId = ignored.UndoOperationId }, Now);
+        review = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(Command("accept-review", review), Now);
+        var task = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal(original.SentAt, task.MessageTime);
+        var newer = Message("newer", text: "补充说明") with { SentAt = Now.AddDays(-1) };
+        Assert.True(workspace.Enqueue(newer, Pinned(), MessageOrigin.History, "sync", Now));
+        var linked = Tasks().SavePending("remind", Candidate(action: RuleAction.Remind,
+            disposition: RuleDisposition.Pending, target: task.Id) with { Evidence = [newer.Key] }, "save-remind", Now);
+        workspace.Execute(new(Account, "accept-review", linked.Id, "accept-remind", linked.Version,
+            TargetTaskVersion: task.Version), Now);
+        Assert.Equal(newer.SentAt, Assert.Single(Workspace().Snapshot(Now).Items).MessageTime);
+        workspace.Execute(new(Account, "create-task", "manual", "manual-create", 0,
+            Date: "2026-12-01", TimeKind: "deadline", Title: "手动任务", Course: "手动课程"), Now);
+        Assert.Equal(Now, Workspace().Snapshot(Now).Items.Single(item => item.Id == "manual").MessageTime);
+    }
+
+    [Fact]
     public void Evidence_PreservesTextAndImageCountWithoutAcceptingImageDate()
     {
         var workspace = Workspace();

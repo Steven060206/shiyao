@@ -814,6 +814,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
     });
     await t.test('未查看变更显示中文标记，实际打开详情后清标记并保留记录', async () => {
       const changed = structuredClone(fixture);
+      changed.items[1].messageTime = '2026-10-14T09:00:00+08:00';
       Object.assign(changed.items[0], { id: 'history-task', version: 200, changeLabel: '已延期', changes: [{ label: '已延期', at: '2026-10-13T01:23:45Z', version: 200, fields: [{ field: '正式日期', before: '2026-12-19', after: '2026-12-20' }], evidence: [] }] });
       await evaluate('backend.hold=true');
       try {
@@ -1488,6 +1489,33 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await evaluate('backend.held=[];backend.hold=false'); await push({ ...bulkFixture(), generation:1 });
       assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="ignore").length'), issuedBeforeRestore);
       assert.equal(await evaluate('document.querySelector("#batch-count").textContent'), '已选 0 项');
+    });
+    await t.test('所有列表按最新原消息倒序，忽略筛选及刷新保留顺序', async () => {
+      const saved = { ...structuredClone(fixture), accountId: '987654' };
+      await evaluate('backend.hold=false;filters.search="";filters.course=""');
+      for (const [targetPage, kind, state] of [
+        ['tasks', 'task', 'active'], ['pending', 'review', 'pending'],
+        ['pending', 'review', 'ignored'], ['notices', 'notice', 'active'], ['completed', 'task', 'completed']
+      ]) {
+        const entry = (id, timestamps, extra = {}) => ({ ...itemDefaults, id, kind, state, title: id, version: 1,
+          unread: false, priority: 3, due: '2027-01-01', evidence: timestamps.map(sentAt => ({ ...evidence[0], sentAt })), ...extra });
+        const ordered = [
+          entry('old', ['2026-10-14T11:00:00+08:00'], { priority: 0, due: '2020-01-01' }),
+          entry('tie-b', ['2026-10-14T05:00:00Z']), entry('unknown', [null, 'invalid']),
+          entry('multiple', ['2026-10-10T12:00:00Z', '2026-10-14T05:30:00Z']),
+          entry('tie-a', ['2026-10-14T14:00:00+09:00']),
+          entry('manual', [], { messageTime: '2026-10-14T06:00:00Z', source: 'manual' })
+        ];
+        await push({ ...saved, items: ordered }); await nav(targetPage);
+        if (targetPage === 'pending') await change('#state-filter', state);
+        const expected = ['manual', 'multiple', 'tie-a', 'tie-b', 'old', 'unknown'];
+        const ids = () => evaluate('[...document.querySelectorAll(".task-row")].map(row=>row.dataset.id)');
+        assert.deepEqual(await ids(), expected, `${targetPage}/${state}`);
+        await push({ ...saved, items: [...ordered].reverse() });
+        assert.deepEqual(await ids(), expected, `refresh ${targetPage}/${state}`);
+        if (targetPage === 'pending' && state === 'ignored') await capture('ui-message-time-descending-dark.png');
+      }
+      await push(saved); await nav('pending'); await change('#state-filter', 'pending');
     });
     assert.deepEqual(browserErrors, []);
   } finally {

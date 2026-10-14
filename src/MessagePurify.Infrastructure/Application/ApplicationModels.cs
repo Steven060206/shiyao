@@ -28,7 +28,7 @@ public sealed record ApplicationItem(string Id, string Kind, string Title, strin
     IReadOnlyList<ApplicationChange>? Changes = null,
     IReadOnlyList<ApplicationPendingChange>? PendingChanges = null, string Source = "qq",
     string? MergedIntoId = null, IReadOnlyList<string>? RelatedItemIds = null,
-    ApplicationMergeSuggestion? MergeSuggestion = null);
+    ApplicationMergeSuggestion? MergeSuggestion = null, DateTimeOffset? MessageTime = null);
 
 public sealed record ApplicationMergeSuggestion(string FirstTaskId, long FirstTaskVersion,
     string SecondTaskId, long SecondTaskVersion);

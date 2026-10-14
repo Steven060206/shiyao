@@ -175,7 +175,7 @@ public sealed partial class AccountWorkspace
                     unreadVersion: important?.Entry.After.Version ?? task.Version,
                     changeLabel: important?.Badge, changes: changes.Reverse().Select(change => new ApplicationChange(
                         change.Label, change.Entry.At, change.Entry.After.Version, change.Fields, Evidence(change.Entry.Evidence))).ToArray(),
-                    pendingChanges: pending, source: task.Source) with
+                    pendingChanges: pending, source: task.Source, createdAt: task.Source == "manual" ? task.CreatedAt : null) with
                     { MergedIntoId = task.MergedIntoId is null ? null : CurrentTaskId(task.Id), RelatedItemIds = task.RelatedItemIds });
             }
             foreach (var review in reviews.Where(review => review.State is ReviewState.Pending or ReviewState.Ignored || review.SplitParentTaskId is not null))
@@ -237,7 +237,7 @@ public sealed partial class AccountWorkspace
         DateTimeOffset? undoExpires = null, IReadOnlyList<string>? reasons = null,
         TaskTime? suggested = null, bool canAccept = false, int? priorityOverride = null,
         long? unreadVersion = null, string? changeLabel = null, IReadOnlyList<ApplicationChange>? changes = null,
-        IReadOnlyList<ApplicationPendingChange>? pendingChanges = null, string source = "qq")
+        IReadOnlyList<ApplicationPendingChange>? pendingChanges = null, string source = "qq", DateTimeOffset? createdAt = null)
     {
         var sources = evidenceKeys.Distinct().Select(key => (Key: key, Stored: messages.Find(key))).ToArray();
         var evidence = Evidence(evidenceKeys);
@@ -252,7 +252,8 @@ public sealed partial class AccountWorkspace
                 .ToString().ToLowerInvariant(), priorityOverride ?? (time is null ? null : PriorityCalculator.Calculate(time, now, clearConsequence)),
             version, target, targetVersion, undoId, undoExpires, reasons ?? [], FormatDate(suggested),
             FormatTime(suggested), evidence, unread, action.ToString().ToLowerInvariant(), canAccept,
-            pendingChanges?.Count > 0 ? "待确认变更" : unread ? changeLabel : null, changes, pendingChanges, source);
+            pendingChanges?.Count > 0 ? "待确认变更" : unread ? changeLabel : null, changes, pendingChanges, source,
+            MessageTime: evidence.Max(item => item.SentAt) ?? createdAt);
     }
 
     private ApplicationEvidence[] Evidence(IReadOnlyList<MessageKey> keys) => keys.Distinct().Select(key =>

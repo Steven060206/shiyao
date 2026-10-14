@@ -193,23 +193,26 @@ public sealed class DesktopCardTests
             DesktopCardProjection.RenderSignature(changed, "dark", null, null, Now));
     }
 
-    [Fact]
-    public void TasksSortByPriorityThenDateTimeTitleAndId()
+    [Theory]
+    [InlineData("task", "active")]
+    [InlineData("review", "pending")]
+    [InlineData("merge-review", "pending")]
+    public void CardsSortByNewestMessageTimeRegardlessOfPriorityOrDeadline(string kind, string state)
     {
-        var snapshot = Snapshot(
-            Item("p3", priority: 3, due: "2026-10-12"),
-            Item("later-date", priority: 0, due: "2026-10-13"),
-            Item("later-time", priority: 0, time: "15:00"),
-            Item("b", title: "Same", priority: 0, time: "09:00"),
-            Item("a", title: "Same", priority: 0, time: "09:00"),
-            Item("earliest-title", title: "First", priority: 0, time: "09:00"),
-            Item("no-time", priority: 0, time: null),
-            Item("no-date", priority: 0, due: null),
-            Item("no-priority", priority: null));
+        ApplicationEvidence Evidence(string at) => new("group", "Group", "sender", DateTimeOffset.Parse(at), "text", 0);
+        var newest = Item("new", kind, state, priority: 3, due: "2027-01-01") with
+            { Evidence = [Evidence("2026-10-14T13:00:00+08:00")] };
+        var old = Item("old", kind, state, priority: 0, due: "2020-01-01") with
+            { Evidence = [Evidence("2026-10-14T11:00:00+08:00")] };
+        var multiple = old with { Id = "multiple", Evidence = [Evidence("2026-10-10T12:00:00Z"), Evidence("2026-10-14T05:30:00Z")] };
+        var manual = Item("manual", kind, state) with { MessageTime = DateTimeOffset.Parse("2026-10-14T06:00:00Z") };
+        var snapshot = Snapshot(old, newest with { Id = "b" }, multiple, manual, Item("unknown", kind, state), newest with { Id = "a",
+            Evidence = [Evidence("2026-10-14T14:00:00+09:00")] });
+        var cards = DesktopCardProjection.Build(snapshot, Connected());
+        var sorted = kind == "task" ? cards.Tasks : cards.Pending;
 
-        var ids = DesktopCardProjection.Build(snapshot, Connected()).Tasks.Select(item => item.Id);
-
-        Assert.Equal(["earliest-title", "a", "b", "later-time", "no-time", "later-date", "no-date", "p3", "no-priority"], ids);
+        Assert.Equal(["manual", "multiple", "a", "b", "old", "unknown"], sorted.Select(item => item.Id));
+        Assert.Equal("old", snapshot.Items[0].Id);
     }
 
     [Fact]
