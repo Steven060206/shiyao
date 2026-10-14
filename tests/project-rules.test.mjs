@@ -8,6 +8,20 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('同学分发目标与GitHub发布准备同步，尚未发布且源码公开待决定', () => {
+  const requirements = read('docs/requirements.md').split('## 11. 同学分发与 GitHub 下载')[1]?.split('## 参考来源')[0];
+  const handoff = read('docs/HANDOFF.md').split('### 同学分发与 GitHub 发布准备')[1]?.split('### 本轮修复前 QQ 连接诊断')[0];
+  for (const [file, content] of [['requirements', requirements], ['handoff', handoff]]) {
+    assert.ok(content, `${file}: missing distribution section`);
+    assert.match(content, /其他同学.*用户的 GitHub.*下载/s);
+    assert.match(content, /尚未制作.*分发包/);
+    assert.match(content, /尚未上传\s*GitHub/);
+    assert.match(content, /未决定[：:].*是否公开源码/);
+    assert.match(content, /不得包含.*聊天数据.*账号数据库.*Token.*登录材料/);
+    assert.match(content, /QQ.*路径.*NapCat/s);
+  }
+});
+
 test('批量审核保留日期确认、选择范围、原文撤销和逐条失败边界', () => {
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /多选、全选当前筛选结果、批量忽略和批量加入任务/);
