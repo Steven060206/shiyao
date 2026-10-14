@@ -4,6 +4,7 @@ using MessagePurify.Core;
 using MessagePurify.Infrastructure.Application;
 using MessagePurify.Infrastructure.NapCat;
 using MessagePurify.Infrastructure.Storage;
+using MessagePurify.Infrastructure.Tasks;
 using Microsoft.Data.Sqlite;
 
 namespace MessagePurify.Infrastructure.Tests;
@@ -42,6 +43,67 @@ public sealed class ApplicationMessageHostTests : IDisposable
             Assert.DoesNotContain(server.Actions, action => action.StartsWith("send", StringComparison.Ordinal));
         }
         finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
+    }
+
+    [Theory]
+    [InlineData("active")]
+    [InlineData("completed")]
+    [InlineData("archived")]
+    public async Task ReopenedRunOnceSkipsIgnoredMessagesAndPreservesAcceptedTasks(string state)
+    {
+        var ignoredMessage = Message("ignored", text: "10月20日提交忽略作业");
+        var acceptedMessage = Message("accepted", text: "10月21日提交保留作业");
+        await using var server = new LoopbackOneBotServer
+        {
+            EmitHistoryEvents = false,
+            HistoryResponder = (_, _) => (0, BoundaryHistory(ignoredMessage, acceptedMessage))
+        };
+        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var workspace = Workspace();
+        await new NapCatMessageHost(workspace, server.Url).RunOnceAsync(cancellation.Token);
+        var now = DateTimeOffset.UtcNow;
+        var reviews = workspace.Snapshot(now).Items;
+        var ignored = Assert.Single(reviews, item => item.Title.Contains("忽略作业", StringComparison.Ordinal));
+        var accepted = Assert.Single(reviews, item => item.Title.Contains("保留作业", StringComparison.Ordinal));
+        workspace.Execute(new(Account, "ignore", ignored.Id, "ignore", ignored.Version), now);
+        workspace.Execute(new(Account, "accept-review", accepted.Id, "accept", accepted.Version,
+            Date: "2026-11-01"), now);
+        var task = Assert.Single(workspace.Snapshot(now).Items, item => item.Kind == "task");
+        workspace.Execute(new(Account, "edit-task", task.Id, "edit", task.Version,
+            Date: "2026-11-02", TimeKind: "deadline", Course: "手动课程", Title: "手动保留标题", Priority: 2), now);
+        task = Assert.Single(workspace.Snapshot(now).Items, item => item.Kind == "task");
+        if (state != "active")
+            workspace.Execute(new(Account, state == "completed" ? "complete" : "archive",
+                task.Id, "set-state", task.Version), now);
+        var store = new AccountTaskStore(root, Account);
+        var savedTask = JsonSerializer.Serialize(store.FindTask(task.Id));
+        var savedIgnored = JsonSerializer.Serialize(store.FindReview(ignored.Id));
+        var savedAccepted = JsonSerializer.Serialize(store.FindReview(accepted.Id));
+        var savedHistory = JsonSerializer.Serialize(store.ListTaskHistory());
+
+        for (var replay = 0; replay < 2; replay++)
+        {
+            if (replay == 1)
+                server.HistoryResponder = (_, _) => (0, BoundaryHistory(ignoredMessage, acceptedMessage,
+                    Message("new", text: "10月22日提交新增作业")));
+            workspace = Workspace();
+            var host = new NapCatMessageHost(workspace, server.Url);
+            await host.RunOnceAsync(cancellation.Token);
+            Assert.Equal("complete", host.Status.History);
+            var items = workspace.Snapshot(now).Items;
+            Assert.Equal(state, Assert.Single(items, item => item.Kind == "task").State);
+            Assert.Equal("ignored", Assert.Single(items, item => item.Id == ignored.Id).State);
+            Assert.DoesNotContain(items, item => item.Id == accepted.Id);
+            Assert.Equal(replay, items.Count(item => item.Kind == "review" && item.State == "pending"));
+            Assert.Equal(2 + replay, StoredCount());
+            store = new(root, Account);
+            Assert.Equal(savedTask, JsonSerializer.Serialize(store.FindTask(task.Id)));
+            Assert.Equal(savedIgnored, JsonSerializer.Serialize(store.FindReview(ignored.Id)));
+            Assert.Equal(savedAccepted, JsonSerializer.Serialize(store.FindReview(accepted.Id)));
+            Assert.Equal(savedHistory, JsonSerializer.Serialize(store.ListTaskHistory()));
+        }
+        Assert.Equal(3, server.ConnectionCount);
+        Assert.DoesNotContain(server.Actions, action => action.StartsWith("send", StringComparison.Ordinal));
     }
 
     [Fact]

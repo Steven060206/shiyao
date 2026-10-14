@@ -501,6 +501,27 @@ public sealed class AccountWorkspaceTests : IDisposable
     }
 
     [Fact]
+    public void ResyncAfterIgnoreUndoExpiresDoesNotRestoreIgnoredReview()
+    {
+        var workspace = Workspace();
+        var message = Message();
+        Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.History, "first-sync", Now));
+        var review = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(Command("ignore", review, "ignore"), Now);
+        var saved = JsonSerializer.Serialize(Tasks().FindReview(review.Id));
+
+        workspace = Workspace();
+        var later = Now.AddDays(2);
+        Assert.False(workspace.Enqueue(message, Pinned(), MessageOrigin.History, "next-sync", later));
+        Assert.Equal(0, workspace.ProcessPending(Pinned(), later));
+        var ignored = Assert.Single(workspace.Snapshot(later).Items);
+        Assert.Equal("ignored", ignored.State);
+        Assert.Equal(Now.AddDays(1), ignored.UndoExpiresAt);
+        Assert.True(ignored.UndoExpiresAt < later);
+        Assert.Equal(saved, JsonSerializer.Serialize(Tasks().FindReview(review.Id)));
+    }
+
+    [Fact]
     public void Notice_IngestAndDuplicateReplayShowOnePersistentOriginalNotice()
     {
         var workspace = Workspace();
