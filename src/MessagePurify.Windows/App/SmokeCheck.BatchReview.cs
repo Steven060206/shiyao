@@ -33,10 +33,17 @@ internal static partial class SmokeCheck
             if (ignored.Length != 2 || ignored.Any(item => item.State != "ignored" || item.UndoOperationId is null)
                 || ignored.Select(item => item.UndoOperationId).Distinct().Count() != 2)
                 throw new InvalidDataException("批量忽略未分别保存状态及撤销凭据。");
-            foreach (var item in ignored)
+            await EvaluateAsync(window, "document.querySelector('[data-page=trash]').click()");
+            await WaitAsync(window, "document.querySelector('#breadcrumb').textContent === '回收站' && document.querySelectorAll('.task-row').length === 2");
+            await EvaluateAsync(window, "document.querySelector('.task-row[data-id=' + " + JsonSerializer.Serialize(ignored[0].Id) + " + ']').click();document.querySelector('[data-action=undo-ignore]').click()");
+            await WaitAsync(window, "document.querySelectorAll('.task-row').length === 1");
+            if (workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == ignored[0].Id).State != "pending")
+                throw new InvalidDataException("回收站撤销没有恢复待确认。");
+            foreach (var item in ignored.Skip(1))
                 workspace.Execute(new(workspace.AccountId, "undo-ignore", item.Id, Guid.NewGuid().ToString("N"), item.Version,
                     UndoOperationId: item.UndoOperationId), DateTimeOffset.UtcNow);
             runtime.Refresh();
+            await EvaluateAsync(window, "document.querySelector('[data-page=pending]').click()");
             await WaitAsync(window, "document.querySelectorAll('[data-batch-id]').length === 2");
             var date = now.ToOffset(TimeSpan.FromHours(8)).AddDays(6).ToString("yyyy-MM-dd");
             await EvaluateAsync(window, "document.querySelector('#batch-select-all').click();document.querySelector('#batch-date').value=" + JsonSerializer.Serialize(date));

@@ -2,11 +2,23 @@
 
 最后更新：2026-10-14（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序与独立回收站已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+
+### 当前接续（回收站入口，2026-10-14，已实现、部署并实机核对）
+
+用户要求把“已忽略”单独设为“回收站”，在左侧导航增加入口，功能保持一致。需求与实现已同步：左侧新增回收站，待确认包括“全部状态”不再混入已忽略；回收站继续查看原文、搜索/课程筛选、最新消息倒序及原24小时撤销期限。复用现有ignored状态与undo-ignore，期限过后仍保留原记录。入口来自桌面打开已忽略项时也定位回收站；空列表显示回收站为空。批量忽略的提示已改为回收站入口，批量审核仍只在待确认页面。变更产物为src/MessagePurify.Windows/App/ui/app.js、ui/index.html、SmokeCheck.BatchReview.cs和tests/application-ui.test.mjs，不改数据格式。
+
+新增浏览器回归覆盖独立入口、状态分离、搜索/课程筛选、倒序、原文、未过期撤销/过期保留、恢复待确认及空状态；Native批量验证通过正式WebView2进入回收站撤销合成条目。实际执行 `.tools/dotnet/dotnet.exe test` 分别针对Core、Infrastructure、Windows测试项目，均带 `--no-restore --configuration Release`，结果306/306、695/695、456/456、退出0；`node --test tests/application-ui.test.mjs`88/88、`node --test tests/*.test.mjs`172/172、退出0。`.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py`25/25，同Python的 `-m pip check`通过；`python -m unittest discover -s tests -p release_packaging_test.py`4/4、退出0。App csproj以 `--no-restore --configuration Release --self-contained true` 发布隔离 `.tools/published/app-trash-page-check/` 成功；`python tests/app_desktop_test.py --executable .tools/published/app-trash-page-check/MessagePurify.exe`退出0、113项Native与真实父窗/styles检查通过。`.tools/desktop-validation/ui-trash-dark.png`已查看，导航、原文与撤销正常；Impeccable detect仅有沿用浅色配色的4.47:1对比度提示，本轮没有改动配色。
+
+SQLite Backup API保护四库和设置于 `.tools/trash-page-validation/before-reopen/`。初次旧托盘退出脚本未找到菜单，未确认退出即发布，导致旧PID36728锁定DLL、publish失败；随后查明验证脚本DPI坐标与屏幕缩放不一致。仅在临时验证脚本启用线程DPI感知并保留UTF-8 BOM，`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .tools/trash-page-validation/exit-dpi-aware.ps1 -ProcessId 36728 -ExitApplication -Verbose`退出0，Success/ExitVerified=true，经托盘正常退出。确认没有拾要进程后重新publish至正式 `.tools/published/app-card-controls/`退出0（publish-formal-final.log），并以 `--background`重开PID42596；没有强制终止应用。正式入口已切换到最新版，桌面/开始菜单与Run路径和开关沿用，MessagePurify.Shiyao、黑色标题栏及约2 DIP间距保留。
+
+实际执行同目录check-real-tray.ps1（启用同一DPI感知）`-ProcessId 42596 -OpenApplication`退出0，QQ进程ID/启动时刻不变、3001/6099无监听；UIAutomation只点击真实左侧回收站并核对页面说明可见，没有撤销或修改真实条目。`python .tools/trash-page-validation/verify-data-cards.py`与`python .tools/trash-page-validation/verify-delivery.py`均退出0：四库integrity=ok，tasks库所有表（含82条reviews、167条operations）与保护快照一致，已忽略与已确认记录保留；布局及界面偏好字节不变，正式exe、三个DLL与三个页面文件的SHA256均匹配隔离已验证产物。两卡片附着SHELLDLL_DefView、child/noActivate=true、topmost=false，提醒卡片可见，空待确认卡片隐藏。正式界面停留回收站；日志与delivery.json、real-data-cards.json、trash-real-ui.json均在 `.tools/trash-page-validation/`。
+
+maintain-context-hygiene两处仍只有agents目录、无SKILL.md，按项目规则人工核对有效需求、交接正文、源文件、日志、正式产物及真实数据。本轮替代原待确认中的“已忽略”筛选入口，忽略持久性、确认保留和24小时撤销规则继续有效。文档同步后实际执行 `node --test tests/*.test.mjs`172/172、退出0，日志 `.tools/trash-page-validation/node-delivery-final.log`；`git diff --check`退出0。通过后创建对应Git commit，标识以Git日志为准。下一步正常使用左侧回收站；真实Windows登录自启动仍未验收，实际游戏、多屏/恢复、其他电脑和长期稳定性验收继续沿用既有范围。
 
 ### 本轮消息排序（2026-10-14，已实现并部署）
 
-用户要求所有消息按时间倒序、最新在前。有效需求已同步：主窗口任务、待确认（含已忽略）、通知、已完成与两张桌面卡片统一按原消息最新发送时间倒序；手动新增按创建时间，无可用时间放最后，同一时间按稳定 ID 排列。替代优先级/截止日期/标题排序；优先级、正式日期及临期高亮保留。AccountWorkspace 根据证据最新 SentAt 产生 MessageTime，手动任务回退 CreatedAt；不修改数据库格式。正式页面与 DesktopCardProjection 使用该时间，新关联消息更新排序，普通人工编辑或重复同步不伪造新消息时间。
+用户要求所有消息按时间倒序、最新在前。有效需求已同步：主窗口任务、待确认、通知、已完成、回收站（已忽略）与两张桌面卡片统一按原消息最新发送时间倒序；手动新增按创建时间，无可用时间放最后，同一时间按稳定 ID 排列。替代优先级/截止日期/标题排序；优先级、正式日期及临期高亮保留。AccountWorkspace 根据证据最新 SentAt 产生 MessageTime，手动任务回退 CreatedAt；不修改数据库格式。正式页面与 DesktopCardProjection 使用该时间，新关联消息更新排序，普通人工编辑或重复同步不伪造新消息时间。
 
 新增工作区时间投影回归、桌面三种条目排序回归，以及浏览器各列表/已忽略筛选/刷新排序回归，覆盖时区、同时间稳定ID、多证据、无效时间和高优先级旧消息。实际执行 `.tools/dotnet/dotnet.exe test` 分别针对 Core、Infrastructure、Windows 测试项目，参数均为 `--no-restore --configuration Release`，最终306/306、695/695、456/456、退出0；Infrastructure时间投影专项1/1。`node --test tests/application-ui.test.mjs`87/87、`node --test tests/*.test.mjs`171/171，均退出0。`.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py`25/25、同Python的`-m pip check`通过；`python -m unittest discover -s tests -p release_packaging_test.py`4/4、退出0。Impeccable context与detect仅检查既有列表行为，detect返回空列表；排序页面截图 `.tools/desktop-validation/ui-message-time-descending-dark.png` 已查看。初期测试失败来自新增用例错误插入初始加载流程、重复嵌套导致父测试超时，以及手动创建夹具缺课程；修正测试隔离与夹具后通过。变更已读测试显式设置另一事项为最新，保留原“未打开事项不标已读”断言。
 
@@ -50,7 +62,7 @@ QQ路径与首次配置已写入：便携目录为app、napcat/package和bridge�
 
 用户确认启动拾要自动同步一次：每次点击拾要时自动启动一轮同步（指从桌面快捷方式启动）；从系统托盘打开只显示窗口，不同步，也不切换 QQ；拾要已打开时，点击“自动同步”再同步一次；同步完成后结束项目专用 NapCat Framework，恢复原本的普通 QQ。普通 QQ 已运行时允许自动退出，再在同步后重新打开普通 QQ。取消每天 08:00、12:00、20:00 定时同步，只在点击拾要或“自动同步”时同步；登录 Windows 的后台自启动只恢复本地界面和卡片，不切换 QQ。同步失败、超时或退出应用时也尝试恢复普通 QQ；游戏期间禁止同步，游戏导致错过同步时，结束游戏后补同步一次，重复点击合并为一轮。代码已写入，完整全量、Native及真实切换验证通过，已部署；详见下方当前接续。
 
-### 当前接续（待确认批量审核，2026-10-14，已实现、部署并核对真实控件）
+### 上一段接续（待确认批量审核，2026-10-14，已实现、部署并核对真实控件）
 
 基线8263aa1，用户要求多选批量忽略和加入任务。已在正式页面加入勾选、全选当前筛选结果、批量忽略与加入任务；复用现有ignore/accept-review逐条版本化命令与24小时忽略撤销，不新增后端接口。加入任务提供统一日期（清空钟点，保留日期精度）和显式采用建议日期，空课程可显式确认；缺信息、关联变更、动态可能重复建议不自动处理。每条使用独立操作ID及勾选时版本，部分失败继续，其余保留原因；超时停止队列、保留在途锁并显示结果未确认，迟到回执核对账号与工作区后更新结果。不代处理真实事项。正式入口继续.tools/published/app-card-controls/，新版PID20352以--background运行，MessagePurify.Shiyao独立身份与约2 DIP间距保留，托盘打开不同步。
 
@@ -855,7 +867,7 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 - **提醒事项卡片**：已确认任务按最新原消息发送时间倒序，显示标题、课程/来源群、优先级、截止时间及“详情”“完成”入口。手动新增按创建时间，无时间放最后，临期和逾期高亮；无任务时显示“暂无待办”。主窗口各列表与待确认卡片使用同一排序规则。
 - **待确认卡片**：有未处理事项时一直显示，不自动淡出。显示事项标题、来源和待补信息，可查看原文及图片；补齐确认后转入正式任务/通知，无关或误报可忽略。处理一项减少一项，全部处理完后隐藏整张卡片。
 - **普通通知仅在软件主界面的通知列表中展示**，不增加第三张桌面通知卡片，也不混入提醒事项卡片。
-- **主界面采用左侧导航**：包含“任务、待确认、通知、已完成、设置”，右侧显示所选页面的内容；用户已选择 A（左侧导航）。
+- **主界面采用左侧导航**：包含“任务、待确认、通知、已完成、回收站、设置”，右侧显示所选页面的内容；已忽略独立进入回收站，原24小时撤销规则保持。用户已选择 A（左侧导航）。
 - **事项详情采用主界面右侧详情栏**：点击事项后保留事项列表，在右侧查看原文、图片，并修改截止时间等信息，方便连续处理；用户已选择 A（右侧详情栏）。
 - **课程／分类选项同步和自定义**：课程筛选与详情／新增表单共用下拉选项，可从各下拉框新增名称，保存后立即同步并在刷新后保留；同步不丢失未提交表单。筛选选择与事项所属课程独立，编辑课程不自动切换筛选。本轮已在示例数据 demo 实现并验证，真实应用实现仍按正式计划执行。
 - **主题切换**：用户已要求支持浅色模式与深色模式自由切换，主界面和桌面卡片统一主题，切换时有柔和的过渡动画。

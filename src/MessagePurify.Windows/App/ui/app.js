@@ -2,9 +2,9 @@
 
 const $ = id => document.getElementById(id);
 const html = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-const pages = { tasks: '任务', pending: '待确认', notices: '通知', completed: '已完成', settings: '设置' };
+const pages = { tasks: '任务', pending: '待确认', notices: '通知', completed: '已完成', trash: '回收站', settings: '设置' };
 const states = { active: '待办', converted: '已转为任务', completed: '已完成', archived: '已归档', cancelled: '已取消', pending: '待确认', ignored: '已忽略', rejected: '已拒绝', accepted: '已确认', merged: '已合并' };
-const descriptions = { tasks: '保留待办，直到完成或归档', pending: '核对原文，补齐信息后再确认', notices: '无需完成的群消息', completed: '保留完成记录和消息来源', settings: '连接状态、课程关联与界面偏好' };
+const descriptions = { tasks: '保留待办，直到完成或归档', pending: '核对原文，补齐信息后再确认', notices: '无需完成的群消息', completed: '保留完成记录和消息来源', trash: '已忽略的消息，忽略后 24 小时内可撤销', settings: '连接状态、课程关联与界面偏好' };
 const preferencesKey = 'message-purify-preferences';
 const preferences = { theme: 'system', motion: 'system' };
 try {
@@ -198,7 +198,7 @@ function openItem(message) {
   }
   if (!item) { hostError = '未找到此事项，请刷新后重试。'; render(); return; }
   manualOpen = false; structureOpen = null; mergedSourceId = null;
-  page = reviewItem(item) ? 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
+  page = reviewItem(item) ? item.state === 'ignored' ? 'trash' : 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
   filters = { search: '', course: '', state: item.state };
   selectedId = item.id; detailError = null; hostError = '';
   render();
@@ -298,7 +298,7 @@ function receive(message) {
       if (pending.itemId && pending.operation !== 'create-task') {
         drafts.delete(pending.itemId);
         if (pending.operation === 'confirm-group') groupDrafts.delete(pending.itemId);
-        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在已忽略记录中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'edit-task': '任务修改已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
+        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在回收站中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'edit-task': '任务修改已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
       }
     }
   } else if (message.type !== 'state') return;
@@ -388,10 +388,11 @@ function pageItems() {
   return items().filter(item => {
     if (item.state === 'merged' || item.kind === 'review' && item.state === 'accepted') return false;
     const belongs = page === 'tasks' ? item.kind === 'task' && item.state !== 'completed'
-      : page === 'pending' ? reviewItem(item)
+      : page === 'pending' ? reviewItem(item) && item.state !== 'ignored'
+        : page === 'trash' ? reviewItem(item) && item.state === 'ignored'
         : page === 'completed' ? item.kind === 'task' && item.state === 'completed'
           : page === 'notices' ? item.kind === 'notice' : false;
-    const stateMatch = page === 'completed' || filters.state === 'all' || item.state === filters.state || page === 'notices' && filters.state === 'active' && item.state === 'converted';
+    const stateMatch = page === 'completed' || page === 'trash' || filters.state === 'all' || item.state === filters.state || page === 'notices' && filters.state === 'active' && item.state === 'converted';
     return belongs && stateMatch
       && (!filters.course || item.course === filters.course)
       && (!search || [item.title, item.course, item.group, states[item.state]].some(value => String(value || '').toLocaleLowerCase().includes(search)));
@@ -442,7 +443,7 @@ function renderNav() {
 }
 function renderFilters() {
   if (lastFilterPage !== page) {
-    const options = page === 'pending' ? ['pending', 'ignored', 'rejected', 'all'] : page === 'tasks' ? ['active', 'archived', 'cancelled', 'all'] : page === 'notices' ? ['active', 'converted', 'all'] : ['active', 'all'];
+    const options = page === 'pending' ? ['pending', 'rejected', 'all'] : page === 'trash' ? ['ignored'] : page === 'tasks' ? ['active', 'archived', 'cancelled', 'all'] : page === 'notices' ? ['active', 'converted', 'all'] : ['active', 'all'];
     $('state-filter').innerHTML = options.map(value => `<option value="${value}">${states[value] || '全部状态'}</option>`).join('');
     if (!options.includes(filters.state)) filters.state = options[0];
     lastFilterPage = page;
@@ -453,7 +454,7 @@ function renderFilters() {
   if ($('course-filter').innerHTML !== courseHTML) $('course-filter').innerHTML = courseHTML;
   $('course-filter').value = filters.course; $('state-filter').value = filters.state;
   if ($('search').value !== filters.search) $('search').value = filters.search;
-  $('state-filter').hidden = page === 'completed';
+  $('state-filter').hidden = page === 'completed' || page === 'trash';
 }
 function courseOptions() {
   return [...new Set([...items().map(item => item.course), ...(snapshot?.groups || []).map(group => group.course)].filter(Boolean))].sort((a, b) => a.localeCompare(b, 'zh-CN'));
@@ -466,6 +467,7 @@ function initialMessage() {
 }
 function emptyMessage() {
   if (!snapshot) { const [title, message] = initialMessage(); return `<div class="empty"><h2>${title}</h2><p>${message}</p></div>`; }
+  if (page === 'trash' && !filters.search && !filters.course) return '<div class="empty"><h2>回收站为空</h2><p>已忽略的消息会显示在这里。</p></div>';
   if (filters.search || filters.course || !['active', 'pending'].includes(filters.state)) return '<div class="empty"><h2>没有符合筛选的事项</h2><p>可调整搜索、课程或状态筛选。</p></div>';
   return `<div class="empty"><h2>${({ tasks: '暂无待办', pending: '暂无待确认', notices: '暂无通知', completed: '暂无完成记录' })[page]}</h2><p>${page === 'tasks' ? '置顶群中识别出的任务会显示在这里。' : '已有事项保存在本地应用中。'}</p></div>`;
 }

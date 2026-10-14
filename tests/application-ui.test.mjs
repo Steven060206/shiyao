@@ -737,8 +737,8 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
     });
     await t.test('忽略与撤销、拒绝建议有真实操作', async () => {
       await nav('pending'); await select('review1'); await click('[data-action="ignore"]');
-      await change('#state-filter', 'ignored'); await select('review1'); await click('[data-action="undo-ignore"]');
-      await change('#state-filter', 'pending'); await select('blocked'); await click('[data-action="reject"]');
+      await nav('trash'); await select('review1'); await click('[data-action="undo-ignore"]');
+      await nav('pending'); await select('blocked'); await click('[data-action="reject"]');
       assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="blocked").state'), 'rejected');
     });
     await push(fixture);
@@ -1413,7 +1413,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await waitFor('document.querySelector("#batch-result").textContent.includes("已忽略 1 项")');
       assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="review1").state'), 'ignored');
       assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="blocked").state'), 'pending');
-      await change('#state-filter', 'ignored'); await select('review1'); await click('[data-action=undo-ignore]');
+      await nav('trash'); await select('review1'); await click('[data-action=undo-ignore]');
       assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="review1").state'), 'pending');
     });
     await t.test('批量加入明确采用各项建议日期，缺日期与关联变更保留，任务使用新ID', async () => {
@@ -1490,12 +1490,53 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="ignore").length'), issuedBeforeRestore);
       assert.equal(await evaluate('document.querySelector("#batch-count").textContent'), '已选 0 项');
     });
+    await t.test('回收站独立入口保留原文、筛选和24小时撤销，待确认不混入已忽略', async () => {
+      const data = { ...structuredClone(fixture), accountId: 'trash-account' };
+      const activeIgnore = { ...structuredClone(data.items[2]), id: 'trash-new', state: 'ignored', unread: false,
+        undoOperationId: 'original-ignore', undoExpiresAt: new Date(Date.now() + 3600000).toISOString(),
+        evidence: [{ ...evidence[0], sentAt: '2026-10-14T11:00:00+08:00' }] };
+      const expired = { ...structuredClone(activeIgnore), id: 'trash-expired', course: '数学',
+        undoExpiresAt: new Date(Date.now() - 3600000).toISOString(),
+        evidence: [{ ...evidence[0], sentAt: '2026-10-13T11:00:00+08:00' }] };
+      data.items = [expired, data.items[3], activeIgnore];
+      await evaluate('backend.release();filters.search="";filters.course=""');
+      await push(data); await nav('pending'); await change('#state-filter', 'all');
+      assert.deepEqual(await evaluate('[...document.querySelectorAll(".task-row")].map(row=>row.dataset.id)'), ['blocked']);
+      assert.equal(await evaluate('!!document.querySelector("#state-filter option[value=ignored]")'), false);
+      await nav('trash');
+      assert.equal(await evaluate('document.querySelector("#breadcrumb").textContent'), '回收站');
+      assert.equal(await evaluate('document.querySelector("[data-page=trash]").getAttribute("aria-current")'), 'page');
+      assert.deepEqual(await evaluate('[...document.querySelectorAll(".task-row")].map(row=>row.dataset.id)'), ['trash-new', 'trash-expired']);
+      assert.equal(await evaluate('document.querySelector("#batch-review").hidden'), true);
+      assert.equal(await evaluate('document.querySelector("#state-filter").hidden'), true);
+      assert.match(await evaluate('document.querySelector(".source-section").textContent'), /请提交报告/);
+      await change('#course-filter', '数学');
+      assert.deepEqual(await evaluate('[...document.querySelectorAll(".task-row")].map(row=>row.dataset.id)'), ['trash-expired']);
+      assert.equal(await evaluate('!!document.querySelector("[data-action=undo-ignore]")'), false);
+      assert.match(await body(), /撤销期限已过/);
+      await change('#course-filter', ''); await change('#search', '不匹配');
+      assert.equal(await evaluate('document.querySelectorAll(".task-row").length'), 0);
+      await change('#search', ''); await select('trash-new'); await click('[data-action=undo-ignore]');
+      const undo = await evaluate('backend.messages.filter(message=>message.operation==="undo-ignore").at(-1)');
+      assert.equal(undo.parameters.undoOperationId, 'original-ignore');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="trash-new").state'), 'pending');
+      assert.deepEqual(await evaluate('[...document.querySelectorAll(".task-row")].map(row=>row.dataset.id)'), ['trash-expired']);
+      await nav('pending');
+      assert.ok(await evaluate('!!document.querySelector(".task-row[data-id=trash-new]")'));
+      await push({ ...data, items: [] }); await nav('trash');
+      assert.match(await body(), /回收站为空/);
+      await capture('ui-trash-empty-dark.png');
+      await push(data); await select('trash-new');
+      await capture('ui-trash-dark.png');
+      await evaluate('backend.emit({type:"open-item",accountId:snapshot.accountId,id:"trash-new"})');
+      assert.equal(await evaluate('document.querySelector("#breadcrumb").textContent'), '回收站');
+    });
     await t.test('所有列表按最新原消息倒序，忽略筛选及刷新保留顺序', async () => {
       const saved = { ...structuredClone(fixture), accountId: '987654' };
       await evaluate('backend.hold=false;filters.search="";filters.course=""');
       for (const [targetPage, kind, state] of [
         ['tasks', 'task', 'active'], ['pending', 'review', 'pending'],
-        ['pending', 'review', 'ignored'], ['notices', 'notice', 'active'], ['completed', 'task', 'completed']
+        ['trash', 'review', 'ignored'], ['notices', 'notice', 'active'], ['completed', 'task', 'completed']
       ]) {
         const entry = (id, timestamps, extra = {}) => ({ ...itemDefaults, id, kind, state, title: id, version: 1,
           unread: false, priority: 3, due: '2027-01-01', evidence: timestamps.map(sentAt => ({ ...evidence[0], sentAt })), ...extra });
@@ -1513,7 +1554,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
         assert.deepEqual(await ids(), expected, `${targetPage}/${state}`);
         await push({ ...saved, items: [...ordered].reverse() });
         assert.deepEqual(await ids(), expected, `refresh ${targetPage}/${state}`);
-        if (targetPage === 'pending' && state === 'ignored') await capture('ui-message-time-descending-dark.png');
+        if (targetPage === 'trash') await capture('ui-message-time-descending-dark.png');
       }
       await push(saved); await nav('pending'); await change('#state-filter', 'pending');
     });
