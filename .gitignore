@@ -4,3 +4,9 @@
 .tools/
 **/__pycache__/
 *.pyc
+**/qq-sync.json
+**/onebot11*.json
+**/webui*.json
+*.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm

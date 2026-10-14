@@ -20,6 +20,7 @@ public sealed class AppRuntime
     private int restoring;
     private int syncRequested;
     private string? accessToken;
+    private QqSyncConfiguration? qqSyncConfiguration;
     public bool IsRestoring => Volatile.Read(ref restoring) != 0;
     public AccountWorkspace? Workspace { get; private set; }
     public MessageHostStatus Status { get; private set; } = new("disconnected", "unknown", "paused", "pending", null, DateTimeOffset.UtcNow, [])
@@ -38,7 +39,8 @@ public sealed class AppRuntime
         AccountBackupService.RecoverInterrupted(this.dataRoot);
         gameCatalog = new(Path.Combine(this.dataRoot, "game-catalog.json"));
         syncController = new(gameDetector ?? gameCatalog);
-        this.sessionFactory = sessionFactory ?? (() => new QqSyncSession());
+        this.sessionFactory = sessionFactory ?? (() => new QqSyncSession(
+            qqSyncConfiguration ??= QqSyncConfiguration.Load(AppContext.BaseDirectory)));
         this.syncBatch = syncBatch ?? RunBatchAsync;
         this.syncTimeout = syncTimeout ?? TimeSpan.FromMinutes(5);
         injectedBatch = syncBatch is not null;
@@ -265,15 +267,21 @@ public sealed class AppRuntime
         Changed?.Invoke();
     }
 
-    private void ReadAccessToken() => accessToken = NapCatConnectionConfiguration.ReadAccessToken(
-        Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN"),
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../napcat/framework/v4.18.37/package/config")));
+    private void ReadAccessToken()
+    {
+        qqSyncConfiguration = QqSyncConfiguration.Load(AppContext.BaseDirectory);
+        accessToken = ReadAccessToken(qqSyncConfiguration, Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN"));
+    }
+
+    internal static string? ReadAccessToken(QqSyncConfiguration configuration, string? environmentToken) =>
+        NapCatConnectionConfiguration.ReadAccessToken(environmentToken, configuration.TokenConfigurationDirectory);
 
     private static string SafeFailure(Exception exception) => exception switch
     {
         OneBotProtocolException protocol => protocol.Code,
         OneBotApiException api => "api-" + api.Retcode,
         OneBotRequestTimeoutException => "request-timeout",
+        QqSyncConfigurationException configuration => configuration.Message,
         InvalidOperationException { Message: "connection-configuration-unavailable" } => "connection-configuration-unavailable",
         InvalidOperationException invalid when invalid.Message.StartsWith("qq-", StringComparison.Ordinal) => invalid.Message,
         IOException or InvalidDataException => "local-data-unavailable",

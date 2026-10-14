@@ -4,13 +4,17 @@
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 同学分发与 GitHub 发布准备（2026-10-14，尚未上传）
+### 同学分发与 GitHub 发布准备（2026-10-14，上传进行中）
 
-用户要求提供可供其他同学使用的软件版本，并由助手上传到用户的 GitHub，供其他人下载。已确认发布目标；分发实现尚未开始。M3 阶段与既有本机部署保持上述真实状态，新增分发准备工作。
+用户要求提供可供其他同学使用的软件版本，并由助手上传到用户的 GitHub，供其他人下载。2026-10-14 用户选择 A：公开源码，同时提供软件下载，并明确授权助手直接上传。分发准备已开始；M3 阶段与既有本机部署保持上述真实状态，新增分发准备工作。
 
 只读核对：`git status --short` 无改动，基线279a7a5；`git remote -v` 无远端；`gh auth status` 退出0，当前账号Steven060206。App csproj为win-x64、WPF + WebView2；QqSyncSession默认固定`D:/QQ/QQ.exe`，NapCat与置顶桥脚本依赖项目目录；AppRuntime也按项目布局读取NapCat配置。现有`.tools/published/app-card-controls/`不能直接作为其他电脑上的完整QQ同步分发包。
 
-下一步先确定是否公开源码，再处理不同电脑的QQ路径、NapCat首次连接、运行依赖和安装说明，验证干净环境中的分发包，再上传对应仓库及Releases。分发包和公开仓库不得包含用户的QQ聊天数据、账号数据库、Token或登录材料，同学使用各自账号与本地数据。建议首版标为测试版；未决定：是否公开源码、目标仓库和下载包形式；尚未制作分发包、尚未上传GitHub。
+QQ路径与首次配置已写入：便携目录为app、napcat/package和bridge，Setup选择本机QQ并创建个人本机OneBot配置，未Setup的包不回退开发者配置。新增README、MIT及第三方完整许可、原始NapCat包打包工具和相关测试。分发包和公开仓库不得包含用户的QQ聊天数据、账号数据库、Token或登录材料，同学使用各自账号与本地数据。公开仓库https://github.com/Steven060206/shiyao已创建；源码和下载包尚未上传，验证完成后由助手直接上传首次测试版，上传授权已确认。
+
+本轮实际已执行Core Release306/306、Infrastructure Release690/690、Windows Release454/454，均使用`--no-restore --configuration Release`退出0；App csproj自包含Release publish到`.tools/published/github-release-0.1.0-beta.1/`退出0。`python tests/app_desktop_test.py --executable .tools/published/github-release-0.1.0-beta.1/MessagePurify.exe`退出0、113项Native和真实父窗/styles通过。Python release_packaging_test四项含子场景已通过。首次配置Node初跑7/9：修复WindowsPowerShell5.1把File.Replace的$null绑定为空路径导致重复配置失败，测试另将PublicKeyToken程序集类型误判为凭据；最终验证及远端结果随后按实际补记。保持现有本机运行、快捷方式及个人数据，未发起真实QQ同步。
+
+最终分发验证：`node --test tests/*.test.mjs`170/170、退出0；`python -m unittest discover -s tests -p release_packaging_test.py`4/4（含污染包和不安全ZIP子场景）、退出0。`python tools/build_release.py --publish-directory .tools/published/github-release-0.1.0-beta.1 --napcat-archive .tools/napcat/framework/v4.18.37/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.1`退出0，生成`.tools/releases/Shiyao-0.1.0-beta.1-win-x64.zip`，119915264字节、518个条目；ZIP完整性通过，内部DLL与最终publish一致。解压到`.tools/releases/验包 中文空格 0.1.0-beta.1/Shiyao/`后再次执行`python tests/app_desktop_test.py --executable .tools/releases/验包 中文空格 0.1.0-beta.1/Shiyao/app/MessagePurify.exe`，113项及真实父窗/styles通过、退出0。`python .tools/releases/verify-package.py`在该解压目录用合成QQ路径/账号执行原始NapCat包的CheckOnly与实际Setup，通过本机接口、桥和不输出凭据核对；未运行QQ或安装真实快捷方式，报告`.tools/releases/package-validation.json`。源码历史扫描没有私人材料命中，完整许可保留。上述为本机独立路径/合成配置验证，其他同学的电脑与QQ版本仍需实际试用。
 
 本轮仅同步`docs/requirements.md`、本文与`tests/project-rules.test.mjs`的分发状态检查；实际运行`node --test tests/*.test.mjs`，161/161通过、退出0；`git diff --check`退出0。验证范围为文档与既有Node回归，不代表分发包或跨电脑验收。`maintain-context-hygiene`两处目录均只有agents子目录，未找到SKILL.md，按项目规则人工核对需求、交接、实际源码及发布状态，不删除文件。提交说明`docs: record classmate distribution and GitHub release goal`，标识以Git日志为准。
 
@@ -889,7 +893,7 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 14. **按次切换已写入代码、验证并部署**。新流程使用 AppRuntime 请求合并、QqSyncSession 和 NapCatMessageHost.RunOnceAsync。完成/未补全后主动断开；异常、取消和五分钟超时尝试恢复普通 QQ。游戏中断取消原因保留，退出游戏后补一次；固定时刻已取消，后台登录启动不触发同步。真实 QQ 切换、正式按钮和入口验证通过；实际游戏与长期运行仍待验收。
 15. **本阶段明确后置 OCR 与额外安全增强**。图片下载、附件存储、OCR 队列、OCR 重分析以及与本机数据泄露相关的安全强化暂不实现；现有 OCR worker 和离线调查保留为后期基础。QQ/NapCat 继续只读，软件不得向任何 QQ 群聊或私聊发布消息，这一边界保持为当前硬约束。
 
-16. **已确认：提供同学使用的软件版本，并由助手上传到用户GitHub供下载**。未决定：是否公开源码、目标仓库和下载包形式；建议GitHub Releases测试版。现有本机路径与依赖须先处理，不能将本机运行验证记为跨电脑分发验证；尚未制作分发包、尚未上传GitHub。
+16. **已确认：公开源码，提供同学使用的软件版本，并由助手直接上传到用户GitHub供下载**。2026-10-14 用户选择A并明确授权上传；仓库和打包等实现细节由助手处理。分发首次配置与路径适配已写入，公开仓库shiyao已创建、上传进行中；不能将本机运行验证记为跨电脑分发验证，实际远端结果以首段为准。
 
 ## 7. 接续与同步方式
 

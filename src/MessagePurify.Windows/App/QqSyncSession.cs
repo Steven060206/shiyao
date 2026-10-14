@@ -21,10 +21,10 @@ public sealed class QqSyncSession : IQqSyncSession
     private bool restoreNeeded;
     private int started;
 
-    public QqSyncSession() : this(new WindowsQqSyncProcessAdapter(
-        "D:/QQ/QQ.exe",
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../napcat/framework/v4.18.37/package")),
-        Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../packaging/napcat/Prepare-PinnedGroups.ps1")))) { }
+    public QqSyncSession() : this(QqSyncConfiguration.Load(AppContext.BaseDirectory)) { }
+
+    internal QqSyncSession(QqSyncConfiguration configuration) : this(new WindowsQqSyncProcessAdapter(
+        configuration.QqExecutable, configuration.PackageDirectory, configuration.PrepareScript)) { }
 
     internal QqSyncSession(IQqSyncProcessAdapter processes) => this.processes = processes;
 
