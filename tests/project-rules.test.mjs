@@ -530,6 +530,10 @@ test('已确认点击触发同步并在完成后恢复普通 QQ', () => {
   assert.match(overview, /定时同步已取消/);
   assert.doesNotMatch(overview, /固定时刻.*未验收/);
   assert.match(handoff, /### 本轮修复前 QQ 连接诊断（2026-10-14，历史）/);
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'docs/integrations/napcat-setup.md', 'src/MessagePurify.Windows/App/README.md', 'docs/superpowers/specs/2026-10-10-windows-app-design.md']) {
+    assert.match(read(file), /指从桌面快捷方式启动/);
+    assert.match(read(file), /从系统托盘打开只显示窗口，不同步，也不切换 QQ/);
+  }
   assert.doesNotMatch(requirements, /日常重新打开 QQ 直接双击桌面原有/);
 });
 

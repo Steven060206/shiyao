@@ -361,3 +361,5 @@ node --test tests/pinned-groups-bridge.test.mjs
 需要 Node.js 22 或更新版本和 Chrome。默认使用 `C:/Program Files/Google/Chrome/Application/chrome.exe`；其他安装位置可通过环境变量 `CHROME_PATH` 指定。浏览器检查使用独立临时配置，不访问个人浏览器会话。普通测试不会覆盖预览图；仅在主动更新预览时运行 `node tests/prototype-qa.mjs --screenshots`，生成课程选择、待确认、主界面及桌面卡片的六张预览。
 
 这些检查验证 C# 核心、协议、OCR 工作进程、Windows 探针参数和浏览器原型；真实 QQ、Windows 系统通知呈现/点击和桌面人工驻留仍不由自动测试替代。
+
+2026-10-14 托盘范围纠正已实现、部署并实机核对：从桌面快捷方式启动拾要（含唤回后台实例）和“自动同步”触发一轮；托盘双击及菜单只显示窗口，不同步、不切换 QQ。Windows446/446、Node153/153、110项Native及真实父窗/styles检查通过，正式exe/DLL与隔离验证产物相同；实际托盘菜单打开后QQ进程不变、Framework端口关闭。原任务、布局和界面偏好保持一致。本轮日志和数据保护位于.tools/tray-no-sync-validation/。

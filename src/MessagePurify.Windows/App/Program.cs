@@ -55,11 +55,10 @@ public static class Program
                 runtime = new(dataRoot, synthetic);
                 window = new(runtime, dataRoot, check || background, registerStartup: !check);
                 var menu = new Forms.ContextMenuStrip();
-                void OpenAndSync() { runtime.RequestSync(); window.ShowMainWindow(); }
-                menu.Items.Add("打开拾要", null, (_, _) => application.Dispatcher.Invoke(OpenAndSync));
+                menu.Items.Add("打开拾要", null, (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow));
                 menu.Items.Add("退出", null, async (_, _) => await application.Dispatcher.InvokeAsync(Exit).Task.Unwrap());
                 tray.ContextMenuStrip = menu;
-                tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(OpenAndSync);
+                tray.DoubleClick += (_, _) => application.Dispatcher.Invoke(window.ShowMainWindow);
                 if (!check || synthetic is not null)
                 {
                     desktop = new(runtime, dataRoot, window.OpenItemAsync);
@@ -80,7 +79,7 @@ public static class Program
                     await window.Ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
                     if (synthetic is not null)
                     {
-                        await SmokeCheck.RunAsync(window, synthetic, runtime, desktop!, dataRoot, report);
+                        await SmokeCheck.RunAsync(window, synthetic, runtime, desktop!, dataRoot, report, tray);
                         if (int.TryParse(Argument(arguments, "--hold-seconds"), out var hold))
                             await Task.Delay(TimeSpan.FromSeconds(Math.Clamp(hold, 0, 10)));
                     }

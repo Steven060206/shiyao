@@ -36,8 +36,19 @@ internal static partial class SmokeCheck
     }
 
     public static async Task RunAsync(AppWindow window, AccountWorkspace workspace, AppRuntime runtime,
-        DesktopCardHost desktop, string dataRoot, string reportPath)
+        DesktopCardHost desktop, string dataRoot, string reportPath, System.Windows.Forms.NotifyIcon tray)
     {
+        var initiallyVisible = window.IsVisible;
+        window.Hide();
+        tray.ContextMenuStrip!.Items[0].PerformClick();
+        if (!window.IsVisible || runtime.Status.SyncPhase != "idle")
+            throw new InvalidOperationException("托盘菜单打开必须只显示窗口，不发起同步。");
+        window.Hide();
+        typeof(System.Windows.Forms.NotifyIcon).GetMethod("OnDoubleClick",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(tray, [EventArgs.Empty]);
+        if (!window.IsVisible || runtime.Status.SyncPhase != "idle")
+            throw new InvalidOperationException("双击托盘必须只显示窗口，不发起同步。");
+        if (!initiallyVisible) window.Hide();
         Marshal.ThrowExceptionForHR(GetCurrentProcessExplicitAppUserModelID(out var appId));
         try
         {
@@ -245,7 +256,7 @@ internal static partial class SmokeCheck
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
-            checks = new[] { "branding", "taskbar-identity", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+            checks = new[] { "branding", "taskbar-identity", "tray-menu-no-sync", "tray-double-click-no-sync", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",
