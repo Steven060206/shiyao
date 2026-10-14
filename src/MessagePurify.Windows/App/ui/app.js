@@ -35,6 +35,8 @@ let filters = { search: '', course: '', state: 'active' }, detailSignature = '',
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
 let manualOpen = false, structureOpen = null, mergedSourceId = null;
 let isRestoring = false, backupPreview = null;
+let batchRunning = false, batchResult = '', batchEpoch = 0;
+const batchSelection = new Map();
 const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), structureDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
 const cacheCleanupErrors = new Map();
 const backupErrors = new Map(), backupResults = new Map(), generations = new Map();
@@ -105,10 +107,11 @@ function setCacheCleanupError(accountId, message, startedAt = Date.now(), incomi
   const incoming = incomingCleanup?.accountId === accountId ? Date.parse(incomingCleanup.completedAt) : 0;
   cacheCleanupErrors.set(accountId, { message, afterCompletedAt: Math.max(previous || 0, incoming || 0) || startedAt });
 }
-function request(operation, parameters, itemId = null) {
-  if (restoreLocked() && !['snapshot', 'set-appearance', 'open-backup-location'].includes(operation)) return;
+function request(operation, parameters, itemId = null, complete = null) {
+  if (restoreLocked() && !['snapshot', 'set-appearance', 'open-backup-location'].includes(operation)) { complete?.({ success: false, error: 'backup_restoring' }); return; }
   if (parameters.accountId && !['cancel-backup', 'open-backup-location'].includes(operation)) parameters = { ...parameters, generation: generation() };
   if (!bridge) {
+    complete?.({ success: false, error: 'bridge_unavailable' });
     if (backupOperations.includes(operation)) { backupErrors.set(parameters.accountId, errorLabel('bridge_unavailable')); renderSettings(); }
     else if (operation === 'clean-cache') { setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable')); renderSettings(); }
     else { hostError = errorLabel('bridge_unavailable'); renderStatus(); }
@@ -121,6 +124,11 @@ function request(operation, parameters, itemId = null) {
   const structureDraftKey = structural ? structureOpen?.accountId === parameters.accountId && structureOpen.id === itemId ? structureOpen.draftKey : structureKey(parameters.accountId, itemId, operation === 'split-task' ? 'split' : 'merge') : null;
   const timer = setTimeout(() => {
     const pending = requests.get(id); if (!pending) return;
+    if (pending.complete) {
+      pending.timedOut = true;
+      pending.complete({ success: false, error: 'command_timeout' });
+      render(); return;
+    }
     if (backupOperations.includes(pending.operation)) {
       pending.timedOut = true;
       backupErrors.set(pending.accountId, '操作结果尚未确认，请等待本地应用完成；刷新可核对最新结果。');
@@ -143,9 +151,10 @@ function request(operation, parameters, itemId = null) {
     render();
   }, 15000);
   const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen?.draftKey } : null;
-  requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, generation: parameters.generation, structural, structureDraftKey, structureOperationId: parameters.operationId, startedAt });
+  requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, generation: parameters.generation, structural, structureDraftKey, structureOperationId: parameters.operationId, startedAt, complete });
   try { bridge.postMessage({ id, operation, parameters }); }
   catch {
+    complete?.({ success: false, error: 'bridge_unavailable' });
     clearTimeout(timer); requests.delete(id); if (busyKey) busy.delete(busyKey);
     if (backupOperations.includes(operation)) backupErrors.set(parameters.accountId, errorLabel('bridge_unavailable'));
     else if (operation === 'clean-cache') setCacheCleanupError(parameters.accountId, errorLabel('bridge_unavailable'), startedAt);
@@ -203,6 +212,8 @@ function receive(message) {
   if (pending) {
     clearTimeout(pending.timer); requests.delete(message.id);
     releaseBusy(pending);
+    pending.complete?.(message);
+    if (pending.complete && pending.accountId !== snapshot?.accountId) { render(); return; }
     if (pending.accountId === snapshot?.accountId && pending.generation !== undefined && pending.generation !== generation()
       && pending.operation !== 'restore-backup') { render(); return; }
     if (backupOperations.includes(pending.operation)) {
@@ -273,7 +284,7 @@ function receive(message) {
       }
       if (pending.accountId !== snapshot?.accountId) { render(); return; }
     }
-    if (pending.structural || pending.operation === 'clean-cache') { /* Each operation carries its own error without changing the current editor. */ }
+    if (pending.complete || pending.structural || pending.operation === 'clean-cache') { /* Batch results are summarized beside the selection. */ }
     else if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
       else if (pending.operation === 'create-task') { /* Keep the account's manual draft for retry. */ }
@@ -313,7 +324,8 @@ function receive(message) {
     if (!older) {
       generations.set(incoming.accountId, incoming.generation || 0);
       if (changedGeneration) {
-        for (const [id, pendingRequest] of requests) if (pendingRequest.accountId === incoming.accountId && pendingRequest.operation !== 'restore-backup') { clearTimeout(pendingRequest.timer); requests.delete(id); }
+        resetBatchSelection();
+        for (const [id, pendingRequest] of requests) if (pendingRequest.accountId === incoming.accountId && pendingRequest.operation !== 'restore-backup') { pendingRequest.complete?.({ success: false, error: 'workspace_changed' }); clearTimeout(pendingRequest.timer); requests.delete(id); }
         busy.clear(); drafts.clear(); groupDrafts.clear(); readAttempts.clear(); manualDrafts.delete(incoming.accountId);
         for (const [key] of structureDrafts) if (key.startsWith(incoming.accountId + '/')) structureDrafts.delete(key);
         manualOpen = false; structureOpen = null; mergedSourceId = null; detailError = null; backupPreview = null; detailSignature = ''; settingsSignature = '';
@@ -322,6 +334,7 @@ function receive(message) {
       if (cleanupError && !incoming.cacheCleanupError && incoming.cacheCleanup?.accountId === incoming.accountId
         && Date.parse(incoming.cacheCleanup.completedAt) > cleanupError.afterCompletedAt) cacheCleanupErrors.delete(incoming.accountId);
       if (snapshot && snapshot.accountId !== incoming.accountId) {
+        resetBatchSelection();
         if (backupPreview) request('cancel-backup', { accountId: snapshot.accountId, previewId: backupPreview.id });
         backupPreview = null; isRestoring = false;
         drafts.clear(); groupDrafts.clear(); readAttempts.clear(); selectedId = null; initialized = false;
@@ -455,19 +468,80 @@ function renderList() {
   $('page-title').textContent = pages[page]; $('breadcrumb').textContent = pages[page]; $('page-subline').textContent = descriptions[page];
   $('date-stamp').textContent = new Intl.DateTimeFormat('zh-CN', { timeZone: 'Asia/Shanghai', month: 'long', day: 'numeric', weekday: 'short' }).format(new Date());
   const isSettings = page === 'settings';
+  $('batch-review').hidden = page !== 'pending';
   const createButton = document.querySelector('[data-action="new-task"]');
   createButton.hidden = page !== 'tasks'; createButton.disabled = !loadedAccount() || Boolean(manualOpen);
   $('filters').hidden = isSettings; $('list-summary').hidden = isSettings; $('rows').hidden = isSettings; $('settings-panel').hidden = !isSettings;
   if (isSettings) { renderSettings(); return; }
   renderFilters();
   const visible = pageItems();
+  renderBatchControls(visible);
   const viewingStructure = structureOpen?.accountId === snapshot?.accountId && structureOpen?.id === selectedId && selected()?.kind === 'task';
   if (!visible.some(item => item.id === selectedId) && !viewingStructure) selectedId = visible[0]?.id || null;
   $('list-summary').innerHTML = `<span>${visible.length} 项${snapshot ? '' : ' · 等待本地应用'}</span><b>${pages[page]}</b>`;
-  $('rows').innerHTML = visible.length ? visible.map(item => `<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
+  $('rows').innerHTML = visible.length ? visible.map(item => `${page === 'pending' && batchReview(item) ? `<div class="batch-row"><label class="batch-check"><input type="checkbox" data-batch-id="${html(item.id)}" aria-label="选择${html(item.title)}" ${batchSelection.has(item.id) ? 'checked' : ''} ${batchRunning || restoreLocked() || busy.has(item.id) ? 'disabled' : ''}></label>` : ''}<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
     <div class="row-top"><h2>${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}${item.changeLabel ? `<span class="change-badge">${html(item.changeLabel)}</span>` : ''}</h2><span class="tag ${reviewItem(item) ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${reviewItem(item) ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
     <div class="row-meta"><span>${html(item.course || item.group || '来源待核对')}${item.source === 'manual' ? '<span class="manual-source">手动添加</span>' : ''}</span><span>${item.kind === 'task' ? html(dateLabel(item)) : html(states[item.state])}</span></div>
-    ${reviewItem(item) && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}</button>`).join('') : emptyMessage();
+    ${reviewItem(item) && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}${page === 'pending' && batchReview(item) && (item.due || item.suggestedDue) ? `<p class="row-note">${item.due ? '日期' : '建议日期'}：${html(item.due || item.suggestedDue)}${html(item.due ? item.time ? ' ' + item.time : '' : item.suggestedTime ? ' ' + item.suggestedTime : '')}</p>` : ''}</button>${page === 'pending' && batchReview(item) ? '</div>' : ''}`).join('') : emptyMessage();
+}
+const batchReview = item => item.kind === 'review' && item.state === 'pending';
+function resetBatchSelection() {
+  batchEpoch++; batchRunning = false; batchResult = ''; batchSelection.clear();
+  $('batch-date').value = ''; $('batch-use-suggestions').checked = false;
+}
+function renderBatchControls(visible) {
+  const eligible = page === 'pending' ? visible.filter(batchReview) : [];
+  if (page === 'pending') for (const id of batchSelection.keys()) if (!eligible.some(item => item.id === id)) batchSelection.delete(id);
+  const locked = batchRunning || restoreLocked() || !loadedAccount();
+  const all = $('batch-select-all');
+  all.checked = eligible.length > 0 && eligible.every(item => batchSelection.has(item.id));
+  all.indeterminate = !all.checked && batchSelection.size > 0; all.disabled = locked || eligible.length === 0;
+  $('batch-count').textContent = `已选 ${batchSelection.size} 项`;
+  document.querySelectorAll('[data-action=batch-ignore],[data-action=batch-accept]').forEach(button => { button.disabled = locked || batchSelection.size === 0; });
+  $('batch-date').disabled = locked; $('batch-use-suggestions').disabled = locked;
+  $('batch-result').textContent = batchResult; $('batch-result').hidden = !batchResult;
+  $('filters').querySelectorAll('input,select').forEach(control => { control.disabled = batchRunning; });
+}
+async function runBatchReview(operation) {
+  if (batchRunning || restoreLocked() || !loadedAccount() || !batchSelection.size) return;
+  const accountId = snapshot.accountId, currentGeneration = generation(), epoch = ++batchEpoch;
+  const chosen = [...batchSelection], date = $('batch-date').value, useSuggestions = $('batch-use-suggestions').checked;
+  const reasons = new Map(), unconfirmed = new Set(); let success = 0, skipped = 0, failed = 0;
+  const addReason = reason => reasons.set(reason, (reasons.get(reason) || 0) + 1);
+  const summarize = () => `${operation === 'ignore' ? '已忽略' : '已加入'} ${success} 项；保留 ${skipped} 项；失败 ${failed} 项${unconfirmed.size ? `；结果未确认 ${unconfirmed.size} 项。请等待回执或刷新核对，剩余条目未处理` : ''}${reasons.size ? '。' + [...reasons].map(([reason, count]) => `${reason}（${count}项）`).join('；') : ''}`;
+  batchRunning = true;
+  try {
+    for (const [id, version] of chosen) {
+      if (epoch !== batchEpoch || accountId !== snapshot?.accountId || currentGeneration !== generation()) return;
+      if (restoreLocked()) { skipped += chosen.length - success - skipped - failed; addReason('正在恢复备份，剩余条目未处理'); break; }
+      const item = items().find(item => item.id === id);
+      const reason = !item || !batchReview(item) ? '条目已处理' : item.version !== version ? '内容已变化，请重新勾选核对' : busy.has(id) ? '条目正在处理' : operation === 'accept-review' && (!item.canAccept || item.targetTaskId) ? '需补信息或单独核对关联变更' : null;
+      if (reason) { skipped++; addReason(reason); continue; }
+      const extra = {};
+      if (operation === 'accept-review') {
+        const formalDate = date || item.due || (useSuggestions ? item.suggestedDue : '');
+        const time = date ? '' : item.due ? item.time || '' : item.suggestedTime || '';
+        const validDate = /^\d{4}-\d{2}-\d{2}$/.test(formalDate || '') && Number(formalDate.slice(0, 4)) > 0 && !Number.isNaN(Date.parse(formalDate + 'T00:00:00Z')) && new Date(formalDate + 'T00:00:00Z').toISOString().slice(0, 10) === formalDate;
+        if (!validDate || time && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) { skipped++; addReason('日期或时间待确认'); continue; }
+        Object.assign(extra, { date: formalDate, time, timeKind: item.timeKind || 'deadline' });
+      }
+      batchResult = `正在处理 ${success + skipped + failed + 1} / ${chosen.length} 项`; render();
+      let responded = false;
+      const result = await new Promise(resolve => request(operation, { accountId, id, version, operationId: uuid(), ...extra }, id, response => {
+        resolve(response);
+        if (epoch !== batchEpoch || accountId !== snapshot?.accountId || currentGeneration !== generation()) return;
+        if (responded && !unconfirmed.delete(id)) return;
+        responded = true;
+        if (response.success) { success++; batchSelection.delete(id); drafts.delete(id); }
+        else if (response.error === 'command_timeout') unconfirmed.add(id);
+        else { failed++; addReason(errorLabel(response.error)); }
+        if (!batchRunning) { batchResult = summarize(); render(); }
+      }));
+      if (epoch !== batchEpoch || accountId !== snapshot?.accountId || currentGeneration !== generation()) return;
+      if (['command_timeout', 'bridge_unavailable'].includes(result.error)) { skipped += chosen.length - success - skipped - failed - unconfirmed.size; break; }
+    }
+    batchResult = summarize();
+  } finally { if (epoch === batchEpoch) { batchRunning = false; render(); } }
 }
 function draftFor(item) {
   if (!drafts.has(item.id)) drafts.set(item.id, {
@@ -804,6 +878,13 @@ document.addEventListener('input', event => {
 });
 document.addEventListener('change', event => {
   const element = event.target;
+  if (element.id === 'batch-select-all' || element.dataset.batchId) {
+    if (batchRunning || restoreLocked()) return;
+    const candidates = pageItems().filter(batchReview);
+    const chosen = element.dataset.batchId ? candidates.filter(item => item.id === element.dataset.batchId) : candidates;
+    for (const item of chosen) if (element.checked) batchSelection.set(item.id, item.version); else batchSelection.delete(item.id);
+    batchResult = ''; render(); return;
+  }
   if (restoreLocked() && ['theme-setting', 'motion-setting', 'autostart-setting', 'desktop-transparency-setting'].includes(element.id)) return;
   if (element.id === 'course-filter') { filters.course = element.value; render(); }
   else if (element.id === 'state-filter') { filters.state = element.value; render(); }
@@ -835,6 +916,7 @@ document.addEventListener('click', event => {
   const button = event.target.closest('button[data-action]');
   if (!button || button.disabled) return;
   const action = button.dataset.action;
+  if (action === 'batch-ignore' || action === 'batch-accept') { void runBatchReview(action === 'batch-ignore' ? 'ignore' : 'accept-review'); return; }
   if (action === 'new-task') {
     if (!loadedAccount()) return;
     if (!manualDraft()) manualDrafts.set(snapshot.accountId, { id: uuid(), title: '', course: '', date: '', time: '', timeKind: 'deadline', priority: 'auto', error: '' });

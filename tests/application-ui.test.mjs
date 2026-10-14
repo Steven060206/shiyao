@@ -135,6 +135,7 @@ const mockScript = `(() => {
           if(item.action==='cancel')backend.snapshot.items.find(target=>target.id===item.targetTaskId).state='cancelled';
           item.kind='task';item.state='active';item.due=parameters.date || null;item.time=parameters.time || null;item.timeKind=parameters.timeKind || 'deadline';
           backend.snapshot.reminders.push({taskId:item.id,timeVersion:1,planVersion:1,preference:{mode:'default',hours:null,days:null,clock:null},needsReview:false,active:true,nodes:[]});
+          if(backend.realAcceptIds) item.id='accepted-'+parameters.id;
         }
         if(command.operation==='convert-notice') {
           const taskId=item.targetTaskId || 'notice-task-'+item.id;
@@ -1401,6 +1402,92 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await evaluate('backend.emit({type:"state",preferences:{theme:"dark",motion:"reduce",desktopTransparency:null},snapshot:backend.snapshot})');
       assert.equal(await evaluate('document.querySelector("#desktop-transparency-setting").value'), '20');
       assert.equal(await evaluate('JSON.parse(localStorage.getItem("message-purify-preferences")).desktopTransparency ?? null'), null);
+    });
+    const bulkFixture = () => ({ ...structuredClone(fixture), accountId: '54321' });
+    const bulkReady = async data => { await evaluate('backend.release();backend.realAcceptIds=true;resetBatchSelection();hostError="";detailError=null'); await push(data); await nav('pending'); await change('#search', ''); };
+    const choose = id => click(`[data-batch-id="${id}"]`);
+    await t.test('批量忽略只处理当前筛选勾选项，保留逐条撤销和独立操作标识', async () => {
+      await bulkReady(bulkFixture()); await change('#search', '图片预习');
+      await click('#batch-select-all'); await capture('ui-batch-review-dark.png'); await click('[data-action=batch-ignore]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("已忽略 1 项")');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="review1").state'), 'ignored');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="blocked").state'), 'pending');
+      await change('#state-filter', 'ignored'); await select('review1'); await click('[data-action=undo-ignore]');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="review1").state'), 'pending');
+    });
+    await t.test('批量加入明确采用各项建议日期，缺日期与关联变更保留，任务使用新ID', async () => {
+      const data = bulkFixture(); data.items.push({ ...structuredClone(data.items[2]), id:'no-date', title:'没有日期', suggestedDue:null, suggestedTime:null });
+      await bulkReady(data); await click('#batch-select-all'); await click('[data-action=batch-accept]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("已加入 0 项")');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="review1").kind'), 'review');
+      await click('#batch-use-suggestions');
+      await click('[data-action=batch-accept]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("已加入 1 项")');
+      const accepted = await evaluate('backend.messages.filter(message=>message.operation==="accept-review" && message.parameters.accountId==="54321").at(-1)');
+      assert.equal(accepted.parameters.date, '2026-12-21'); assert.equal(accepted.parameters.time, '18:00');
+      assert.ok(await evaluate('backend.snapshot.items.some(item=>item.id==="accepted-review1" && item.kind==="task")'));
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="no-date").state'), 'pending');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="task1").state'), 'active');
+      assert.match(await evaluate('document.querySelector("#batch-result").textContent'), /日期|关联|补信息/);
+    });
+    await t.test('统一日期用于多个新任务，空课程可显式确认，重复点击只发送一轮', async () => {
+      const data = bulkFixture(); data.items = [data.items[2], { ...structuredClone(data.items[2]), id:'second', course:'', suggestedDue:null }];
+      await bulkReady(data); await click('#batch-select-all'); await change('#batch-date', '2026-12-30');
+      await evaluate('backend.hold=true'); await click('[data-action=batch-accept]'); await click('[data-action=batch-accept]');
+      assert.equal(await evaluate('backend.held.filter(message=>message.operation==="accept-review").length'), 1);
+      assert.equal(await evaluate('document.querySelector("#search").disabled'), true);
+      await evaluate('backend.release()'); await waitFor('document.querySelector("#batch-result").textContent.includes("已加入 2 项")');
+      const accepted = await evaluate('backend.messages.filter(message=>message.operation==="accept-review" && message.parameters.date==="2026-12-30")');
+      assert.equal(accepted.length, 2); assert.equal(new Set(accepted.map(item=>item.parameters.operationId)).size, 2);
+      assert.ok(accepted.every(item=>item.parameters.time===''));
+    });
+    await t.test('一项失败不重试成功项，其余继续，失败项保留勾选和原因', async () => {
+      await bulkReady(bulkFixture()); await choose('review1'); await choose('blocked');
+      await evaluate('backend.failNext="version_conflict"'); await click('[data-action=batch-ignore]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("失败 1 项")');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="review1").state'), 'pending');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="blocked").state'), 'ignored');
+      assert.equal(await evaluate('document.querySelector("[data-batch-id=review1]").checked'), true);
+      assert.match(await evaluate('document.querySelector("#batch-result").textContent'), /变化|版本/);
+    });
+    await t.test('批量超时停止余下队列，结果未确认时禁止重复发送，迟到回执更新结果', async () => {
+      await bulkReady(bulkFixture()); await choose('review1'); await choose('blocked');
+      await evaluate('window.originalBatchSetTimeout=window.setTimeout;window.batchTimeoutHandlers=new Map();window.setTimeout=(handler,ms,...args)=>{const id=window.originalBatchSetTimeout(handler,ms,...args);if(ms===15000)window.batchTimeoutHandlers.set(id,handler);return id};backend.hold=true');
+      try {
+        const before = await evaluate('backend.messages.filter(message=>message.operation==="ignore").length');
+        await click('[data-action=batch-ignore]');
+        await evaluate('(()=>{const pending=[...requests.values()].find(pending=>pending.complete && pending.operation==="ignore");clearTimeout(pending.timer);window.batchTimeoutHandlers.get(pending.timer)()})()');
+        await waitFor('document.querySelector("#batch-result").textContent.includes("结果未确认 1 项")');
+        assert.equal(await evaluate('document.querySelector("[data-batch-id=review1]").disabled'), true);
+        assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="ignore").length'), before + 1);
+        await evaluate('backend.release()');
+        await waitFor('document.querySelector("#batch-result").textContent.includes("已忽略 1 项")');
+        assert.doesNotMatch(await evaluate('document.querySelector("#batch-result").textContent'), /结果未确认|失败 1 项/);
+        assert.equal(await evaluate('snapshot.items.find(item=>item.id==="review1").state'), 'ignored');
+        assert.equal(await evaluate('snapshot.items.find(item=>item.id==="blocked").state'), 'pending');
+        assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="ignore").length'), before + 1);
+      } finally { await evaluate('window.setTimeout=window.originalBatchSetTimeout;backend.release()'); }
+    });
+    await t.test('账号切换取消尚未发送的批次，选中版本变更不自动接受新内容', async () => {
+      await bulkReady(bulkFixture()); await choose('review1'); await choose('blocked');
+      await evaluate('backend.snapshot.items.find(item=>item.id==="review1").version++;backend.push()');
+      await click('[data-action=batch-ignore]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("已忽略 1 项")');
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="review1").state'), 'pending');
+      await bulkReady(bulkFixture()); await click('#batch-select-all'); await evaluate('backend.hold=true'); await click('[data-action=batch-ignore]');
+      const first = await evaluate('backend.held.find(message=>message.operation==="ignore")');
+      const issuedBeforeSwitch = await evaluate('backend.messages.filter(message=>message.operation==="ignore").length');
+      const oldBatchSnapshot = await evaluate('structuredClone(backend.snapshot)');
+      await evaluate('backend.held=[];backend.hold=false'); await push({ ...bulkFixture(), accountId:'54322' });
+      await evaluate(`backend.emit({id:${JSON.stringify(first.id)},success:true,snapshot:{...${JSON.stringify(oldBatchSnapshot)},generatedAt:new Date(Date.now()+1000).toISOString()}})`);
+      assert.equal(await evaluate('snapshot.accountId'), '54322');
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="ignore").length'), issuedBeforeSwitch);
+      assert.equal(await evaluate('document.querySelector("#batch-count").textContent'), '已选 0 项');
+      await bulkReady(bulkFixture()); await click('#batch-select-all'); await evaluate('backend.hold=true'); await click('[data-action=batch-ignore]');
+      const issuedBeforeRestore = await evaluate('backend.messages.filter(message=>message.operation==="ignore").length');
+      await evaluate('backend.held=[];backend.hold=false'); await push({ ...bulkFixture(), generation:1 });
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="ignore").length'), issuedBeforeRestore);
+      assert.equal(await evaluate('document.querySelector("#batch-count").textContent'), '已选 0 项');
     });
     assert.deepEqual(browserErrors, []);
   } finally {

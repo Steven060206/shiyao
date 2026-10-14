@@ -8,6 +8,17 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('批量审核保留日期确认、选择范围、原文撤销和逐条失败边界', () => {
+  const requirements = read('docs/requirements.md');
+  assert.match(requirements, /多选、全选当前筛选结果、批量忽略和批量加入任务/);
+  assert.match(requirements, /24小时逐条撤销/);
+  assert.match(requirements, /用户明确勾选采用各项建议日期/);
+  assert.match(requirements, /不自动猜日期/);
+  assert.match(requirements, /涉及已有任务更新\/取消的条目保留待确认/);
+  assert.match(requirements, /每条独立提交/);
+  assert.match(requirements, /超时.*结果未确认.*迟到回执/);
+});
+
 test('正式入口已切最新版并保留真实登录与持续观察验收边界', () => {
   for (const file of ['docs/requirements.md','docs/HANDOFF.md',
     'src/MessagePurify.Windows/App/README.md','tests/README.md']) {

@@ -240,6 +240,7 @@ internal static partial class SmokeCheck
         await CheckCacheCleanupAsync(window, workspace, runtime, dataRoot);
         var backupSmoke = await CheckBackupRestoreAsync(window, workspace, runtime, desktop, dataRoot, reportFile);
         var desktopRecoverySmoke = await CheckDesktopRecoveryAsync(dataRoot, reportFile);
+        await CheckBatchReviewAsync(dataRoot, reportFile);
         var expectedCards = workspace.Snapshot(DateTimeOffset.UtcNow);
         await desktop.RefreshAsync();
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == expectedCards.Items.Count(item => item.Kind == "task" && item.State == "active")
@@ -256,7 +257,7 @@ internal static partial class SmokeCheck
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
-            checks = new[] { "branding", "taskbar-identity", "tray-menu-no-sync", "tray-double-click-no-sync", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+            checks = new[] { "branding", "taskbar-identity", "tray-menu-no-sync", "tray-double-click-no-sync", "batch-ignore-undo", "batch-accept-task", "batch-reopen-evidence", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",

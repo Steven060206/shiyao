@@ -2,7 +2,7 @@
 
 最后更新：2026-10-14（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
 ### 本轮修复前 QQ 连接诊断（2026-10-14，历史）
 
@@ -12,7 +12,17 @@
 
 用户确认启动拾要自动同步一次：每次点击拾要时自动启动一轮同步（指从桌面快捷方式启动）；从系统托盘打开只显示窗口，不同步，也不切换 QQ；拾要已打开时，点击“自动同步”再同步一次；同步完成后结束项目专用 NapCat Framework，恢复原本的普通 QQ。普通 QQ 已运行时允许自动退出，再在同步后重新打开普通 QQ。取消每天 08:00、12:00、20:00 定时同步，只在点击拾要或“自动同步”时同步；登录 Windows 的后台自启动只恢复本地界面和卡片，不切换 QQ。同步失败、超时或退出应用时也尝试恢复普通 QQ；游戏期间禁止同步，游戏导致错过同步时，结束游戏后补同步一次，重复点击合并为一轮。代码已写入，完整全量、Native及真实切换验证通过，已部署；详见下方当前接续。
 
-### 当前接续（按次自动同步并恢复普通 QQ，2026-10-14，已实现、部署并实机核对）
+### 当前接续（待确认批量审核，2026-10-14，已实现、部署并核对真实控件）
+
+基线8263aa1，用户要求多选批量忽略和加入任务。已在正式页面加入勾选、全选当前筛选结果、批量忽略与加入任务；复用现有ignore/accept-review逐条版本化命令与24小时忽略撤销，不新增后端接口。加入任务提供统一日期（清空钟点，保留日期精度）和显式采用建议日期，空课程可显式确认；缺信息、关联变更、动态可能重复建议不自动处理。每条使用独立操作ID及勾选时版本，部分失败继续，其余保留原因；超时停止队列、保留在途锁并显示结果未确认，迟到回执核对账号与工作区后更新结果。不代处理真实事项。正式入口继续.tools/published/app-card-controls/，新版PID20352以--background运行，MessagePurify.Shiyao独立身份与约2 DIP间距保留，托盘打开不同步。
+
+验证：新增页面六项与Native三项合成检查，涵盖筛选/撤销、显式日期确认、新任务ID、日期精度、独立凭据、原文证据、重开、重复点击、部分失败、超时和账号/恢复边界。最初缺按钮的页面回归失败；一轮只读复核确认旧账号完整迟到快照会回切账号、超时回执会被丢弃，均新增复现并修复。node --test tests/application-ui.test.mjs最终86/86；node --test tests/*.test.mjs全量160/160。分别执行.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests、tests/MessagePurify.Infrastructure.Tests、tests/MessagePurify.Windows.Tests，均带--no-restore --configuration Release，结果306/306、690/690、446/446，退出0。App csproj以--no-restore --configuration Release --self-contained true发布到隔离app-bulk-review-check及正式app-card-controls，两次最终发布退出0；python tests/app_desktop_test.py --executable .tools/published/app-bulk-review-check/MessagePurify.exe退出0，113项Native与真实父窗/styles通过（新增batch-ignore-undo、batch-accept-task、batch-reopen-evidence）。页面截图.tools/desktop-validation/ui-batch-review-dark.png已实际查看，无裁切。
+
+部署与真实核对：python .tools/bulk-review-validation/protect-data.py通过SQLite Backup API保护四库及设置于before-reopen/，四库integrity=ok。powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/app_tray_test.ps1 -ProcessId 26536 -ExitApplication退出0、Success/ExitVerified=true；同目录发布后以--background正常启动PID20352。正式exe、DLL及ui/app.js、ui/app.css、ui/index.html的SHA256均与隔离验证产物相同。复制前轮check-real-tray.ps1后实际执行-ProcessId 20352 -OpenApplication，菜单打开主窗口通过，QQ进程ID/启动时刻未变、3001/6099无监听。UIAutomation只读核对全选、批量忽略、批量加入任务与建议日期控件均可见；两个批量按钮在未勾选时禁用，未执行任何真实批量操作。python .tools/bulk-review-validation/verify-data-cards.py退出0，原tasks完整记录、布局及界面偏好字节未变，四库integrity=ok，两张卡片visible/child/noActivate=true、topmost=false、父窗SHELLDLL_DefView。相关安全状态报告、命令日志、保护脚本与快照均位于.tools/bulk-review-validation/。未重新发起QQ同步；既有桌面启动与按钮按次切换证据保留，实际游戏、真实Windows登录、多屏/恢复和长期稳定性仍未验收。
+
+变更记录：用户新增批量审核需求，替代只能逐条操作的页面；同步触发范围沿用8263aa1，不把托盘打开加入同步。maintain-context-hygiene技能未找到的既有结论保持，已人工核对需求、源码、验证日志、正式产物和真实数据。交付前更新两份文档后，node --test tests/*.test.mjs最终160/160、退出0，日志.tools/bulk-review-validation/node-delivery-final.log；git diff --check退出0。提交说明feat: add bulk pending review actions，标识以Git日志为准。下一步由用户使用批量入口；剩余实机验收范围保持上述记录。
+
+### 上一段（按次自动同步并恢复普通 QQ，2026-10-14，已实现、部署并实机核对）
 
 补充澄清（2026-10-14，已修正、部署并实机核对）：用户说明“打开”是开机后从桌面快捷方式启动拾要，不包括系统托盘打开。桌面启动（含唤回后台实例）与“自动同步”仍触发一轮；托盘双击和菜单“打开拾要”只显示窗口，不同步，也不切换 QQ。基线3770ee9误将托盘也接入同步，根因是两个托盘事件共用OpenAndSync回调；本轮均改为ShowMainWindow。
 
