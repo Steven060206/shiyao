@@ -2,9 +2,19 @@
 
 最后更新：2026-10-14（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序与独立回收站已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 当前接续（回收站入口，2026-10-14，已实现、部署并实机核对）
+### 当前接续（无待办时隐藏提醒事项卡片，2026-10-14，已实现、部署并实机核对）
+
+用户截图要求无待办时不显示“提醒事项”桌面卡片。需求与实现已同步，替代此前空卡片收紧并显示暂无待办的规则：当前账号active任务为0时隐藏，有待办时自动显示，保留位置、尺寸、主题和透明度；待确认仍按自身未处理项决定显示。DesktopCardHost.Render原来只隐藏空待确认，现对两种卡片均按条目数量决定显示；构造窗口时先创建原生句柄和设置位置，首次有内容后再Show，空账号或桌面恢复重建不短暂显示空卡片。产物为src/MessagePurify.Windows/App/DesktopCardHost.cs、SmokeCheck.DesktopAppearance.cs、README.md及tests/app_desktop_test.py。
+
+Native新增/替换回归核对完成最后一项后WPF和原生窗口均隐藏、待确认独立显示、无待办时关闭并重建卡片仍隐藏、新待办自动恢复显示和原尺寸、隐藏提醒卡片不参与吸附；四方向可见卡片间距与布局重读仍通过。独立桌面脚本按activeTaskCount核对提醒卡片可见性。实际执行 `.tools/dotnet/dotnet.exe test` 分别针对Core、Infrastructure、Windows项目，参数均为 `--no-restore --configuration Release`，306/306、695/695、456/456、退出0；`node --test tests/*.test.mjs`172/172、退出0；`.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py`25/25、同Python的 `-m pip check`通过；`python -m unittest discover -s tests -p release_packaging_test.py`4/4、退出0。App csproj以 `--no-restore --configuration Release --self-contained true` 发布 `.tools/published/app-empty-task-card-check/` 成功，`python tests/app_desktop_test.py --executable .tools/published/app-empty-task-card-check/MessagePurify.exe`最终退出0、115项Native与真实父窗/styles通过。初次Native失败来自替换紧凑空卡片测试后仍向屏幕下方拖64 DIP的测试坐标：请求Y981.25、高450超出工作区1380，正确被夹到Y930；记录诊断后改为在工作区内水平拖64 DIP，最终通过，软件的边界处理不变。
+
+SQLite Backup API保护四库及设置于 `.tools/empty-task-card-validation/before-reopen/`，integrity均ok。`powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .tools/empty-task-card-validation/exit-dpi-aware.ps1 -ProcessId 42596 -ExitApplication`退出0、ExitVerified=true；确认旧进程退出后正式publish至 `.tools/published/app-card-controls/`退出0，以 `--background`正常重开PID47420。正式入口已切换到最新版，桌面/开始菜单和Run路径与开关沿用；MessagePurify.Shiyao、黑色标题栏及约2 DIP吸附间距保留。实际执行同目录check-real-tray.ps1 `-ProcessId 47420 -OpenApplication`退出0，主窗口可用、QQ进程未变、3001/6099无监听。`python .tools/empty-task-card-validation/verify-data-cards.py`及 `python .tools/empty-task-card-validation/verify-delivery.py`退出0，实机提醒与待确认窗口均visible=false（当前均无未处理项）；窗口仍附着SHELLDLL_DefView、child/noActivate=true、topmost=false。四库integrity=ok，tasks库所有表含1条任务、82条review、167条operations与快照完全一致，布局/界面偏好字节不变；正式exe、三个DLL及三个页面文件SHA256与隔离已验证产物一致。没有代处理真实事项或重新QQ同步。日志、native-failure.json诊断及delivery.json/real-data-cards.json均在 `.tools/empty-task-card-validation/`。
+
+maintain-context-hygiene两处无SKILL.md的已核对结论沿用，已人工核对需求、交接、实际源码、测试日志、正式产物和真实数据。交付前同步两份文档，实际执行 `node --test tests/*.test.mjs`172/172、退出0，日志 `.tools/empty-task-card-validation/node-delivery-final.log`；`git diff --check`退出0。通过后创建对应Git commit，标识以日志为准。下一步正常使用，有新待办自动显示卡片；真实Windows登录自启动仍未验收，实际游戏、多屏/恢复、其他电脑和长期稳定性保持既有验收范围。
+
+### 上一段接续（回收站入口，2026-10-14，已实现、部署并实机核对）
 
 用户要求把“已忽略”单独设为“回收站”，在左侧导航增加入口，功能保持一致。需求与实现已同步：左侧新增回收站，待确认包括“全部状态”不再混入已忽略；回收站继续查看原文、搜索/课程筛选、最新消息倒序及原24小时撤销期限。复用现有ignored状态与undo-ignore，期限过后仍保留原记录。入口来自桌面打开已忽略项时也定位回收站；空列表显示回收站为空。批量忽略的提示已改为回收站入口，批量审核仍只在待确认页面。变更产物为src/MessagePurify.Windows/App/ui/app.js、ui/index.html、SmokeCheck.BatchReview.cs和tests/application-ui.test.mjs，不改数据格式。
 

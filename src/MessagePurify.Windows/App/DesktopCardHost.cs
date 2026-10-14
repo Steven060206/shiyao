@@ -456,7 +456,7 @@ public sealed class DesktopCardHost : IDisposable
                 Close();
                 throw new InvalidOperationException("Desktop attachment failed.");
             }
-            try { Show(); SetBounds(bounds); }
+            try { SetBounds(bounds); }
             catch (InvalidOperationException) { Dispose(); throw; }
         }
 
@@ -548,7 +548,7 @@ public sealed class DesktopCardHost : IDisposable
             }
             ((ScrollViewer)content.Children[1]).ScrollToVerticalOffset(previousScroll);
             footer.Text = error ?? snapshot.ConnectionText;
-            if (isPending && items.Count == 0) Hide(); else if (!IsVisible) { Show(); SetBounds(Bounds); }
+            if (items.Count == 0) Hide(); else if (!IsVisible) { Show(); SetBounds(Bounds); }
         }
 
         internal object Inspect() => new { parentClass = DesktopNative.ClassName(DesktopNative.GetParent(Handle)),

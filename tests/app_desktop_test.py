@@ -68,7 +68,8 @@ def main():
                 extended = user32.GetWindowLongPtrW(hwnd, -20)
                 assert extended & 0x08000000, "Missing WS_EX_NOACTIVATE"
                 assert not extended & 8, "Desktop card must not be topmost"
-            assert user32.IsWindowVisible(found["提醒事项"])
+            expected_tasks = report["activeTaskCount"] > 0
+            assert bool(user32.IsWindowVisible(found["提醒事项"])) == expected_tasks, "Task visibility must match final synthetic data"
             expected_pending = report["pendingCount"] + report["mergeSuggestionCount"] > 0
             assert bool(user32.IsWindowVisible(found["待确认"])) == expected_pending, "Pending visibility must match final synthetic data"
             assert process.wait(timeout=15) == 0

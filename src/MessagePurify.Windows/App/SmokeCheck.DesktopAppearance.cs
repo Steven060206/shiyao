@@ -19,8 +19,8 @@ namespace MessagePurify.Windows.App;
 internal static partial class SmokeCheck
 {
     private static readonly string[] DesktopAppearanceChecks = ["desktop-dark-translucent", "desktop-light-translucent",
-        "desktop-rounded-transparent-corners", "desktop-empty-compact", "desktop-content-height-restored",
-        "desktop-slim-scrollbar", "desktop-theme-scroll-preserved", "desktop-snap-horizontal", "desktop-snap-vertical-compact",
+        "desktop-rounded-transparent-corners", "desktop-empty-hidden", "desktop-empty-recovery-hidden", "desktop-content-visible-restored",
+        "desktop-slim-scrollbar", "desktop-theme-scroll-preserved", "desktop-snap-horizontal", "desktop-snap-vertical", "desktop-hidden-task-no-snap",
         "desktop-snap-detach", "desktop-snap-layout-reopen", "desktop-hidden-card-no-snap",
         "desktop-transparency-page", "desktop-transparency-text", "desktop-transparency-reopen", "desktop-transparency-backup",
         "main-titlebar-dark", "main-titlebar-light", "main-titlebar-reopen", "main-native-window-controls"];
@@ -58,14 +58,14 @@ internal static partial class SmokeCheck
             var task = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Kind == "task");
             workspace.Execute(new(workspace.AccountId, "complete", task.Id, "appearance-complete", task.Version), DateTimeOffset.UtcNow);
             runtime.Refresh(); await desktop.RefreshAsync(); card.UpdateLayout();
-            if (surface.ActualHeight > 155 || surface.ActualHeight < 100 || desktop.Layout != originalLayout)
-                throw new InvalidOperationException("空卡片未收紧，或改变了原布局偏好。");
-            var emptyPixels = new RenderTargetBitmap((int)card.ActualWidth, (int)card.ActualHeight, 96, 96, PixelFormats.Pbgra32);
-            emptyPixels.Render(card);
-            emptyPixels.CopyPixels(new Int32Rect((int)card.ActualWidth / 2, (int)card.ActualHeight - 10, 1, 1), corner, 4, 0);
-            if (corner[3] != 0) throw new InvalidOperationException("空卡片下方仍留下矩形背景。");
+            if (card.IsVisible || IsAppearanceWindowVisible(new WindowInteropHelper(card).Handle)
+                || !desktop.PendingWindow.IsVisible || desktop.Layout != originalLayout)
+                throw new InvalidOperationException("完成最后一项后提醒卡片未隐藏，或改变了待确认与布局。");
+            card.Close(); await desktop.RefreshAsync();
+            card = desktop.TaskWindow; surface = (Border)card.Content;
+            if (card.IsVisible || IsAppearanceWindowVisible(new WindowInteropHelper(card).Handle) || desktop.Layout != originalLayout)
+                throw new InvalidOperationException("无待办时重建桌面卡片后仍显示空卡片。");
             var captureRoot = Path.GetDirectoryName(Path.GetFullPath(reportFile))!;
-            desktop.Capture(Path.Combine(captureRoot, "appearance-empty-dark.png"));
             workspace.Execute(new(workspace.AccountId, "create-task", "appearance-manual", "appearance-create", 0,
                 Date: DateTimeOffset.UtcNow.AddDays(3).ToString("yyyy-MM-dd"), TimeKind: "deadline", Course: "数学", Title: "完成课程报告"), DateTimeOffset.UtcNow);
             for (var index = 0; index < 8; index++)
@@ -73,8 +73,9 @@ internal static partial class SmokeCheck
                     Date: DateTimeOffset.UtcNow.AddDays(4).ToString("yyyy-MM-dd"), TimeKind: "deadline", Course: "数学",
                     Title: "第" + (index + 1) + "项课程任务"), DateTimeOffset.UtcNow);
             runtime.Refresh(); await desktop.RefreshAsync(); card.UpdateLayout();
-            if (surface.ActualHeight < 200 || !double.IsNaN(surface.Height) || desktop.Layout != originalLayout)
-                throw new InvalidOperationException("新事项出现后未恢复原列表高度。");
+            if (!card.IsVisible || !IsAppearanceWindowVisible(new WindowInteropHelper(card).Handle)
+                || surface.ActualHeight < 200 || !double.IsNaN(surface.Height) || desktop.Layout != originalLayout)
+                throw new InvalidOperationException("新事项出现后未恢复显示或原列表尺寸。");
             var scroll = Descendants(card).OfType<ScrollViewer>().Single();
             scroll.ScrollToVerticalOffset(90);
             await WaitAsync(() => scroll.VerticalOffset > 0);
@@ -108,7 +109,7 @@ internal static partial class SmokeCheck
         foreach (var target in new DesktopPoint[]
         {
             new(anchor.X + anchor.Width - 8 * scale, anchor.Y), new(anchor.X - initial.Pending.Width + 8 * scale, anchor.Y),
-            new(anchor.X, anchor.Y - initial.Pending.Height + 8 * scale)
+            new(anchor.X, anchor.Y - initial.Pending.Height + 8 * scale), new(anchor.X, anchor.Y + anchor.Height - 8 * scale)
         })
         {
             desktop.MoveCard(initial.Pending with { X = target.X + 4 * scale, Y = target.Y + 4 * scale }, true);
@@ -119,19 +120,18 @@ internal static partial class SmokeCheck
         foreach (var task in workspace.Snapshot(DateTimeOffset.UtcNow).Items.Where(item => item.Kind == "task" && item.State == "active"))
             workspace.Execute(new(workspace.AccountId, "complete", task.Id, "snap-complete-" + task.Id, task.Version), DateTimeOffset.UtcNow);
         runtime.Refresh(); await desktop.RefreshAsync(); desktop.TaskWindow.UpdateLayout();
-        var surface = (Border)desktop.TaskWindow.Content;
-        var bottom = anchor.Y + (surface.ActualHeight + 2) * scale;
-        desktop.MoveCard(initial.Pending with { X = anchor.X + 4 * scale, Y = bottom + 4 * scale }, true);
-        var snapped = initial.Pending with { X = anchor.X, Y = bottom };
-        if (desktop.Layout.Pending != snapped || surface.ActualHeight > 155 || desktop.Layout.Tasks != anchor)
-            throw new InvalidOperationException("上下吸附没有使用紧凑卡片的可见高度。");
-        CheckPanelGap(desktop, scale, Path.Combine(captureRoot, "snap-vertical-compact.png"));
+        var bottom = anchor.Y + anchor.Height - 8 * scale;
+        var unsnapped = initial.Pending with { X = anchor.X + 4 * scale, Y = bottom + 4 * scale };
+        desktop.MoveCard(unsnapped, true);
+        if (desktop.TaskWindow.IsVisible || !desktop.PendingWindow.IsVisible
+            || desktop.Layout.Pending != unsnapped || desktop.Layout.Tasks != anchor)
+            throw new InvalidOperationException("隐藏的提醒事项卡片仍参与吸附，或改变了待确认。");
         desktop.SaveLayout(true);
         if (new DesktopLayoutStore(root).Load(new DesktopRect(0, 0, 100000, 100000), scale) != desktop.Layout)
             throw new InvalidOperationException("吸附位置重读后改变。");
-        var detached = snapped with { Y = snapped.Y + 64 * scale };
+        var detached = unsnapped with { X = unsnapped.X + 64 * scale };
         desktop.MoveCard(detached, true);
-        if (desktop.Layout.Pending != detached) throw new InvalidOperationException("拖离后仍被强制吸附。");
+        if (desktop.Layout.Pending != detached) throw new InvalidOperationException($"拖离后位置不同：实际={desktop.Layout.Pending}，请求={detached}。");
         foreach (var review in workspace.Snapshot(DateTimeOffset.UtcNow).Items.Where(item => item.Kind == "review" && item.State == "pending"))
             workspace.Execute(new(workspace.AccountId, "ignore", review.Id, "snap-ignore-" + review.Id, review.Version), DateTimeOffset.UtcNow);
         runtime.Refresh(); await desktop.RefreshAsync();
@@ -210,6 +210,9 @@ internal static partial class SmokeCheck
 
     [DllImport("user32.dll", EntryPoint = "PrintWindow")]
     private static extern bool PrintTitlebarWindow(IntPtr window, IntPtr dc, uint flags);
+
+    [DllImport("user32.dll", EntryPoint = "IsWindowVisible")]
+    private static extern bool IsAppearanceWindowVisible(IntPtr window);
 
     [DllImport("dwmapi.dll", ExactSpelling = true)]
     private static extern int DwmFlush();
