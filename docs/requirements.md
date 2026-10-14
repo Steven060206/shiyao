@@ -236,7 +236,7 @@
 - 分发包和公开仓库不得包含用户的 QQ 聊天数据、账号数据库、Token 或登录材料；同学使用各自的 QQ 账号和本地数据。
 - 2026-10-14 用户选择 A：公开源码，同时提供软件下载；明确授权助手直接上传到自己的 GitHub。仓库与打包等普通实现细节由助手处理，无需再次确认上传授权。
 - 后续每次软件更新，都同步 GitHub 源码和 Release 下载包；这是持续要求，无需重复确认。完成测试、验证和 Git commit 后推送 main，并构建、验证、发布新版下载包，核对附件上传状态和公开下载链接。失败或尚未完成时如实记录。
-- 本次准备发布 0.1.0-beta.2，同步启动后保留忽略与确认结果、消息时间倒序、独立回收站和无待办时隐藏提醒卡片；本地已实现，下载包已构建并通过本机解压版115项Native及合成Setup验证，GitHub新版上传仍待完成。
+- 当前最新测试版已发布：Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.2；下载附件`Shiyao-0.1.0-beta.2-win-x64.zip`，119916177字节（约114 MB），uploaded、draft=false、prerelease=true，匿名下载HTTP200。main已推送本地更新，包含启动后保留忽略与确认结果、消息时间倒序、独立回收站和无待办时隐藏提醒卡片；下载包通过本机解压版115项Native及合成Setup验证，其他电脑试用仍待反馈。
 - 公开源码与首次测试版已上传：仓库 https://github.com/Steven060206/shiyao，Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.1；下载附件`Shiyao-0.1.0-beta.1-win-x64.zip`，119915264字节（约114 MB），状态uploaded、draft=false、prerelease=true。同学完整解压后运行Setup.cmd，再运行Start.cmd或桌面快捷方式。
 
 ## 参考来源

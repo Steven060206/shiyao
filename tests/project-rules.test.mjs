@@ -18,6 +18,21 @@ test('软件更新持续同步GitHub源码与下载包，上传验证不足时�
   }
 });
 
+test('最新GitHub测试版、下载附件和构建示例版本一致，保留公开下载验证', () => {
+  const currentRelease = read('docs/requirements.md').match(/^- 当前最新测试版已发布：.*$/m)?.[0];
+  assert.ok(currentRelease, '需求必须记录当前已发布测试版');
+  const version = currentRelease.match(/releases\/tag\/v([\d.]+-beta\.\d+)/)?.[1];
+  assert.ok(version, '必须记录实际Release版本');
+  assert.ok(currentRelease.includes(`Shiyao-${version}-win-x64.zip`));
+  assert.ok(read('README.md').includes(`--version ${version}`));
+  const handoff = read('docs/HANDOFF.md').split('### GitHub 更新同步')[1]?.split('### 当前接续')[0];
+  assert.ok(handoff?.includes(`/releases/tag/v${version}`));
+  for (const content of [currentRelease, handoff]) {
+    assert.match(content, /uploaded.*draft=false.*prerelease=true|draft=false.*prerelease=true.*uploaded/s);
+    assert.match(content, /匿名下载(?:最终)?HTTP200/);
+  }
+});
+
 test('同学分发与GitHub公开发布授权同步，并保留个人数据边界', () => {
   const requirements = read('docs/requirements.md').split('## 11. 同学分发与 GitHub 下载')[1]?.split('## 参考来源')[0];
   const handoff = read('docs/HANDOFF.md').split('### 同学分发与 GitHub 发布准备')[1]?.split('### 本轮修复前 QQ 连接诊断')[0];
