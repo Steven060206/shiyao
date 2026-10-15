@@ -76,6 +76,7 @@ internal static partial class SmokeCheck
                 throw new InvalidDataException("显式手动拆分没有保留所选日期、原消息证据或父事项关联。");
 
             var reopened = new AccountWorkspace(root, workspace.AccountId);
+            reopened.SetAvailableGroups([new OneBotGroup("10001", "合成待核对课程群")], pinned);
             reopened.Ingest(original, pinned, MessageOrigin.History, "synthetic-whole-message-replay", now.AddSeconds(1));
             var after = reopened.Snapshot(DateTimeOffset.UtcNow);
             var parent = after.Items.Single(item => item.Id == task.Id);
