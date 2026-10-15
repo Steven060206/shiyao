@@ -4,17 +4,25 @@
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 审核粒度反馈（2026-10-15，用户已选择 A，代码与自动回归完成，部署待验证）
+### 审核粒度反馈（2026-10-15，用户已选择 A，已实现、部署并发布beta.3）
+
+发布构建与部署过程：修复提交 bc4e45f、Native 测试群名恢复提交 b9d109f 已完成；从已提交 b9d109f 的 git archive 导出干净源码到 `.tools/release-stage-beta3-final/`，自包含发布 `.tools/published/github-release-0.1.0-beta.3-final/`，排除另一个界面任务的三项未提交修改。`python tests/app_desktop_test.py --executable .tools/releases/验包 中文空格 0.1.0-beta.3/Shiyao/app/MessagePurify.exe` 最终退出0、119项 Native/桌面检查通过，包括整条审核、完整原文、一次确认、真实表单手动拆分、重开与重放。初次 Native 仅因合成工作区重开未恢复群名失败，b9d109f 修正后通过。ZIP 为 `.tools/releases/Shiyao-0.1.0-beta.3-win-x64.zip`、119924077字节、518条目；`python .tools/message-review-validation/verify-archive.py` 与 `python .tools/releases/verify-package-beta3.py` 均退出0，程序字节一致、ZIP完整性、官方NapCat原包、个人文件缺失及合成CheckOnly/Setup通过，未启动QQ。日志和JSON报告在 `.tools/message-review-validation/` 及 `.tools/releases/`。正式旧进程31140已通过托盘正常退出，exit-formal.log确认ExitVerified=true；停机后重新执行 `python .tools/message-review-validation/protect-data.py`，SQLite Backup API保护四库及设置到before-reopen，四库integrity=ok。随后确认无正式进程，安全复制498个已验证发布文件至原正式目录，保留个人配置，以--background正常重开PID48588；真实数据/文件/托盘/卡片验证通过，beta.3源码和下载包已公开，具体结果见下方当前接续与GitHub同步记录。
 
 用户反馈同一条 QQ 原消息被拆成多条待确认，造成重复审核；已确认需要减少同一原消息的重复审核。根因是原 MessageRuleExtractor.SplitActions 按标点及动作词产生多个候选，AccountCandidateRouter.Route 逐候选保存，AccountWorkspace.Snapshot 逐条展示。新版仍内部分析行动，但只输出一个完整业务候选，规则版本 m2-local-v2-message-review；多个行动整体待确认，全部为普通通知时整体保存通知，不同日期/角色或不一致建议清空正式和建议时间，保留完整原文。不同目标或混合变更不自动应用到已有任务。
 
-用户已选择 A：默认一条 QQ 原消息只生成一个完整待确认项，保留完整内容，需要独立管理时手动拆开；B 多事项集中审核卡的方案不采用。已写入 Core MessageReviewCandidate、Infrastructure MessageReviewConsolidation 与 AccountWorkspace.MessageReviews、路由兼容及 Native Smoke.MessageReview。同一原消息已有未处理项按旧路由 ID 与原始候选索引核对后原子合并，保留首项 ID、递增版本，子项保留原候选并标记 Consolidated/ConsolidatedIntoId；已确认、已忽略、已拒绝、手动拆分及操作历史保留，不同群/消息 ID 分开，不能因证据排序把引用消息当原消息。旧未路由提取及旧备份恢复也覆盖；单片段遗漏其他日期时重核对完整原文，不能自动任选日期。数据库 schema 仍为 1，JSON 追加可选合并去向、ReviewState 追加内部合并状态。正式入口尚未更新，下载包尚未发布。工作区已有 app.css、index.html、application-ui.test.mjs 的视觉改版未提交修改，属于已有工作，不能混入本次提交。maintain-context-hygiene 技能文件仍未找到，已人工核对需求、交接与实际源文件。
+用户已选择 A：默认一条 QQ 原消息只生成一个完整待确认项，保留完整内容，需要独立管理时手动拆开；B 多事项集中审核卡的方案不采用。已写入 Core MessageReviewCandidate、Infrastructure MessageReviewConsolidation 与 AccountWorkspace.MessageReviews、路由兼容及 Native Smoke.MessageReview。同一原消息已有未处理项按旧路由 ID 与原始候选索引核对后原子合并，保留首项 ID、递增版本，子项保留原候选并标记 Consolidated/ConsolidatedIntoId；已确认、已忽略、已拒绝、手动拆分及操作历史保留，不同群/消息 ID 分开，不能因证据排序把引用消息当原消息。旧未路由提取及旧备份恢复也覆盖；单片段遗漏其他日期时重核对完整原文，不能自动任选日期。数据库 schema 仍为 1，JSON 追加可选合并去向、ReviewState 追加内部合并状态。正式入口已更新并正常重开，beta.3下载包已公开发布。工作区已有 app.css、index.html、application-ui.test.mjs 的视觉改版未提交修改，属于已有工作，不能混入本次提交。maintain-context-hygiene 技能文件仍未找到，已人工核对需求、交接与实际源文件。
 
-实际验证：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release` 323/323；同参数对 Infrastructure、Windows 执行分别 704/704、456/456，均退出0。`node --test tests/*.test.mjs` 175/175；`python -m unittest discover -s tests -p release_packaging_test.py` 4/4；`.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 25/25；同 Python `-m pip check` 通过。`.tools/dotnet/dotnet.exe run --project tools/MessagePurify.RuleBaseline --no-restore --configuration Release -- --output docs/verification/rule-baseline.md` 退出0，68/68合成样本、高影响错误0，生成新版基线。Native 新增真实审核/拆分表单测试，App `build --no-restore --no-dependencies --configuration Release` 退出0、无警告错误；完整 Native 尚待干净发布产物执行。
+实际验证：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release` 323/323；同参数对 Infrastructure、Windows 执行分别 704/704、456/456，均退出0。`node --test tests/*.test.mjs` 175/175；`python -m unittest discover -s tests -p release_packaging_test.py` 4/4；`.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py` 25/25；同 Python `-m pip check` 通过。`.tools/dotnet/dotnet.exe run --project tools/MessagePurify.RuleBaseline --no-restore --configuration Release -- --output docs/verification/rule-baseline.md` 退出0，68/68合成样本、高影响错误0，生成新版基线。Native 新增真实审核/拆分表单测试，App `build --no-restore --no-dependencies --configuration Release` 退出0、无警告错误；完整干净发布产物119项Native/桌面检查随后通过，见本节首段。
 
-修复前 Core 新回归 21失败/82通过，旧兼容回归6失败/2通过；修复后均通过。全量初次暴露7处依赖旧自动拆分的测试，按整条审核/显式拆分调整；后续备份夹具遍历新增内部枚举导致数量5而预期4，改为明确四种人工状态，并新增合并状态备份保留回归。新加测试曾误用 ignore-review 操作名，改为实际 ignore 后最终704/704通过。前轮文档定位提交77db15c、51项文档及2项旧行为检查保留为历史。本轮日志位于 `.tools/message-review-validation/`。下一步限定文件提交，从提交导出干净源码构建，验证 Native 和 ZIP，再安全更新本机并发布 beta.3；本轮提交标识以 Git 日志为准。
+修复前 Core 新回归 21失败/82通过，旧兼容回归6失败/2通过；修复后均通过。全量初次暴露7处依赖旧自动拆分的测试，按整条审核/显式拆分调整；后续备份夹具遍历新增内部枚举导致数量5而预期4，改为明确四种人工状态，并新增合并状态备份保留回归。新加测试曾误用 ignore-review 操作名，改为实际 ignore 后最终704/704通过。前轮文档定位提交77db15c、51项文档及2项旧行为检查保留为历史。本轮日志位于 `.tools/message-review-validation/`。修复已限定文件提交，随后完成干净源码构建、Native/ZIP/本机部署验证与beta.3发布；本轮提交标识以 Git 日志为准。
 
-### GitHub 更新同步（2026-10-14，beta.2源码和下载包已发布）
+### GitHub 更新同步（2026-10-15，beta.3源码和下载包已发布）
+
+一条原消息一项完整审核及旧未处理自动拆分项兼容已发布。完成全部产品验证和修复提交后，`git -c http.https://github.com.proxy= push origin HEAD:main` 退出0，远端main从79ea7bd更新到b9d109fb002531833d2d005aa178c67ebc92c63d；从该已提交源码构建并验证 beta.3，未带入三个未提交界面改版文件。`gh release create v0.1.0-beta.3 --repo Steven060206/shiyao --draft --prerelease --target b9d109fb002531833d2d005aa178c67ebc92c63d --title '拾要 0.1.0-beta.3 · Windows 测试版' --notes-file .tools/releases/release-notes-beta3.md`、`gh release upload v0.1.0-beta.3 .tools/releases/Shiyao-0.1.0-beta.3-win-x64.zip --repo Steven060206/shiyao` 均退出0。按Release列表核对ID413555250、target完整SHA和附件uploaded/119924077字节后，`gh release edit v0.1.0-beta.3 --repo Steven060206/shiyao --draft=false` 退出0。
+
+Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.3；`gh api repos/Steven060206/shiyao/releases/tags/v0.1.0-beta.3` 核对draft=false、prerelease=true、附件uploaded、119924077字节、target=b9d109f。`curl.exe --noproxy '*' --head --location --silent --show-error --output NUL --write-out '%{http_code}' https://github.com/Steven060206/shiyao/releases/download/v0.1.0-beta.3/Shiyao-0.1.0-beta.3-win-x64.zip` 退出0，匿名下载最终HTTP200。旧beta.1/beta.2保留。发布说明记录托盘退出后覆盖程序、保留原napcat与app/qq-sync.json，事项沿用本机用户目录；公开源码和下载包不含聊天数据、账号数据库、Token或登录材料。发布结果、README版本及需求文档同步后，运行相关文档回归并提交、推送记录，具体结果见最新交付段。
+
+#### 上次 GitHub 更新（2026-10-14，beta.2源码和下载包已发布）
 
 用户明确要求软件更新后，GitHub也要同步。后续每次软件更新，都同步 GitHub 源码和 Release 下载包；已有直接上传授权持续有效，无需重复确认，规则已写入AGENTS.md与需求。完成测试、验证和Git commit后推送main，从干净的自包含发布目录构建下载包，上传后核对附件状态和公开下载链接。失败或尚未完成时如实记录，不把本地实现记为远端已发布。
 
@@ -32,7 +40,15 @@ App csproj用 `--no-restore --configuration Release --self-contained true --outp
 
 maintain-context-hygiene在两处技能目录仍无SKILL.md，按项目规则人工核对新需求、交接、实际源码、测试结果、下载包和远端状态。发布结果同步需求与交接，并新增最新版本/构建示例一致性检查；`node --test tests/project-rules.test.mjs`50/50、最终`node --test tests/*.test.mjs`174/174，均退出0，日志docs-published-final.log及node-published-final.log。`git diff --check`退出0；通过后创建发布结果记录commit并推main，标识以Git日志为准。下一步供同学下载试用；后续软件改动交付时继续同步源码与下载包，其他电脑及QQ版本试用、实际游戏、多屏/恢复和长期稳定性保留既有验收范围。
 
-### 当前接续（无待办时隐藏提醒事项卡片，2026-10-14，已实现、部署并实机核对）
+### 当前接续（一条原消息一项审核，2026-10-15，已实现、部署并发布beta.3）
+
+正式入口已切换到最新版 `.tools/published/app-card-controls/`，确认旧PID31140正常退出、停机保护四库及设置后，将已验证干净发布目录的498个文件复制到原正式目录，保留原个人配置，不从含界面改版修改的工作区重新构建；`Start-Process`以 `--background`、Hidden正常重开PID48588。桌面/开始菜单与Run入口及开关沿用，MessagePurify.Shiyao、黑色标题栏与约2 DIP吸附间距保留。
+
+实际执行 `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File .tools/empty-task-card-validation/check-real-tray.ps1 -ProcessId 48588 -OpenApplication` 退出0，Success/OpenVerified/QqProcessesUnchanged/FrameworkPortsClosed=true，主窗口可用，未重新QQ同步。`python .tools/message-review-validation/verify-delivery.py` 退出0，四库integrity=ok、14/14表全部逐行原样，1条任务、82条已处理review、167条operations保留，新增合并0；真实原pending=0，无需迁移真实未处理项，旧pending合并由704项Infrastructure及119项Native合成验证覆盖，不把该合成验证写成真实迁移。4份布局/偏好/账号设置字节一致，正式全部498个文件与已验证产物逐字节相同。PID48588两卡片均为SHELLDLL_DefView子窗、noActivate=true、topmost=false；真实activeTasks=0、pending=0，两卡均隐藏。未代处理真实条目。产物为 `.tools/message-review-validation/delivery.json`、`tray-final.log`、`formal-pid.txt`及before-reopen保护快照。
+
+main源码与v0.1.0-beta.3下载包已公开，target=b9d109f、附件119924077字节、uploaded/draft=false/prerelease=true、匿名HTTP200，见上方GitHub同步段及 `.tools/message-review-validation/github-release.json`。maintain-context-hygiene技能文件仍不可用，已人工核对需求、交接、已提交源码、正式产物和真实数据报告；未修改无关文档或个人数据。交付收尾实际执行 `node --test tests/*.test.mjs` 175/175、退出0，日志node-delivery-final.log；已补充README整条审核/保留人工结果的回归断言。`git diff --check -- README.md docs/HANDOFF.md docs/requirements.md tests/message-review-requirements.test.mjs` 退出0；全工作区检查仅报告另一个任务原有app.css末尾空行，未修改该文件。本次仅提交上述四个交付文件并推main，提交标识以Git日志为准。下一步正常使用整条审核，需要独立管理时先确认任务再手动拆分；其他电脑、实际游戏、多屏/恢复、真实Windows登录自启动与长期稳定性继续按既有范围验收。
+
+### 上一段（无待办时隐藏提醒事项卡片，2026-10-14，已实现、部署并实机核对）
 
 用户截图要求无待办时不显示“提醒事项”桌面卡片。需求与实现已同步，替代此前空卡片收紧并显示暂无待办的规则：当前账号active任务为0时隐藏，有待办时自动显示，保留位置、尺寸、主题和透明度；待确认仍按自身未处理项决定显示。DesktopCardHost.Render原来只隐藏空待确认，现对两种卡片均按条目数量决定显示；构造窗口时先创建原生句柄和设置位置，首次有内容后再Show，空账号或桌面恢复重建不短暂显示空卡片。产物为src/MessagePurify.Windows/App/DesktopCardHost.cs、SmokeCheck.DesktopAppearance.cs、README.md及tests/app_desktop_test.py。
 
@@ -958,7 +974,7 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 
 已确认方向不重新询问；以下状态均需按真实产物和验证报告更新。
 
-审核粒度已确认（2026-10-15）：用户选择 A，一条原消息一个完整待确认项，需要时手动拆开；正在实施新消息与旧未处理拆分项兼容。
+审核粒度已确认并交付（2026-10-15）：用户选择 A，一条原消息一个完整待确认项，需要时手动拆开；新消息与旧未处理拆分项兼容均已实现并验证，正式本机和GitHub beta.3已更新。
 
 1. **整体设计已确认，demo 基本满足要求，持续开发已授权**。M1/M2 已完成，M3 真实接收和长期稳定性仍在实施；真实 QQ、OCR 和桌面宿主各自验证，不用合成数据代替真实验收。
 2. **已确认：明确取消任务移出待办和桌面卡片**，保留“已取消”记录和原文，不记完成；不再发取消系统通知。本地取消与旧操作保护已测试，正式卡片 active/pending 状态过滤已通过。
@@ -989,6 +1005,8 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 - 用户希望每次只选择一个问题、选项同时写在正文、等待明确答复；不因等待时间过去就默认选项或进入下一题。
 
 ## 8. 变更记录
+
+2026-10-15：整条原消息审核和旧pending兼容修复已提交bc4e45f，Native重开夹具修正提交b9d109f；Core323、Infrastructure704、Windows456、Node175及119项Native/桌面检查全部通过，68/68规则基线高影响错误0。干净源码构建beta.3，ZIP与合成Setup验证通过；本机安全覆盖后PID48588正常重开，真实四库14表、任务/82条已处理review/167条操作和4份设置保持，498个程序文件匹配。GitHub main与beta.3源码/119924077字节附件已公开，匿名下载HTTP200；保留另一视觉任务未提交修改，真实QQ未同步、未代用户处理事项。
 
 2026-10-15：用户明确选择 A，替代此前 A/B 待选择状态；按一条原消息一个完整待确认项实施，兼容旧未处理拆分项，保留人工处理与拆分结果。前轮文档提交 77db15c 及定位验证保留为历史。
 

@@ -3,6 +3,10 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 test('用户已选择一条原消息一个完整待确认项，保留人工结果与日期核对', () => {
+  const readme = fs.readFileSync(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /一条 QQ 原消息只生成一个完整待确认项/);
+  assert.match(readme, /手动拆分/);
+  assert.match(readme, /保留已确认、已忽略和手动拆分的结果/);
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
     const content = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
     const feedback = content.split('审核粒度反馈（2026-10-15')[1]?.split('\n### ')[0];
