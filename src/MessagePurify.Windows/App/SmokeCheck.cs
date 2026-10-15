@@ -241,6 +241,7 @@ internal static partial class SmokeCheck
         var backupSmoke = await CheckBackupRestoreAsync(window, workspace, runtime, desktop, dataRoot, reportFile);
         var desktopRecoverySmoke = await CheckDesktopRecoveryAsync(dataRoot, reportFile);
         await CheckBatchReviewAsync(dataRoot, reportFile);
+        await CheckMessageReviewAsync(dataRoot);
         var expectedCards = workspace.Snapshot(DateTimeOffset.UtcNow);
         await desktop.RefreshAsync();
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == expectedCards.Items.Count(item => item.Kind == "task" && item.State == "active")
@@ -258,6 +259,7 @@ internal static partial class SmokeCheck
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
             checks = new[] { "branding", "taskbar-identity", "tray-menu-no-sync", "tray-double-click-no-sync", "batch-ignore-undo", "batch-accept-task", "batch-reopen-evidence", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+                "message-review-one-row", "message-review-full-source", "message-review-single-accept", "message-review-manual-split",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",

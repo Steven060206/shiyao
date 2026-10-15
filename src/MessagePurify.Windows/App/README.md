@@ -2,6 +2,8 @@
 
 当前为可运行的 Windows 应用。AccountWorkspace 使用现有账号独立 SQLite 保存事项；NapCatMessageHost 只读置顶群。正式页面没有样例事项，刷新后仍读取本地数据。
 
+2026-10-15 消息审核修复：一条 QQ 原消息最多一个完整候选，多行动整体待确认，日期不一致时不代选；用户加入任务后可手动拆开。工作区打开及备份恢复时整理同消息未处理的自动拆分项，保留原记录、合并去向和操作历史；已处理和手动拆分项保留。代码及自动回归已完成，正式入口与下载包部署结果以交接最新记录为准。
+
 ## 当前正式入口（2026-10-14）
 
 正式入口已切换到最新版 .tools/published/app-card-controls/，保持桌面/开始菜单和已启用Run路径及开关。新版PID43240运行，打开软件与正式“自动同步”按钮各完成一轮真实同步，结束后普通 QQ 运行、Framework 的3001/6099端口均关闭；页面显示“同步完成，已切回 QQ”及北京时间成功时间，已移除定时同步。Core306/306、Infrastructure690/690、Windows446/446、Node153/153，均退出0；隔离及正式发布版108项Native和真实父窗/styles检查通过。 9个置顶群、历史complete、失败0；原任务记录、布局和界面偏好未变，四库integrity=ok，两卡片附着SHELLDLL_DefView、child/noActivate=true、topmost=false。MessagePurify.Shiyao独立身份、黑色标题栏、约2 DIP吸附间距保留。真实Windows登录自启动仍未验收；实际游戏、多屏、恢复与长期稳定性仍未完成。

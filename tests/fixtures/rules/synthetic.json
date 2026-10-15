@@ -726,25 +726,12 @@
       "expectedCandidates": [
         {
           "requiresAction": false,
-          "action": "Register",
+          "action": "Complete",
           "disposition": "Notice",
           "course": "高等数学",
-          "date": "2026-10-12",
-          "clock": "18:00",
-          "timeKind": "Deadline",
-          "suggestedDate": null,
-          "suggestedClock": null,
-          "suggestedTimeKind": null,
-          "target": null
-        },
-        {
-          "requiresAction": false,
-          "action": "Attend",
-          "disposition": "Notice",
-          "course": "高等数学",
-          "date": "2026-10-20",
-          "clock": "09:00",
-          "timeKind": "Start",
+          "date": null,
+          "clock": null,
+          "timeKind": null,
           "suggestedDate": null,
           "suggestedClock": null,
           "suggestedTimeKind": null,
@@ -786,24 +773,11 @@
         {
           "requiresAction": true,
           "action": "Submit",
-          "disposition": "Task",
+          "disposition": "Pending",
           "course": "高等数学",
-          "date": "2026-10-11",
-          "clock": "18:00",
-          "timeKind": "Deadline",
-          "suggestedDate": null,
-          "suggestedClock": null,
-          "suggestedTimeKind": null,
-          "target": null
-        },
-        {
-          "requiresAction": true,
-          "action": "Submit",
-          "disposition": "Task",
-          "course": "高等数学",
-          "date": "2026-10-12",
+          "date": null,
           "clock": null,
-          "timeKind": "Deadline",
+          "timeKind": null,
           "suggestedDate": null,
           "suggestedClock": null,
           "suggestedTimeKind": null,
@@ -1882,6 +1856,31 @@
           "target": "report"
         }
       ]
+    },
+    {
+      "id": "one-review-unknown-course",
+      "category": "message-review",
+      "message": { "text": "【重要通知】\n明天交实验报告；后天完成练习。请核对格式。" },
+      "context": { "confirmedCourse": null },
+      "expectedCandidates": [
+        { "requiresAction": true, "action": "Submit", "disposition": "Pending", "course": null }
+      ]
+    },
+    {
+      "id": "one-review-mixed-linked-and-new-action",
+      "category": "message-review",
+      "message": { "text": "取消实验报告；后天提交课程论文" },
+      "context": {},
+      "expectedCandidates": [
+        { "requiresAction": true, "action": "Complete", "disposition": "Pending", "course": "高等数学" }
+      ]
+    },
+    {
+      "id": "one-diagnostic-multiple-ignored-actions",
+      "category": "message-review",
+      "message": { "text": "明天交作业吗？不用提交实验报告" },
+      "context": {},
+      "expectedCandidates": []
     }
   ]
 }

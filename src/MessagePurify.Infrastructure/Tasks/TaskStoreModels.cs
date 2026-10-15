@@ -2,7 +2,7 @@ using MessagePurify.Core;
 
 namespace MessagePurify.Infrastructure.Tasks;
 
-public enum ReviewState { Pending, Ignored, Accepted, Rejected }
+public enum ReviewState { Pending, Ignored, Accepted, Rejected, Consolidated }
 
 public sealed record TaskItem(string Id, string AccountId, string Title,
     string? Course, RuleAction Action, TaskTime Time, TaskState State,
@@ -18,7 +18,8 @@ public sealed record PendingReview(string Id, string AccountId,
     RuleCandidate Candidate, ReviewState State, DateTimeOffset CreatedAt,
     DateTimeOffset? IgnoredAt, DateTimeOffset? UndoExpiresAt, long Version,
     string? AcceptedTaskId = null, string? UndoOperationId = null,
-    string? SplitParentTaskId = null, TaskState? SplitState = null, TimeKind? SplitTimeKind = null);
+    string? SplitParentTaskId = null, TaskState? SplitState = null, TimeKind? SplitTimeKind = null,
+    string? ConsolidatedIntoId = null);
 
 public sealed record TaskMergeSelection(string TitleTaskId, string CourseTaskId,
     string TimeTaskId, string PriorityTaskId, string StateTaskId);

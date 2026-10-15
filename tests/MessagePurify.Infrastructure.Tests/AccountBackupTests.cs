@@ -356,7 +356,7 @@ public sealed class AccountBackupTests : IDisposable
             if (state == TaskState.Cancelled) Tasks().Cancel(task.Id, "cancel", task.Version, Now);
             if (state == TaskState.Archived) Tasks().Archive(task.Id, "archive", task.Version, Now);
         }
-        foreach (var state in Enum.GetValues<ReviewState>())
+        foreach (var state in new[] { ReviewState.Pending, ReviewState.Ignored, ReviewState.Accepted, ReviewState.Rejected })
         {
             var target = state == ReviewState.Accepted ? Tasks().ListTasks().Single(task => task.State == TaskState.Active) : null;
             Route("review-" + state, RuleDisposition.Pending, linkedTaskId: target?.Id);

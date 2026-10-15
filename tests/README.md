@@ -1,5 +1,9 @@
 # 项目检查
 
+## 2026-10-15 一条原消息一个完整审核项
+
+Core 的 RuleExtractionTests 与 RuleFixtureTests 覆盖完整原文、单候选、不同日期和关联变更；MessageReviewCompatibilityTests 覆盖旧片段整理、人工结果、引用/账号/来源隔离、重开和备份恢复。Native Smoke 的 `message-review-one-row`、`message-review-full-source`、`message-review-single-accept`、`message-review-manual-split` 使用真实 WebView2 页面与合成数据检查一项审核、一次接受及显式手动拆分。实际执行结果与日志路径见 docs/HANDOFF.md，未运行的验证不计为通过。
+
 ## 2026-10-14 按次 QQ 同步交付验证
 
 正式入口已切换到最新版 .tools/published/app-card-controls/，保留原路径和后台自启动开关；取消定时同步，只在点击软件或“自动同步”时切换QQ。Core306、Infrastructure690、Windows446、Node153全量通过；隔离及正式exe108项Native/父窗检查通过。真实AppRuntime无QQ与已有普通QQ分别23.61/24.93秒完成；正式软件启动和按钮各同步一次、恢复普通QQ，3001/6099关闭，界面显示完成和北京时间，无下次计划说明。日志和安全报告.tools/sync-session-validation/。原任务记录、布局和主题偏好未变，未代确认真实事项；真实Windows登录自启动仍未验收，实际游戏和长期稳定性后置。

@@ -587,27 +587,26 @@ public sealed class AccountWorkspaceTests : IDisposable
     }
 
     [Fact]
-    public void NoticeConversion_KeepsSeparateTasksForSeparateNoticesInOneMessage()
+    public void NoticeConversion_OneWholeOriginalConvertsToOneTask()
     {
         var workspace = Workspace();
         Groups(workspace);
         Confirm(workspace);
         var message = Message(text: "10月14日18点自愿参加讲座；10月15日18点自愿参加比赛");
         Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.History, "history", Now));
-        var notices = workspace.Snapshot(Now).Items.Where(item => item.Kind == "notice").ToArray();
-        Assert.Equal(2, notices.Length);
+        var notice = Assert.Single(workspace.Snapshot(Now).Items, item => item.Kind == "notice");
+        Assert.Equal(message.Segments[0].Text, notice.Title);
+        Assert.Null(notice.Due);
+        workspace.Execute(Command("convert-notice", notice) with { Date = "2026-10-14", Time = "18:00" }, Now);
 
-        workspace.Execute(Command("convert-notice", notices[0]) with { Date = "2026-10-14", Time = "18:00" }, Now);
-        var current = workspace.Snapshot(Now).Items.Where(item => item.Kind == "notice").ToArray();
-        workspace.Execute(Command("convert-notice", current[1]) with { Date = "2026-10-15", Time = "18:00" }, Now);
-
-        Assert.Equal(2, Tasks().ListTasks().Count);
+        var task = Assert.Single(Tasks().ListTasks());
+        Assert.Equal(message.Segments[0].Text, task.Title);
+        Assert.Equal(Date(14).Date, task.Time.Date);
         var snapshot = workspace.Snapshot(Now);
-        Assert.Equal(2, snapshot.Items.Count(item => item.Kind == "task"));
-        var converted = snapshot.Items.Where(item => item.Kind == "notice").ToArray();
-        Assert.Equal(2, converted.Length);
-        Assert.All(converted, item => Assert.Equal("converted", item.State));
-        Assert.NotEqual(converted[0].TargetTaskId, converted[1].TargetTaskId);
+        Assert.Single(snapshot.Items, item => item.Kind == "task");
+        var converted = Assert.Single(snapshot.Items, item => item.Kind == "notice");
+        Assert.Equal("converted", converted.State);
+        Assert.Equal(task.Id, converted.TargetTaskId);
     }
 
     [Fact]
@@ -705,7 +704,13 @@ public sealed class AccountWorkspaceTests : IDisposable
         Confirm(workspace);
         workspace.Ingest(Message(text: "10月12日18点提交统计作业，逾期不收；10月12日18点提交英语作业，不扣分"),
             Pinned(), MessageOrigin.Realtime, "live", Now);
-        var task = Assert.Single(workspace.Snapshot(Now).Items, item => item.Title.Contains("英语作业", StringComparison.Ordinal));
+        var review = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(Command("accept-review", review) with { Date = "2026-10-12", Time = "18:00" }, Now);
+        var parent = Assert.Single(workspace.Snapshot(Now).Items);
+        workspace.Execute(Command("split-task", parent) with { NewItemId = "english", Title = "英语作业，不扣分",
+            Course = "数学", Date = "2026-10-12", Time = "18:00", TimeKind = "deadline",
+            State = "active", EvidenceIndexes = [0] }, Now);
+        var task = Assert.Single(workspace.Snapshot(Now).Items, item => item.Id == "english");
         workspace.Execute(Command("accept-time", task) with { Date = "2026-10-20", TimeKind = "deadline" }, Now);
         var changed = workspace.Snapshot(Now).Items.Single(item => item.Id == task.Id);
         Assert.Equal(3, changed.Priority);

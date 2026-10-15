@@ -27,6 +27,7 @@ public sealed partial class AccountWorkspace
                 applySettings?.Invoke(preferences);
             });
             cacheCleanupError = null;
+            ConsolidateLegacyMessageReviews(now);
             Generation++;
             return result;
         }

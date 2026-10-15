@@ -18,6 +18,18 @@ public sealed class RuleFixtureTests
     }
 
     [Fact]
+    public void EverySyntheticOriginalProducesAtMostOneBusinessCandidate()
+    {
+        var corpus = RuleFixtureRunner.Load(CorpusPath);
+        Assert.All(corpus.Cases, item =>
+        {
+            Assert.True(item.ExpectedCandidates.Count <= 1, item.Id);
+            var result = MessageRuleExtractor.Extract(RuleFixtureRunner.BuildMessage(item), RuleFixtureRunner.BuildContext(item.Context));
+            Assert.Single(result.Candidates);
+        });
+    }
+
+    [Fact]
     public void WrongAutomaticDateIsNotCountedAsCorrect()
     {
         var fixture = GoldTask();

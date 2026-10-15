@@ -62,6 +62,12 @@ public sealed partial class AccountCandidateRouter
             ValidateMessage(pending, context);
             var extraction = pending.Extraction ?? MessageRuleExtractor.Extract(pending.Message,
                 CurrentContext(connection, transaction, context));
+            if (extraction.Candidates.Count > 1)
+            {
+                var business = extraction.Candidates.Where(candidate => candidate.Disposition != RuleDisposition.Ignored).ToArray();
+                extraction = extraction with { Candidates = business.Length == 0 ? [extraction.Candidates[0]] :
+                    [MessageReviewCandidate.Combine(pending.Message, business)] };
+            }
             var candidates = extraction.Candidates.ToArray();
             var notices = new List<(string Id, RuleCandidate Candidate)>();
             for (var index = 0; index < candidates.Length; index++)
@@ -101,7 +107,7 @@ public sealed partial class AccountCandidateRouter
                             candidate, "route-task-" + identity, context.Now);
                         break;
                     case RuleDisposition.Pending:
-                        tasks.SavePendingInTransaction(connection, transaction, "review-" + identity,
+                        tasks.SavePendingInTransaction(connection, transaction, ReviewId(pending.Message.Key, index),
                             candidate, "route-review-" + identity, context.Now);
                         break;
                     case RuleDisposition.Change:
@@ -110,7 +116,7 @@ public sealed partial class AccountCandidateRouter
                             reviewReason = tasks.ApplyAutomaticChangeInTransaction(connection, transaction, candidate,
                                 "route-change-" + identity, context.Now).ReviewReason;
                         if (reviewReason is not null)
-                            tasks.SavePendingInTransaction(connection, transaction, "review-" + identity,
+                            tasks.SavePendingInTransaction(connection, transaction, ReviewId(pending.Message.Key, index),
                                 AsPending(candidate, reviewReason), "route-review-" + identity, context.Now);
                         break;
                     case RuleDisposition.Notice:
@@ -292,6 +298,7 @@ public sealed partial class AccountCandidateRouter
     // 持久化身份须在重启/重试后保持一致，编码完整字符串键避免分隔符及大整数歧义。
     private static string StableId(MessageKey key, int index) => Convert.ToHexString(SHA256.HashData(
         Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new { Key = key, Index = index })))).ToLowerInvariant();
+    internal static string ReviewId(MessageKey key, int index) => "review-" + StableId(key, index);
     private static DateTimeOffset ParseTime(string time) =>
         DateTimeOffset.Parse(time, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
 

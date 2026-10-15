@@ -37,6 +37,7 @@ public sealed partial class AccountWorkspace
         settingsPath = Path.Combine(Path.GetDirectoryName(tasks.DatabasePath)!, "workspace-settings.json");
         settings = ReadSettings();
         reminders = new(dataRoot, accountId, tasks);
+        ConsolidateLegacyMessageReviews(DateTimeOffset.UtcNow);
     }
 
     public void SetAvailableGroups(IReadOnlyList<OneBotGroup> groups, IReadOnlySet<string> pinnedGroupIds)

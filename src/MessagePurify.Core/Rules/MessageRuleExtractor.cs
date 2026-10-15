@@ -5,10 +5,11 @@ namespace MessagePurify.Core;
 /// <summary>只生成可审查的候选，不改变正式事项、状态或通知。</summary>
 public static class MessageRuleExtractor
 {
-    public const string RuleVersion = "m2-local-v1";
+    public const string RuleVersion = "m2-local-v2-message-review";
 
     public static RuleExtractionResult Extract(SchoolMessage message, RuleContext context)
     {
+        var originalMessage = message;
         message = MessageNormalizer.Normalize(message);
         var text = string.Join("\n", message.Segments.Where(s => s.Kind == SegmentKind.Text).Select(s => s.Text));
         var imageText = string.Join("\n", message.Segments.Where(s => s.Kind == SegmentKind.Image).Select(s => s.Text));
@@ -33,12 +34,15 @@ public static class MessageRuleExtractor
         var parts = SplitActions(content);
         if (parts.Count == 0) return Diagnostic("没有明确的新行动或学校通知，引用仅保留为证据", RuleDisposition.Ignored);
         var candidates = parts.Select(part => ExtractPart(part.Text, imageOnly, part.Conditional)).ToArray();
-        return new(RuleVersion, candidates);
+        var businessCandidates = candidates.Where(candidate => candidate.Disposition != RuleDisposition.Ignored).ToArray();
+        if (businessCandidates.Length == 0)
+            return Diagnostic(string.Join("；", candidates.SelectMany(candidate => candidate.ReviewReasons).Distinct()), RuleDisposition.Ignored);
+        return new(RuleVersion, [MessageReviewCandidate.Combine(originalMessage, businessCandidates)]);
 
         RuleExtractionResult Diagnostic(string reason, RuleDisposition disposition)
         {
             var assessment = new RuleAssessment(reason, false);
-            return new(RuleVersion, [new(text, RuleAction.Inform, disposition, null,
+            return new(RuleVersion, [new(MessageReviewCandidate.FullContent(originalMessage), RuleAction.Inform, disposition, null,
                 null, null, null, null, new(assessment, assessment, assessment, assessment,
                     assessment, assessment), [reason], evidence)]);
         }
@@ -147,8 +151,9 @@ public static class MessageRuleExtractor
         return result;
     }
 
-    private static bool HasAction(string text) => GetAction(text) != RuleAction.Inform ||
-        Match(text, "通知|放假|停课|开课|安排|课程调整|(?:作业|报告|论文).*(?:格式|要求)");
+    internal static bool HasAction(string text) => GetAction(text) != RuleAction.Inform ||
+        (Match(text, "通知|放假|停课|开课|安排|课程调整|(?:作业|报告|论文).*(?:格式|要求)") &&
+         !Match(text, "^(?:【(?:重要通知|通知|课程安排|安排|变更通知)】|通知|重要通知|课程安排|安排)[:：]?$"));
 
     private static RuleAction GetAction(string text)
     {

@@ -157,10 +157,10 @@ public sealed class CandidateRoutingTests : IDisposable
         SaveExtracted(original);
         Assert.Equal(1, Router().RoutePending(Context(), Pinned()));
         var context = Context() with { TrustedSenders = new HashSet<string> { Sender } };
-        var message = Message("mixed-change", "统计作业延期到10月15日18点；10月16日18点自愿报名讲座") with
+        var message = Message("notice", "10月16日18点自愿报名讲座") with
         {
             SentAt = SentAt.AddMinutes(1),
-            Segments = [new(SegmentKind.Text, "统计作业延期到10月15日18点；10月16日18点自愿报名讲座"),
+            Segments = [new(SegmentKind.Text, "10月16日18点自愿报名讲座"),
                 new(SegmentKind.Quote, "原通知", original.Key)]
         };
         if (preExtracted) SaveExtracted(message, context);
@@ -174,7 +174,7 @@ public sealed class CandidateRoutingTests : IDisposable
         var notice = Assert.Single(Router().ListNotices());
         Assert.Equal(saved.ProcessingVersion, notice.ProcessingVersion);
         Assert.Equal(message.Key, notice.Source);
-        Assert.Equal(new DateOnly(2026, 10, 15), Assert.Single(Tasks().ListTasks()).Time.Date);
+        Assert.Equal(new DateOnly(2026, 10, 13), Assert.Single(Tasks().ListTasks()).Time.Date);
     }
 
     [Fact]
@@ -194,32 +194,35 @@ public sealed class CandidateRoutingTests : IDisposable
     }
 
     [Fact]
-    public void RoutePending_MultipleActionsCreateTaskReviewAndNoticeForOneMessage()
+    public void RoutePending_MultipleActionsCreateOneWholeReviewForOneMessage()
     {
         var message = MixedMessage();
         SaveExtracted(message);
         var candidates = Messages().Find(message.Key)!.Extraction!.Candidates;
-        Assert.Equal(new[] { RuleDisposition.Task, RuleDisposition.Pending, RuleDisposition.Notice, RuleDisposition.Ignored },
-            candidates.Select(candidate => candidate.Disposition));
+        var candidate = Assert.Single(candidates);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Equal(message.Segments[0].Text, candidate.Title);
 
         Assert.Equal(1, Router().RoutePending(Context(), Pinned()));
 
-        Assert.Equal(candidates[0].Title, Assert.Single(Tasks().ListTasks()).Title);
-        AssertCandidate(candidates[1], Assert.Single(Tasks().ListReviews()).Candidate);
-        AssertCandidate(candidates[2], Assert.Single(Router().ListNotices()).Candidate);
+        Assert.Empty(Tasks().ListTasks());
+        AssertCandidate(candidate, Assert.Single(Tasks().ListReviews()).Candidate);
+        Assert.Empty(Router().ListNotices());
         Assert.Equal(1L, Scalar(RoutingPath(), "SELECT COUNT(*) FROM route_receipts;"));
         Assert.Equal(0, Router().RoutePending(Context(), Pinned()));
-        Assert.Single(Tasks().ListTasks());
+        Assert.Empty(Tasks().ListTasks());
         Assert.Single(Tasks().ListReviews());
-        Assert.Single(Router().ListNotices());
+        Assert.Empty(Router().ListNotices());
     }
 
     [Fact]
     public void Reopening_DoesNotRecreateCompletedTaskOrIgnoredReview()
     {
-        SaveExtracted(MixedMessage());
+        SaveExtracted(Message("task", "10月13日18点提交统计作业"));
+        SaveExtracted(Message("review", "提交统计报告"));
+        SaveExtracted(Message("notice", "10月16日18点自愿报名讲座"));
         var router = Router();
-        Assert.Equal(1, router.RoutePending(Context(), Pinned()));
+        Assert.Equal(3, router.RoutePending(Context(), Pinned()));
         var task = Assert.Single(Tasks().ListTasks());
         var completed = Tasks().Complete(task.Id, "user-complete", task.Version, Now.AddMinutes(1));
         var review = Assert.Single(Tasks().ListReviews());
@@ -507,10 +510,10 @@ public sealed class CandidateRoutingTests : IDisposable
         Execute(router.RoutingDatabasePath, "DROP TRIGGER fail_receipt;");
 
         Assert.Equal(1, Router().RoutePending(Context(), Pinned()));
-        Assert.Single(Tasks().ListTasks());
+        Assert.Empty(Tasks().ListTasks());
         Assert.Single(Tasks().ListReviews());
-        Assert.Single(Router().ListNotices());
-        Assert.Equal(2L, Scalar(Tasks().DatabasePath, "SELECT COUNT(*) FROM operations;"));
+        Assert.Empty(Router().ListNotices());
+        Assert.Equal(1L, Scalar(Tasks().DatabasePath, "SELECT COUNT(*) FROM operations;"));
         Assert.Equal(1L, Scalar(router.RoutingDatabasePath, "SELECT COUNT(*) FROM route_receipts;"));
         Assert.Equal(0, Router().RoutePending(Context(), Pinned()));
     }

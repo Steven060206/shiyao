@@ -84,11 +84,11 @@ public class RuleExtractionTests
     [Fact]
     public void AQuestionDoesNotDiscardAnotherIndependentAction()
     {
-        var candidates = MessageRuleExtractor.Extract(Message("明天交作业吗？后天交实验报告"), Context()).Candidates;
-        Assert.Equal(2, candidates.Count);
-        Assert.Equal(RuleDisposition.Ignored, candidates[0].Disposition);
-        Assert.Equal(RuleDisposition.Task, candidates[1].Disposition);
-        Assert.Equal(new DateOnly(2026, 10, 12), candidates[1].Time!.Date);
+        const string text = "明天交作业吗？后天交实验报告";
+        var candidate = Single(text);
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleDisposition.Task, candidate.Disposition);
+        Assert.Equal(new DateOnly(2026, 10, 12), candidate.Time!.Date);
     }
 
     [Theory]
@@ -105,20 +105,21 @@ public class RuleExtractionTests
     [Fact]
     public void NegatedCancellationDoesNotDiscardFollowingSubmission()
     {
-        var candidates = MessageRuleExtractor.Extract(Message("实验报告没有取消，明天仍要提交"), Context(tasks: [Task()])).Candidates;
-        Assert.Equal(2, candidates.Count);
-        Assert.Equal(RuleDisposition.Ignored, candidates[0].Disposition);
-        Assert.Equal(RuleDisposition.Task, candidates[1].Disposition);
-        Assert.Equal(RuleAction.Submit, candidates[1].Action);
+        const string text = "实验报告没有取消，明天仍要提交";
+        var candidate = Single(text, Context(tasks: [Task()]));
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleDisposition.Task, candidate.Disposition);
+        Assert.Equal(RuleAction.Submit, candidate.Action);
+        Assert.Null(candidate.TargetTaskId);
     }
 
     [Fact]
     public void VoluntaryOneActionDoesNotMakeAnotherActionOptional()
     {
-        var candidates = MessageRuleExtractor.Extract(Message("明天必须参加考试；后天自愿参加讲座"), Context()).Candidates;
-        Assert.Equal(2, candidates.Count);
-        Assert.Equal(RuleDisposition.Task, candidates[0].Disposition);
-        Assert.Equal(RuleDisposition.Notice, candidates[1].Disposition);
+        var candidate = Single("明天必须参加考试；后天自愿参加讲座");
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Equal(RuleAction.Attend, candidate.Action);
+        Assert.Null(candidate.Time);
     }
 
     [Theory]
@@ -135,11 +136,10 @@ public class RuleExtractionTests
     [Fact]
     public void BareVoluntaryActionAfterSubmissionIsAnIndependentUnclearAction()
     {
-        var candidates = MessageRuleExtractor.Extract(Message("明天交实验报告，自愿参加"), Context()).Candidates;
-        Assert.Equal(2, candidates.Count);
-        Assert.Equal(RuleDisposition.Task, candidates[0].Disposition);
-        Assert.Equal(RuleAction.Attend, candidates[1].Action);
-        Assert.Equal(RuleDisposition.Pending, candidates[1].Disposition);
+        var candidate = Single("明天交实验报告，自愿参加");
+        Assert.Equal(RuleAction.Complete, candidate.Action);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Null(candidate.Time);
     }
 
     [Theory]
@@ -187,29 +187,30 @@ public class RuleExtractionTests
     }
 
     [Fact]
-    public void MultipleDeliverablesHaveIndependentTimesAndSharedEvidence()
+    public void MultipleDeliverablesRemainOneCompleteReviewWithoutChoosingATime()
     {
-        var candidates = MessageRuleExtractor.Extract(Message("明天交实验报告，格式为PDF；下周一交课程论文"), Context()).Candidates;
-        Assert.Equal(2, candidates.Count);
-        Assert.All(candidates, candidate => Assert.Equal(RuleDisposition.Task, candidate.Disposition));
-        Assert.Contains("PDF", candidates[0].Title);
-        Assert.Equal(new DateOnly(2026, 10, 11), candidates[0].Time!.Date);
-        Assert.Equal(new DateOnly(2026, 10, 12), candidates[1].Time!.Date);
-        Assert.Equal(candidates[0].Evidence, candidates[1].Evidence);
+        const string text = "明天交实验报告，格式为PDF；下周一交课程论文";
+        var candidate = Single(text);
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleAction.Submit, candidate.Action);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Null(candidate.Time);
+        Assert.Null(candidate.SuggestedTime);
+        Assert.Null(candidate.Priority);
+        Assert.False(candidate.Assessments.Time.Reliable);
+        Assert.Equal(Message(text).Key, Assert.Single(candidate.Evidence));
+        Assert.Contains(candidate.ReviewReasons, reason => reason.Contains("时间"));
     }
 
     [Fact]
-    public void RegistrationDeadlineAndEventStartKeepTheirTimeRoles()
+    public void RegistrationDeadlineAndEventStartRemainOneNoticeWithBothDatesInOriginal()
     {
-        var candidates = MessageRuleExtractor.Extract(Message("10月12日报名截止，10月15日活动开始，自愿参加"), Context()).Candidates;
-        Assert.Equal(2, candidates.Count);
-        Assert.Equal(RuleAction.Register, candidates[0].Action);
-        Assert.Equal(RuleAction.Attend, candidates[1].Action);
-        Assert.All(candidates, candidate => Assert.Equal(RuleDisposition.Notice, candidate.Disposition));
-        Assert.Equal(TimeKind.Deadline, candidates[0].Time!.Kind);
-        Assert.Equal(TimeKind.Start, candidates[1].Time!.Kind);
-        Assert.Equal(new DateOnly(2026, 10, 12), candidates[0].Time!.Date);
-        Assert.Equal(new DateOnly(2026, 10, 15), candidates[1].Time!.Date);
+        const string text = "10月12日报名截止，10月15日活动开始，自愿参加";
+        var candidate = Single(text);
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleDisposition.Notice, candidate.Disposition);
+        Assert.Equal(RuleAction.Complete, candidate.Action);
+        Assert.Null(candidate.Time);
     }
 
     [Theory]
@@ -411,13 +412,11 @@ public class RuleExtractionTests
     [InlineData("如果明天必须参加考试，取消实验报告")]
     public void ConditionScopeSurvivesCommaActionSplitting(string text)
     {
-        var candidates = MessageRuleExtractor.Extract(Message(text), Context(tasks: [Task()])).Candidates;
-        Assert.Equal(2, candidates.Count);
-        Assert.All(candidates, candidate =>
-        {
-            Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
-            Assert.False(candidate.Assessments.Action.Reliable);
-        });
+        var candidate = Single(text, Context(tasks: [Task()]));
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.False(candidate.Assessments.Action.Reliable);
+        Assert.Null(candidate.TargetTaskId);
     }
 
     [Theory]
@@ -536,5 +535,156 @@ public class RuleExtractionTests
     public void ClearConsequencesRaisePriorityButNegatedConsequencesDoNot(string text, int priority)
     {
         Assert.Equal(priority, Single(text).Priority);
+    }
+
+    [Theory]
+    [InlineData("通知：\n明天交实验报告；后天完成习题。请认真核对。")]
+    [InlineData("【课程安排】\n\n明天交报告\n后天交论文\n老师提醒：格式保持原样！")]
+    public void UnknownCourseMultipleActionsKeepOneReviewAndTheEntireOriginal(string text)
+    {
+        var candidate = Single(text, Context(course: null));
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleAction.Submit, candidate.Action);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Null(candidate.Course);
+        Assert.Null(candidate.Time);
+        Assert.Null(candidate.SuggestedTime);
+        Assert.Contains("课程或群关联尚未确认", candidate.ReviewReasons);
+    }
+
+    [Fact]
+    public void SingleActionRetainsExactPrefixNewlinesAndPunctuation()
+    {
+        const string text = "【重要通知】\r\n  各位同学：\r\n明天交实验报告，格式为ＰＤＦ！\r\n请认真核对。";
+        var candidate = Single(text);
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleDisposition.Task, candidate.Disposition);
+        Assert.Equal(new DateOnly(2026, 10, 11), candidate.Time!.Date);
+    }
+
+    [Fact]
+    public void MultipleActionsWithOneSharedTimeStillRequireOneReview()
+    {
+        var candidate = Single("明天提交实验报告；明天完成练习");
+        Assert.Equal(RuleAction.Submit, candidate.Action);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Equal(new DateOnly(2026, 10, 11), candidate.Time!.Date);
+        Assert.NotEmpty(candidate.ReviewReasons);
+    }
+
+    [Fact]
+    public void SeparateOriginalIdsWithTheSameContentRemainSeparate()
+    {
+        const string text = "明天交报告；后天交论文";
+        var firstMessage = Message(text);
+        var secondMessage = firstMessage with { Key = firstMessage.Key with { MessageId = "another-original" } };
+        var first = Assert.Single(MessageRuleExtractor.Extract(firstMessage, Context()).Candidates);
+        var second = Assert.Single(MessageRuleExtractor.Extract(secondMessage, Context()).Candidates);
+        Assert.Equal(firstMessage.Key, Assert.Single(first.Evidence));
+        Assert.Equal(secondMessage.Key, Assert.Single(second.Evidence));
+        Assert.NotEqual(first.Evidence[0], second.Evidence[0]);
+    }
+
+    [Theory]
+    [InlineData("明天交作业吗？不用提交实验报告")]
+    [InlineData("实验报告没有取消；实验报告没有延期")]
+    public void AllIgnoredActionsProduceOnlyOneCompleteDiagnostic(string text)
+    {
+        var candidate = Single(text, Context(tasks: [Task()]));
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleDisposition.Ignored, candidate.Disposition);
+        Assert.Null(candidate.TargetTaskId);
+        Assert.NotEmpty(candidate.ReviewReasons);
+    }
+
+    [Theory]
+    [InlineData("取消实验报告；后天交课程论文")]
+    [InlineData("取消实验报告；实验报告延期至后天")]
+    [InlineData("取消实验报告；取消课程论文")]
+    public void MixedActionsOrTargetsCannotApplyAChangeToAnExistingTask(string text)
+    {
+        var candidate = Single(text, Context(tasks: [Task(), Task(title: "课程论文", id: "paper")]));
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleAction.Complete, candidate.Action);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Null(candidate.TargetTaskId);
+        Assert.False(candidate.Assessments.Association.Reliable);
+        Assert.Contains(candidate.ReviewReasons, reason => reason.Contains("变更"));
+    }
+
+    [Fact]
+    public void RepeatedSameLinkedChangeRetainsTargetButRequiresOneReview()
+    {
+        var candidate = Single("取消实验报告；实验报告取消", Context(tasks: [Task()]));
+        Assert.Equal(RuleAction.Cancel, candidate.Action);
+        Assert.Equal("report", candidate.TargetTaskId);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+    }
+
+    [Fact]
+    public void MultipleOcrActionsRetainCompleteRecognizedTextWithoutChoosingSuggestedTime()
+    {
+        const string text = "班级通知：\n10月12日交实验报告；10月15日完成论文。";
+        var message = Message("") with { Segments = [new(SegmentKind.Image, text, AssetId: "image")] };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context()).Candidates);
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Null(candidate.Time);
+        Assert.Null(candidate.SuggestedTime);
+        Assert.Contains("图片识别仅作建议，需要查看原图确认", candidate.ReviewReasons);
+    }
+
+    [Fact]
+    public void CombiningLegacyPendingFragmentsUnionsReasonsAndEvidence()
+    {
+        const string text = "通知：\n明天提交实验报告；后天提交课程论文";
+        var quoted = new MessageKey("a", "g", "quoted");
+        var additional = new MessageKey("a", "g", "retained-evidence");
+        var message = Message(text) with { Segments = [new(SegmentKind.Text, text), new(SegmentKind.Quote, "旧通知", quoted)] };
+        var first = Single("明天提交实验报告") with { Disposition = RuleDisposition.Pending, ReviewReasons = ["核对第一项"], Evidence = [Original] };
+        var second = Single("后天提交课程论文") with { Disposition = RuleDisposition.Pending, ReviewReasons = ["核对第二项", "核对第一项"], Evidence = [additional] };
+        var combined = MessageReviewCandidate.Combine(message, [first, second]);
+        Assert.Equal(text, combined.Title);
+        Assert.Equal(RuleDisposition.Pending, combined.Disposition);
+        Assert.Equal(4, combined.Evidence.Count);
+        Assert.Contains(message.Key, combined.Evidence);
+        Assert.Contains(Original, combined.Evidence);
+        Assert.Contains(additional, combined.Evidence);
+        Assert.Contains(quoted, combined.Evidence);
+        Assert.Contains("核对第一项", combined.ReviewReasons);
+        Assert.Contains("核对第二项", combined.ReviewReasons);
+        Assert.Equal(combined.ReviewReasons.Count, combined.ReviewReasons.Distinct().Count());
+        Assert.Null(combined.Time);
+    }
+
+    [Fact]
+    public void CombiningOneLegacyCandidatePreservesItsSemanticFields()
+    {
+        const string text = "【变更通知】\n实验报告延期至10月13日，请保留原稿。";
+        var fragment = Single("实验报告延期至10月13日", Context(tasks: [Task()]));
+        var combined = MessageReviewCandidate.Combine(Message(text), [fragment]);
+        Assert.Equal(fragment with { Title = text, Evidence = combined.Evidence }, combined);
+        Assert.Equal<MessageKey>(fragment.Evidence, combined.Evidence);
+    }
+
+    [Fact]
+    public void CompositeCannotChooseOneOfTwoTimeRolesOnTheSameDate()
+    {
+        var candidate = Single("10月12日报名截止；10月12日必须参加活动");
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Null(candidate.Time);
+        Assert.Null(candidate.Priority);
+        Assert.False(candidate.Assessments.Time.Reliable);
+    }
+
+    [Fact]
+    public void TextActionsRetainAllTextSegmentsAndDoNotReplaceThemWithOcr()
+    {
+        var message = Message("") with { Segments = [new(SegmentKind.Text, "【重要通知】"),
+            new(SegmentKind.Text, "明天交报告；后天完成习题"), new(SegmentKind.Image, "10月15日交论文")] };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context()).Candidates);
+        Assert.Equal("【重要通知】\n明天交报告；后天完成习题", candidate.Title);
+        Assert.Null(candidate.Time);
+        Assert.Null(candidate.SuggestedTime);
     }
 }
