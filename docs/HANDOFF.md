@@ -1,8 +1,16 @@
 # 拾要（原消息提纯）：项目交接文档
 
-最后更新：2026-10-14（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
+最后更新：2026-10-15（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+
+### 审核粒度反馈（2026-10-15，已定位、方案待确认）
+
+用户反馈同一条 QQ 原消息被拆成多条待确认，造成重复审核；已确认需要减少同一原消息的重复审核。实际代码中 MessageRuleExtractor.SplitActions 按标点及动作词产生多个候选，AccountCandidateRouter.Route 遍历后分别 SavePendingInTransaction，AccountWorkspace.Snapshot 逐条展示，因而一条原消息会产生多个审核项。现有 RuleExtractionTests.MultipleDeliverablesHaveIndependentTimesAndSharedEvidence 明确覆盖同消息多个候选及独立日期，说明需同时保留完整原文及各事项的日期语义。
+
+未决定事项：已向用户提出一个选择，A 默认一条原消息一个完整待确认项、需要时手动拆开；B 保留多个事项但集中在一张审核卡处理。等待用户明确选择后实施，不能把任一方案记为已确认或已修复。本轮仅同步反馈与定位记录，软件代码、真实消息和运行版尚未修改，未发布新下载包。工作区已有 app.css、index.html、application-ui.test.mjs 的视觉改版未提交修改，属于已有工作，不能混入本次提交。maintain-context-hygiene 技能文件仍未找到，人工核对需求、交接与实际源文件。
+
+实际验证：`node --test tests/project-rules.test.mjs tests/message-review-requirements.test.mjs` 51/51、退出0；`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --no-restore --configuration Release --filter 'FullyQualifiedName~MultipleDeliverablesHaveIndependentTimesAndSharedEvidence|FullyQualifiedName~RegistrationDeadlineAndEventStartKeepTheirTimeRoles'` 2/2、退出0，确认当前同消息多候选及独立时间角色的行为。本轮需求状态回归为 `tests/message-review-requirements.test.mjs`；本次文件限定的 `git diff --check -- docs/requirements.md docs/HANDOFF.md tests/message-review-requirements.test.mjs` 退出0。全工作区 diff 检查提示已有视觉改版 app.css 末尾空行，本轮不改动该文件。下一步等待用户选择，再修复、补行为回归并按既有要求同步软件发布；本轮文档提交标识以 Git 日志为准。
 
 ### GitHub 更新同步（2026-10-14，beta.2源码和下载包已发布）
 
@@ -948,6 +956,8 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 
 已确认方向不重新询问；以下状态均需按真实产物和验证报告更新。
 
+审核粒度待选择（2026-10-15）：减少同一原消息的重复审核已确认；A 一条原消息一个待确认项或 B 多事项集中一张审核卡仍待用户明确选择，未实施。
+
 1. **整体设计已确认，demo 基本满足要求，持续开发已授权**。M1/M2 已完成，M3 真实接收和长期稳定性仍在实施；真实 QQ、OCR 和桌面宿主各自验证，不用合成数据代替真实验收。
 2. **已确认：明确取消任务移出待办和桌面卡片**，保留“已取消”记录和原文，不记完成；不再发取消系统通知。本地取消与旧操作保护已测试，正式卡片 active/pending 状态过滤已通过。
 3. **旧自定义提醒方案已取消**。ReminderPlanner、提醒设置/计划/台账及既有验证保留为历史，不删除数据，不作为后续 Windows 自动投递工作。
@@ -977,6 +987,8 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 - 用户希望每次只选择一个问题、选项同时写在正文、等待明确答复；不因等待时间过去就默认选项或进入下一题。
 
 ## 8. 变更记录
+
+2026-10-15：记录同一 QQ 原消息被拆成多条待确认的反馈，定位到规则拆分与逐候选保存；减少重复审核的目标已确认，审核粒度 A/B 待用户选择，尚未修改软件或发布新版本。
 
 
 
