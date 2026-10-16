@@ -469,11 +469,56 @@ public sealed class AccountWorkspaceTests : IDisposable
     }
 
     [Theory]
-    [InlineData(RuleAction.Inform)]
-    [InlineData(RuleAction.Cancel)]
+    [InlineData(RuleAction.Submit)]
+    [InlineData(RuleAction.Complete)]
+    [InlineData(RuleAction.Attend)]
+    [InlineData(RuleAction.Register)]
     [InlineData(RuleAction.Postpone)]
     [InlineData(RuleAction.NewRequirement)]
-    public void UnsupportedReview_CannotAcceptAndExplainsReason(RuleAction action)
+    public void PendingWithoutTargetAndWithFormalTime_CanBeAcceptedAsNewTask(RuleAction action)
+    {
+        var workspace = Workspace();
+        Tasks().SavePending("review", Candidate(action: action, time: Date(20), disposition: RuleDisposition.Pending), "save", Now);
+        workspace = Workspace(); // Existing persisted Pending must use the same acceptance rules.
+        var review = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.True(review.CanAccept);
+        workspace.Execute(Command("accept-review", review) with { Date = "2026-10-20" }, Now);
+        var task = Assert.Single(workspace.Snapshot(Now).Items, item => item.Kind == "task");
+        Assert.Equal("2026-10-20", task.Due);
+        Assert.Equal(action.ToString().ToLowerInvariant(), task.Action);
+        Assert.DoesNotContain(workspace.Snapshot(Now).Items, item => item.Kind == "review" && item.State == "pending");
+    }
+
+    [Fact]
+    public void ExplicitlyTimedUnlinkedRequirementFromMessageCanEnterTasks()
+    {
+        var workspace = Workspace();
+        Groups(workspace);
+        var message = Message("shared-time", "修改材料，补交材料，思想汇报统一改为下周一18：00在南一大厅收取") with
+        {
+            SentAt = new DateTimeOffset(2026, 10, 16, 20, 2, 32, TimeSpan.FromHours(8))
+        };
+        Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.Realtime, "live", Now));
+
+        var review = Assert.Single(workspace.Snapshot(Now).Items, item => item.Kind == "review");
+        Assert.Equal("postpone", review.Action);
+        Assert.Equal("2026-10-19", review.Due);
+        Assert.Equal("18:00", review.Time);
+        Assert.True(review.CanAccept);
+
+        workspace.Execute(Command("accept-review", review) with { Date = review.Due, Time = review.Time }, Now);
+        var task = Assert.Single(workspace.Snapshot(Now).Items, item => item.Kind == "task");
+        Assert.Equal(review.Title, task.Title);
+        Assert.Equal(review.Due, task.Due);
+        Assert.Equal(review.Time, task.Time);
+        Assert.Contains(task.Evidence, evidence => evidence.GroupId == message.Key.GroupId && evidence.Text.Contains("修改材料"));
+    }
+
+    [Theory]
+    [InlineData(RuleAction.Inform)]
+    [InlineData(RuleAction.Cancel)]
+    [InlineData(RuleAction.Remind)]
+    public void UnsupportedReviewWithoutStandaloneTaskTime_CannotAcceptAndExplainsReason(RuleAction action)
     {
         var workspace = Workspace();
         Tasks().SavePending("review", Candidate(action: action, disposition: RuleDisposition.Pending), "save", Now);

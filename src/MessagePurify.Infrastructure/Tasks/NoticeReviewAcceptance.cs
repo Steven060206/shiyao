@@ -20,7 +20,7 @@ public sealed partial class AccountTaskStore
                 if (review.State != ReviewState.Pending)
                     throw new InvalidOperationException("只有待确认状态的通知可以接受。");
                 ValidateCandidate(review.Candidate);
-                if (review.Candidate.Action != RuleAction.Inform || review.Candidate.TargetTaskId is not null)
+                if (!MessageRuleExtractor.IsNoticeCandidate(review.Candidate))
                     throw new ArgumentException("只有普通通知可以从通知入口接受。", nameof(reviewId));
                 saveNotice(review);
                 var accepted = review with

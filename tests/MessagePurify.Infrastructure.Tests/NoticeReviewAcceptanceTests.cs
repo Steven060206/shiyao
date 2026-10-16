@@ -166,6 +166,40 @@ public sealed class NoticeReviewAcceptanceTests : IDisposable
         Assert.Empty(Tasks().ListTasks());
     }
 
+    [Theory]
+    [InlineData("下周一18:00自愿报名讲座", "register")]
+    [InlineData("自愿参加讲座", "attend")]
+    [InlineData("有兴趣的同学明天提交竞赛报名表", "submit")]
+    public void OptionalActionInExistingPendingCanBeKeptAsNotice(string text, string action)
+    {
+        var workspace = Workspace();
+        var review = Ingest(workspace, Message(text: text));
+        workspace = Workspace();
+        review = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal(action, review.Action);
+        Assert.False(review.CanAccept);
+        Assert.True(review.CanAcceptNotice);
+        Assert.Throws<ArgumentException>(() => workspace.Execute(Accept(review, "accept-review") with { Date = "2026-10-20" }, Now));
+        workspace.Execute(Accept(review), Now);
+        Workspace().Execute(Accept(review), Now);
+        Assert.Equal("notice", Assert.Single(Workspace().Snapshot(Now).Items).Kind);
+        Assert.Empty(Tasks().ListTasks());
+        Assert.Equal(text, Assert.Single(Router().ListNotices()).Candidate.Title);
+    }
+
+    [Theory]
+    [InlineData("明天必须参加考试；后天自愿参加讲座")]
+    [InlineData("明天交实验报告，自愿参加")]
+    public void MixedMandatoryAndOptionalMessageCannotBeKeptAsNotice(string text)
+    {
+        var workspace = Workspace();
+        var review = Ingest(workspace, Message(text: text));
+        Assert.True(review.CanAccept);
+        Assert.False(review.CanAcceptNotice);
+        Assert.Throws<ArgumentException>(() => workspace.Execute(Accept(review), Now));
+        Assert.Empty(Router().ListNotices());
+    }
+
     [Fact]
     public void AcceptedReview_RejectsChangedRetriesAndFreshRequestsWithoutDuplicating()
     {

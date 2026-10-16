@@ -242,7 +242,7 @@ public sealed partial class AccountTaskStore
                 throw new InvalidOperationException("只有待确认状态的建议可以接受。");
             var candidate = review.Candidate;
             ValidateCandidate(candidate);
-            if (candidate.Action == RuleAction.Inform)
+            if (MessageRuleExtractor.IsNoticeCandidate(candidate))
                 throw new ArgumentException("普通通知不能通过事项入口接受。", nameof(reviewId));
             var currentTaskId = candidate.TargetTaskId is null ? taskId : ResolveTaskId(connection, transaction, taskId);
             var previous = Read<TaskItem>(connection, transaction, "tasks", currentTaskId);
@@ -251,8 +251,11 @@ public sealed partial class AccountTaskStore
             {
                 if (previous is not null || expectedTaskVersion is not null)
                     throw new InvalidOperationException("新候选不能覆盖已有事项。");
-                if (review.SplitParentTaskId is null && candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement)
-                    throw new ArgumentException("关联变更缺少目标事项。", nameof(reviewId));
+                if (review.SplitParentTaskId is null &&
+                    (candidate.Action == RuleAction.Cancel || candidate.Action == RuleAction.Remind))
+                    throw new ArgumentException(candidate.Action == RuleAction.Remind
+                        ? "催交消息缺少目标事项，不能直接建立任务。"
+                        : "取消消息缺少目标事项，不能直接建立任务。", nameof(reviewId));
                 var time = confirmedTime ?? candidate.Time;
                 ValidateTime(time);
                 task = NewTask(taskId, candidate, time!, confirmedTime is not null, now);

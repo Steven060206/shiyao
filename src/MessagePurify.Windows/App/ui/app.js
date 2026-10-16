@@ -58,6 +58,7 @@ const structureOperations = ['merge-tasks', 'split-task', 'keep-separate'];
 const reviewItem = item => ['review', 'merge-review'].includes(item.kind);
 const mergePair = suggestion => [suggestion.mergeSuggestion?.firstTaskId, suggestion.mergeSuggestion?.secondTaskId].map(id => items().find(item => item.id === id && item.kind === 'task' && item.state !== 'merged'));
 const linkedWithoutDate = item => Boolean(item.targetTaskId && ['cancel', 'remind'].includes(item.action));
+const standaloneChange = item => Boolean(item?.kind === 'review' && !item.targetTaskId && ['postpone', 'newrequirement'].includes(item.action));
 const localDate = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 const past = item => Boolean(item.due && (item.time ? new Date(`${item.due}T${item.time}:00+08:00`).getTime() < Date.now() : item.due < localDate()));
 const timeLabel = item => item.timeKind === 'start' ? '开始时间' : '截止时间';
@@ -720,7 +721,7 @@ function renderDetail() {
         ${pendingChangesHTML(item)}
         ${item.kind === 'review' && item.reviewReasons?.length ? `<div class="change-box">需要核对<p>${html(item.reviewReasons.join(' · '))}</p></div>` : ''}
         <div class="detail-actions">${actionsHTML(item)}</div>
-        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
+        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : (standaloneChange(item) ? '<p class="hint">未找到可关联的旧任务；确认后按完整原消息新建任务，并保留原文和证据。</p>' : '') + formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
         ${item.kind === 'review' && item.state === 'pending' && !item.canAccept && !item.canAcceptNotice ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
         ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${relatedHTML(item)}${historyHTML(item)}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;

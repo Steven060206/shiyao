@@ -192,7 +192,7 @@ public sealed partial class AccountWorkspace
                         candidate.ReviewReasons.Append(reason).Distinct().ToArray(), candidate.SuggestedTime,
                     review.State == ReviewState.Pending && reason is null) with
                     { RelatedItemIds = review.SplitParentTaskId is { } parentId ? [CurrentTaskId(parentId)] : null,
-                      CanAcceptNotice = review.State == ReviewState.Pending && candidate.Action == RuleAction.Inform && candidate.TargetTaskId is null,
+                      CanAcceptNotice = review.State == ReviewState.Pending && MessageRuleExtractor.IsNoticeCandidate(candidate),
                       TimeKind = (candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind ?? review.SplitTimeKind ?? Core.TimeKind.Deadline).ToString().ToLowerInvariant() });
             }
             foreach (var notice in router.ListNotices())
@@ -437,9 +437,12 @@ public sealed partial class AccountWorkspace
 
     private static string? AcceptanceProblem(RuleCandidate candidate, bool targetExists, bool userSplit = false)
     {
-        if (candidate.Action == RuleAction.Inform) return "普通通知请使用“确认并加入通知”。";
-        if (!userSplit && candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement && candidate.TargetTaskId is null)
-            return "关联变更缺少目标事项，需先核对关联。";
+        if (MessageRuleExtractor.IsNoticeCandidate(candidate)) return "普通通知请使用“确认并加入通知”。";
+        if (!userSplit && candidate.TargetTaskId is null &&
+            (candidate.Action == RuleAction.Cancel || candidate.Action == RuleAction.Remind))
+            return candidate.Action == RuleAction.Remind
+                ? "催交消息缺少目标事项，不能直接建立任务。"
+                : "取消消息缺少目标事项，不能直接建立任务。";
         if (candidate.TargetTaskId is not null && !targetExists) return "关联目标事项不存在，需先核对关联。";
         return null;
     }

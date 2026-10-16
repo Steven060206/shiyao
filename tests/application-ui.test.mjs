@@ -763,6 +763,26 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(command.parameters.excluded, true);
     });
     await push(fixture);
+    await t.test('无关联旧任务的改期和补交可沿用正式时间单条或批量加入任务', async () => {
+      const data = { ...structuredClone(fixture), items: ['postpone', 'newrequirement'].map((action, index) => ({
+        ...structuredClone(fixture.items[2]), id: 'standalone-' + index, title: action === 'postpone' ? '材料统一改为下周一18点收取' : '下周一18点补交材料',
+        action, due: '2026-10-19', time: '18:00', suggestedDue: null, suggestedTime: null, canAccept: true
+      })) };
+      await push(data); await nav('pending'); await select('standalone-0');
+      assert.equal(await evaluate('document.querySelector("#pending-confirm-button").disabled'), false);
+      assert.equal(await evaluate('document.querySelector("#review-form [name=date]").value'), '2026-10-19');
+      assert.equal(await evaluate('document.querySelector("#review-form [name=time]").value'), '18:00');
+      assert.match(await evaluate('document.querySelector(".detail-scroll").textContent'), /按完整原消息新建任务/);
+      await click('#pending-confirm-button');
+      await waitFor('backend.snapshot.items.find(item=>item.id==="standalone-0").kind==="task"');
+      let command = await evaluate('backend.messages.filter(message=>message.operation==="accept-review").at(-1)');
+      assert.equal(command.parameters.date, '2026-10-19'); assert.equal(command.parameters.time, '18:00');
+      await nav('pending'); await click('#batch-select-all'); await click('[data-action=batch-accept]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("已加入 1 项")');
+      command = await evaluate('backend.messages.filter(message=>message.operation==="accept-review").at(-1)');
+      assert.equal(command.parameters.id, 'standalone-1'); assert.equal(command.parameters.date, '2026-10-19'); assert.equal(command.parameters.time, '18:00');
+    });
+    await push(fixture);
     await t.test('待确认普通通知无需日期即可确认，失败保留原文，成功后进入通知', async () => {
       const noticeReview = { ...structuredClone(fixture.items[2]), id: 'notice-review', title: '赛前打磨工作的通知', action: 'inform', course: '', due: null, suggestedDue: null, suggestedTime: null, canAccept: false, canAcceptNotice: true, reviewReasons: ['课程或群关联尚未确认'] };
       await push({ ...structuredClone(fixture), items: [...structuredClone(fixture.items), noticeReview] });

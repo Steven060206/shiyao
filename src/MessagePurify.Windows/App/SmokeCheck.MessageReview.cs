@@ -11,6 +11,7 @@ internal static partial class SmokeCheck
 {
     private static async Task CheckMessageReviewAsync(string dataRoot)
     {
+        await CheckStandaloneChangeAsync(dataRoot);
         var root = Path.Combine(dataRoot, "message-review");
         var workspace = new AccountWorkspace(root, "10000");
         var now = DateTimeOffset.UtcNow;

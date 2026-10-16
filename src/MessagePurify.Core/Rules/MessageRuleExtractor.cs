@@ -50,10 +50,10 @@ public static class MessageRuleExtractor
         RuleCandidate ExtractPart(string part, bool ocr, bool conditional)
         {
             var action = GetAction(part);
-            var optional = Match(part, "自愿|有兴趣|感兴趣|自行报名|自由参加|(?<!不)可以(?:参加|报名)|(?<!不)可(?:参加|报名)");
+            var optional = IsOptional(part);
             var question = Match(part, "[?？]|是不是|是否|能否|要不要|有没有|什么时候|几点|啥时候|[吗么呢](?:$|[,，])");
-            var negated = Match(part, "(?:不用|无需|不需要|不要求|不必|不要|禁止)(?:再|继续)?(?:提交|交|报名|参加|完成)|不(?:提交|交作业|参加)|不可以(?:参加|报名)|(?:不|未|没有|不会|不能|不必|不要|无需)(?:再)?(?:取消|延期|延后|推迟|补交|重交|重新提交|新增)|(?:取消|延期|推迟)(?:不了|不掉)");
-            var uncertain = conditional || Match(part, "可能|也许|大概|似乎|好像|据说|听说|应该|估计|猜测|传闻|(?:老师|同学|有人|别人)说|转述|如果|假如|假设|倘若|要是|希望(?:取消|延期)|考虑(?:取消|延期)");
+            var negated = Match(part, "(?:不用|无需|不需要|不要求|不必|不要|禁止)(?:再|继续)?(?:提交|交|报名|参加|完成)|不(?:提交|交作业|参加)|不可以(?:参加|报名)|(?:不|未|没有|不会|不能|不必|不要|无需)(?:再)?(?:取消|延期|延后|推迟|改为|改成|补交|重交|重新提交|新增)|(?:取消|延期|推迟)(?:不了|不掉)");
+            var uncertain = conditional || Match(part, "可能|也许|大概|似乎|好像|据说|听说|应该|估计|猜测|传闻|(?:老师|同学|有人|别人)说|转述|如果|假如|假设|倘若|要是|希望(?:取消|延期|改为|改成)|考虑(?:取消|延期|改为|改成)");
             var partialCancel = action == RuleAction.Cancel && Match(part, "取消.*(?:格式|纸质版|电子版|打印|附件)");
             var actionReliable = !ocr && !question && !negated && !uncertain && !partialCancel;
             var courseReliable = !string.IsNullOrWhiteSpace(context.ConfirmedCourse);
@@ -132,7 +132,9 @@ public static class MessageRuleExtractor
                     Match(value, "^(?:大家)?(?:自愿|自行|自由|可自愿)(?:参加|报名)[!！]?$" );
                 var background = Match(value, "原定|原截止|原计划|原来") &&
                     GetAction(value) is not (RuleAction.Postpone or RuleAction.Cancel or RuleAction.NewRequirement);
-                if (HasAction(value) && !preference && !background)
+                var sharedChange = result.Count > 0 && GetAction(value) == RuleAction.Postpone &&
+                    Match(value, "统一\\s*改(?:为|成)");
+                if (HasAction(value) && !preference && !background && !sharedChange)
                 {
                     result.Add(new((prefix + value).Trim(), conditional));
                     prefix = "";
@@ -155,10 +157,27 @@ public static class MessageRuleExtractor
         (Match(text, "通知|放假|停课|开课|安排|课程调整|(?:作业|报告|论文).*(?:格式|要求)") &&
          !Match(text, "^(?:【(?:重要通知|通知|课程安排|安排|变更通知)】|通知|重要通知|课程安排|安排)[:：]?$"));
 
+    // Reuse the same action boundaries for persisted reviews as for fresh extraction.
+    // One optional clause must not turn a mixed mandatory message into a notice.
+    public static bool IsNoticeCandidate(RuleCandidate candidate)
+    {
+        if (candidate.TargetTaskId is not null) return false;
+        if (candidate.Action == RuleAction.Inform) return true;
+        var parts = SplitActions(candidate.Title);
+        return parts.Count > 0 && parts.All(part => GetAction(part.Text) == RuleAction.Inform ||
+            (GetAction(part.Text) is not (RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Remind)
+                && IsOptional(part.Text)));
+    }
+
+    private static bool IsOptional(string text) =>
+        Match(text, "自愿|有兴趣|感兴趣|自行报名|自由参加|(?<!不)可以(?:参加|报名)|(?<!不)可(?:参加|报名)");
+
     private static RuleAction GetAction(string text)
     {
         if (Match(text, "取消(?!资格)|停止(?:提交|报名|考试|活动)")) return RuleAction.Cancel;
-        if (Match(text, "延期|延后|推迟|延至|改到|调整到")) return RuleAction.Postpone;
+        if (Match(text, "延期|延后|推迟|延至|改到|调整到") ||
+            Match(text, @"改(?:为|成)\s*(?=(?:上午|下午|晚上|中午|早上|凌晨)?\s*(?:[0-9]{1,4}(?:年|月|[日号]|[点时:：/-])|今天|明天|后天|下周|本周|这周|(?:星期|周)[一二三四五六日天]))"))
+            return RuleAction.Postpone;
         if (Match(text, "补交|重新(?:提交|交|做)|重交|补做|新增要求|新要求|还需|追加|再交")) return RuleAction.NewRequirement;
         if (Match(text, "催交|提醒.*(?:交|提交)|尚未.*(?:交|提交)|还没.*交|尽快.*(?:交|提交)")) return RuleAction.Remind;
         if (Match(text, "提交|上交|交齐|交.{0,12}(?:作业|报告|论文|实验|材料|表|文件|习题|笔记|总结)|(?:作业|报告|论文|练习|材料).*(?:截止|交)|交第|交费|缴费|缴纳|上传|递交")) return RuleAction.Submit;

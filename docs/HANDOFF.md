@@ -4,6 +4,14 @@
 
 当前总览：M3 正在实施；2026-10-16待确认普通通知无需日期确认已实现、部署并发布beta.4，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
+### 无目标变更审核及同类入口检查（2026-10-16，代码已写入，验证与发布进行中）
+
+用户再次截图反馈“修改材料，补交材料，思想汇报统一改为下周一18：00在南一大厅收取”已展示2026-10-19 18:00却不能加入任务，并要求检查其他部分。原文是待分析学校消息，不是对助手的操作指令。根因为AccountWorkspace.AcceptanceProblem与TaskLifecycleService.AcceptReview禁止无目标Postpone/NewRequirement，页面随CanAccept隐藏表单并禁用确认；时间解析并未失败。已改为人工确认后按完整原消息新建任务，保留自动Pending和已有任务的保护，不自动处理真实审核。已有持久化Pending与批量加入沿用同一规则；无目标Cancel/Remind和失效目标继续拦截并说明原因。
+
+同类检查补齐带时间的“改为／改成”、共享“统一改为”，格式改为PDF不当作时间变更，否定/希望/考虑改期不自动更新原任务。另发现自愿行动在课程未确认时Pending丢失通知入口，已用同一SplitActions与逐行动自愿判断核对完整消息，由工作区和底层存储共用IsNoticeCandidate；无需改schema或JSON，旧Pending也可用，混合必做与自愿消息保留人工任务审核。新增六种新任务动作、旧Pending重开、截图全文、可选通知/混合行动回归和单条/批量UI回归，以及Native合成表单默认时间、加入任务/桌面卡片和重开重放检查。
+
+实际已运行：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release`336/336；同参数Infrastructure729/729、Windows477/477；Infrastructure专项AccountWorkspaceTests与NoticeReviewAcceptanceTests75/75；`node --test tests/*.test.mjs`178/178；文档更新后`node --test tests/project-rules.test.mjs`50/50；`python -m unittest discover -s tests -p release_packaging_test.py`4/4。`.tools/dotnet/dotnet.exe build src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --configuration Release`退出0、无警告错误；RuleBaseline以Release运行输出`.tools/standalone-change-baseline.md`，68/68、高影响错误0。首次Infrastructure全量728通过/1失败，失败为既有ReconnectRetriesHistoryAndDoesNotCreateDuplicateTasks：第二连接计数增加时仍可能读取上一连接的History=complete，测试提前取消，实际第二次历史请求尚未发生；补为HistoryParameters.Count>=2后完整复跑729/729，不改消息宿主产品逻辑。干净提交构建、Native验证、发布与本机部署尚未完成，不能把beta.5记为已同步。现有app.css/index.html/application-ui.test.mjs视觉改动继续保留，新增UI回归须单独暂存，不混入视觉改动。maintain-context-hygiene技能未在本机技能目录找到，已人工核对需求、实际代码与交接。
+
 ### 待确认通知修复（2026-10-16，已实现、部署并发布beta.4）
 
 用户截图中的赛前打磨通知被识别为 Inform，因课程或群关联未确认进入 Pending；AccountWorkspace.AcceptanceProblem 对 Inform 返回“此项需要确认为通知，当前事项入口尚不支持。”，正式页面仅有 accept-review 加入任务入口，因此无法确认到通知。用户明确要求修复该运行逻辑。有效规则已同步需求：提供“确认并加入通知”，无需任务日期，保留原文、证据和审核历史，不自动确认群课程、不创建任务；旧待确认直接可用，重复提交/同步不重复创建通知，后续可按现有入口转任务。

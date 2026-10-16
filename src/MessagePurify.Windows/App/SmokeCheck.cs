@@ -261,6 +261,7 @@ internal static partial class SmokeCheck
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
             checks = new[] { "branding", "taskbar-identity", "tray-menu-no-sync", "tray-double-click-no-sync", "batch-ignore-undo", "batch-accept-task", "batch-reopen-evidence", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "message-review-one-row", "message-review-full-source", "message-review-single-accept", "message-review-manual-split",
+                "standalone-change-form", "standalone-change-accept-desktop", "standalone-change-reopen-replay",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",
                 "edit-task", "edit-task-reopen", "edit-task-desktop", "edit-task-conflict",
                 "change-history", "change-read", "desktop-new-requirement", "desktop-change-read",

@@ -819,7 +819,8 @@ public sealed class ApplicationMessageHostTests : IDisposable
         {
             await UntilAsync(() => host.Status.History == "complete");
             Volatile.Write(ref failFirstConnection, true);
-            await UntilAsync(() => server.ConnectionCount >= 2 && host.Status.History == "complete");
+            await UntilAsync(() => server.ConnectionCount >= 2 && server.HistoryParameters.Count >= 2
+                && host.Status.History == "complete");
         }
         finally { cancellation.Cancel(); await running.WaitAsync(TimeSpan.FromSeconds(5)); }
         Assert.Equal(2, server.ConnectionCount);

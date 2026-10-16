@@ -97,6 +97,8 @@ public class RuleExtractionTests
     [InlineData("实验报告没有延期")]
     [InlineData("实验报告不会延期")]
     [InlineData("实验报告不要重新提交")]
+    [InlineData("实验报告不改为下周一18:00")]
+    [InlineData("实验报告没有改成下周一18:00")]
     public void NegatedHighImpactActionsCannotChangeTasks(string text)
     {
         Assert.Equal(RuleDisposition.Ignored, Single(text, Context(tasks: [Task()])).Disposition);
@@ -151,6 +153,47 @@ public class RuleExtractionTests
         Assert.Equal(action, candidate.Action);
         Assert.Equal(new DateOnly(2026, 10, 12), candidate.Time!.Date);
         Assert.Equal(action == RuleAction.Postpone ? RuleDisposition.Change : RuleDisposition.Task, candidate.Disposition);
+    }
+
+    [Theory]
+    [InlineData("材料统一改为下周一18：00收取")]
+    [InlineData("材料改成下周一18：00收取")]
+    public void ChangeToSynonymsRemainTimedPendingChanges(string text)
+    {
+        var candidate = Single(text);
+        Assert.Equal(RuleAction.Postpone, candidate.Action);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Equal(new DateOnly(2026, 10, 12), candidate.Time!.Date);
+        Assert.Equal(new TimeOnly(18, 0), candidate.Time.Time);
+        Assert.Null(candidate.TargetTaskId);
+    }
+
+    [Fact]
+    public void FormatChangeWithoutDateRemainsAnInformationalNotice()
+    {
+        var candidate = Single("实验报告格式改为PDF");
+        Assert.Equal(RuleAction.Inform, candidate.Action);
+        Assert.Equal(RuleDisposition.Notice, candidate.Disposition);
+    }
+
+    [Theory]
+    [InlineData("实验报告考虑改为下周一18:00")]
+    [InlineData("实验报告希望改成下周一18:00")]
+    public void ProposedTimeChangesRemainPending(string text)
+    {
+        Assert.Equal(RuleDisposition.Pending, Single(text, Context(tasks: [Task()])).Disposition);
+    }
+
+    [Theory]
+    [InlineData("下周一18点自愿报名讲座", true)]
+    [InlineData("自愿参加讲座", true)]
+    [InlineData("有兴趣的同学明天提交竞赛报名表", true)]
+    [InlineData("明天必须参加考试；后天自愿参加讲座", false)]
+    [InlineData("明天交实验报告，自愿参加", false)]
+    [InlineData("明天交实验报告", false)]
+    public void NoticeAcceptanceChecksEveryAction(string text, bool expected)
+    {
+        Assert.Equal(expected, MessageRuleExtractor.IsNoticeCandidate(Single(text)));
     }
 
     [Theory]
