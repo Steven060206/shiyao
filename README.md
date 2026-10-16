@@ -18,6 +18,7 @@
 ## 当前测试版
 
 - 支持任务、待确认、普通通知、日期与优先级编辑、完成/撤销、合并/拆分、批量审核、搜索筛选、桌面卡片和本地备份恢复。
+- 已识别正式时间的补交、延期或改期消息，找不到旧任务时仍可确认成独立任务；旧待确认和批量加入同样可用，自愿活动可保留为通知。
 - 一条 QQ 原消息只生成一个完整待确认项；多个日期由你核对，加入任务后可按需手动拆分。升级会整理同一原消息尚未处理的旧拆分项，保留已确认、已忽略和手动拆分的结果。
 - 同步保留已忽略和已确认的处理结果；所有消息按最新原消息时间倒序。已忽略消息位于独立“回收站”，无待办时隐藏提醒卡片，有新待办时自动显示。
 - 只读取置顶群；应用不向 QQ 群或私聊发送消息。消息和事项保存在当前 Windows 用户的 `%LOCALAPPDATA%\MessagePurify\App`。
@@ -37,7 +38,7 @@ dotnet publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj -c
 从 [NapCat 官方 v4.18.37 Release](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37) 下载未配置的 `NapCat.Framework.zip`，再用 Python 3 创建同学下载包：
 
 ```powershell
-python tools/build_release.py --publish-directory .tools/published/release --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.4
+python tools/build_release.py --publish-directory .tools/published/release --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.5
 ```
 
 测试命令：
