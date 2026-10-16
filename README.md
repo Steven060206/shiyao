@@ -37,7 +37,7 @@ dotnet publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj -c
 从 [NapCat 官方 v4.18.37 Release](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37) 下载未配置的 `NapCat.Framework.zip`，再用 Python 3 创建同学下载包：
 
 ```powershell
-python tools/build_release.py --publish-directory .tools/published/release --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.3
+python tools/build_release.py --publish-directory .tools/published/release --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.4
 ```
 
 测试命令：

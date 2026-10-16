@@ -23,13 +23,13 @@ test('用户已选择一条原消息一个完整待确认项，保留人工结�
   }
 });
 
-test('最新交付按真实物理数据记账，保留退出证据边界', () => {
+test('整条原消息审核的历史交付保留真实物理数据与退出证据边界', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
     const content = fs.readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
     const current = file.endsWith('requirements.md')
-      ? content.match(/^最新交付状态.*$/m)?.[0]
-      : content.split('### 当前接续')[1]?.split('### 上一段')[0];
-    assert.ok(current, `${file}: missing current delivery section`);
+      ? content.match(/^上一轮交付状态（2026-10-15.*$/m)?.[0]
+      : content.split('### 上一段（一条原消息一项审核，2026-10-15')[1]?.split('### 上一段')[0];
+    assert.ok(current, `${file}: missing historical whole-message delivery section`);
     assert.match(current, /MSIX/);
     assert.match(current, /两套profile分别保护、未合并/);
     assert.match(current, /99条审核/);
