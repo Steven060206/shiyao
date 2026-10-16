@@ -131,6 +131,9 @@ const mockScript = `(() => {
         if(command.operation==='complete' || command.operation==='ignore') { item.undoOperationId=parameters.operationId;item.undoExpiresAt=new Date(Date.now()+3600000).toISOString(); }
         if(command.operation==='accept-time'){item.due=parameters.date;item.time=parameters.time || null;item.timeKind=parameters.timeKind;}
         if(command.operation==='edit-task'){item.title=parameters.title;item.course=parameters.course || null;item.due=parameters.date;item.time=parameters.time || null;item.timeKind=parameters.timeKind;item.priority=parameters.priority;}
+        if(command.operation==='accept-notice') {
+          item.id='notice-review-'+item.id;item.kind='notice';item.state='active';item.canAccept=false;item.canAcceptNotice=false;
+        }
         if(command.operation==='accept-review') {
           if(item.action==='cancel')backend.snapshot.items.find(target=>target.id===item.targetTaskId).state='cancelled';
           item.kind='task';item.state='active';item.due=parameters.date || null;item.time=parameters.time || null;item.timeKind=parameters.timeKind || 'deadline';
@@ -758,6 +761,34 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await click('[data-group-id="100"] [data-action="exclude-group"]');
       command = await evaluate('backend.messages.filter(message=>message.operation==="confirm-group").at(-1)');
       assert.equal(command.parameters.excluded, true);
+    });
+    await push(fixture);
+    await t.test('待确认普通通知无需日期即可确认，失败保留原文，成功后进入通知', async () => {
+      const noticeReview = { ...structuredClone(fixture.items[2]), id: 'notice-review', title: '赛前打磨工作的通知', action: 'inform', course: '', due: null, suggestedDue: null, suggestedTime: null, canAccept: false, canAcceptNotice: true, reviewReasons: ['课程或群关联尚未确认'] };
+      await push({ ...structuredClone(fixture), items: [...structuredClone(fixture.items), noticeReview] });
+      await nav('pending'); await select('notice-review');
+      assert.equal(await evaluate('document.querySelector("#pending-confirm-button").textContent'), '确认并加入通知');
+      assert.equal(await evaluate('document.querySelector("#pending-confirm-button").disabled'), false);
+      assert.equal(await evaluate('document.querySelector("#pending-confirm-button").dataset.action'), 'accept-notice');
+      assert.equal(await evaluate('document.querySelectorAll("#review-form,[name=date],[name=time]").length'), 0);
+      assert.match(await evaluate('document.querySelector("#pending-confirm-help").textContent'), /通知列表/);
+      assert.doesNotMatch(await evaluate('document.querySelector(".detail-scroll").textContent'), /当前建议无法直接接受/);
+      const tasksBefore = await evaluate('backend.snapshot.items.filter(item=>item.kind==="task").length');
+      await evaluate('backend.failNext="version_conflict"'); await click('#pending-confirm-button');
+      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /变化/);
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="notice-review").state'), 'pending');
+      assert.match(await evaluate('document.querySelector(".detail-scroll").textContent'), /原消息正文/);
+      await click('#pending-confirm-button');
+      await waitFor('backend.snapshot.items.some(item=>item.id==="notice-review-notice-review" && item.kind==="notice")');
+      const accepted = await evaluate('backend.messages.filter(message=>message.operation==="accept-notice").at(-1)');
+      assert.equal(accepted.parameters.accountId, '12345'); assert.equal(accepted.parameters.id, 'notice-review'); assert.equal(accepted.parameters.version, 1);
+      assert.equal(accepted.parameters.date, undefined); assert.equal(accepted.parameters.time, undefined); assert.equal(accepted.parameters.timeKind, undefined);
+      assert.equal(await evaluate('backend.snapshot.items.filter(item=>item.kind==="task").length'), tasksBefore);
+      assert.equal(await evaluate('backend.snapshot.groups[0].course'), null);
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'notices');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'notice-review-notice-review');
+      assert.match(await evaluate('document.querySelector(".detail-title").textContent'), /赛前打磨/);
+      assert.match(await evaluate('document.querySelector(".detail-scroll").textContent'), /原消息正文/);
     });
     await push(fixture);
     await t.test('普通通知可补正式日期转为任务并保留通知入口', async () => {

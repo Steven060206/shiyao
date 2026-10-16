@@ -1,8 +1,18 @@
 # 拾要（原消息提纯）：项目交接文档
 
-最后更新：2026-10-15（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
+最后更新：2026-10-16（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
 当前总览：M3 正在实施；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+
+### 待确认通知修复（2026-10-16，代码已实现，验证与发布进行中）
+
+用户截图中的赛前打磨通知被识别为 Inform，因课程或群关联未确认进入 Pending；AccountWorkspace.AcceptanceProblem 对 Inform 返回“此项需要确认为通知，当前事项入口尚不支持。”，正式页面仅有 accept-review 加入任务入口，因此无法确认到通知。用户明确要求修复该运行逻辑。有效规则已同步需求：提供“确认并加入通知”，无需任务日期，保留原文、证据和审核历史，不自动确认群课程、不创建任务；旧待确认直接可用，重复提交/同步不重复创建通知，后续可按现有入口转任务。
+
+已写入代码：ApplicationItem 追加 CanAcceptNotice；独立 accept-notice 命令将 routing.notices、reviews Accepted/Version+1 及 operations before/after 在三库回滚日志事务中一起提交，AcceptedTaskId=null，不新增任务，不改 schema 1。通知ID为 notice-review-{review.Id}，按原路由ID核对来源而非按证据排序猜原消息；原审核候选、原文、证据、课程未确认状态和群关系保留。桥仅允许账号、ID、操作ID、版本及可选generation；页面显示“确认并加入通知”且不渲染任务日期表单，当前仍查看同项时成功后跳到通知并定位原文。旧Pending直接可用，备份恢复、清理保留和后续通知转任务复用既有流程。
+
+已实际运行：Core Release323/323；Infrastructure Release718/718（含新增14项）；Windows Release477/477（含新增21项协议）；node --test tests/*.test.mjs 最终177/177；Python release_packaging_test.py 4/4、OCR25/25及pip check通过。清理后首次 --no-restore 曾退出0但无测试输出，发现obj缺失后已正常restore并确认真实测试计数，未把空运行记为通过。浏览器新回归修复前显示“确认并加入任务”而失败，后续发现openItem不支持notice，接通后89/89通过。Node初次176通过/1失败因README提前换beta.4但当前已发布仍beta.3，保留beta.3示例并复跑177/177通过；发布成功后再同步版本。首次Native合成检查在重开后定位通知超时，根因为Smoke仅等待NavigationCompleted就导航，被首个snapshot默认页覆盖；已按既有模式等待snapshot和initialized，产品流程无需改动；重新publish后 python tests/app_desktop_test.py --executable .tools/published/notice-review-test/MessagePurify.exe 退出0，126项Native/真实桌面父窗检查通过（含7项新增通知审核），synthetic=true。
+
+下一步：限定提交，再从已提交干净源码构建beta.4，核对本机部署及GitHub源码/Release。当前尚未部署或发布。现有 app.css、index.html、application-ui.test.mjs 三项未提交视觉工作保留，只提交本轮新增通知审核测试，不混入既有视觉改动。maintain-context-hygiene技能文件仍未找到，已人工核对有效需求、交接与实现；不操作真实审核、不确认群课程、不触发QQ同步。
 
 ### 本机旧产物清理（2026-10-15，已完成并核验）
 

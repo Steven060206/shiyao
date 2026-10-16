@@ -189,7 +189,7 @@ function openItem(message) {
   if (snapshot.accountId !== message.accountId) {
     hostError = '此事项所属 QQ 账号与当前账号不一致，请核对账号后再打开。'; render(); return;
   }
-  let item = items().find(item => item.id === message.id && ['task', 'review', 'merge-review'].includes(item.kind));
+  let item = items().find(item => item.id === message.id && ['task', 'review', 'merge-review', 'notice'].includes(item.kind));
   const visited = new Set();
   while (item && (item.state === 'merged' && item.mergedIntoId || item.kind === 'review' && item.state === 'accepted' && item.targetTaskId)) {
     if (visited.has(item.id)) { item = null; break; }
@@ -198,7 +198,7 @@ function openItem(message) {
   }
   if (!item) { hostError = '未找到此事项，请刷新后重试。'; render(); return; }
   manualOpen = false; structureOpen = null; mergedSourceId = null;
-  page = reviewItem(item) ? item.state === 'ignored' ? 'trash' : 'pending' : item.state === 'completed' ? 'completed' : 'tasks';
+  page = reviewItem(item) ? item.state === 'ignored' ? 'trash' : 'pending' : item.kind === 'notice' ? 'notices' : item.state === 'completed' ? 'completed' : 'tasks';
   filters = { search: '', course: '', state: item.state };
   selectedId = item.id; detailError = null; hostError = '';
   render();
@@ -298,7 +298,7 @@ function receive(message) {
       if (pending.itemId && pending.operation !== 'create-task') {
         drafts.delete(pending.itemId);
         if (pending.operation === 'confirm-group') groupDrafts.delete(pending.itemId);
-        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在回收站中撤销', 'accept-review': '已确认', 'accept-time': '正式时间已保存', 'edit-task': '任务修改已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
+        toast({ complete: '已完成，可在已完成记录中撤销', ignore: '已忽略，可在回收站中撤销', 'accept-review': '已确认', 'accept-notice': '已加入通知，原消息已保留', 'accept-time': '正式时间已保存', 'edit-task': '任务修改已保存', 'convert-notice': '已转为任务，可在待办中查看', 'confirm-group': '群课程关联已保存' }[pending.operation] || '已保存');
       }
     }
   } else if (message.type !== 'state') return;
@@ -372,6 +372,10 @@ function receive(message) {
       structuralDraft.refresh = false; structuralDraft.error = ''; detailSignature = '';
     }
     if (detailError?.id === item?.id) detailError = null;
+  }
+  if (pending?.operation === 'accept-notice' && message.success && pending.accountId === snapshot?.accountId
+      && page === 'pending' && selectedId === pending.itemId) {
+    openItem({ accountId: pending.accountId, id: 'notice-review-' + pending.itemId }); return;
   }
   if (pendingOpenItem && snapshot) { openItem(pendingOpenItem); return; }
   render();
@@ -717,12 +721,12 @@ function renderDetail() {
         ${item.kind === 'review' && item.reviewReasons?.length ? `<div class="change-box">需要核对<p>${html(item.reviewReasons.join(' · '))}</p></div>` : ''}
         <div class="detail-actions">${actionsHTML(item)}</div>
         ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
-        ${item.kind === 'review' && item.state === 'pending' && !item.canAccept ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
+        ${item.kind === 'review' && item.state === 'pending' && !item.canAccept && !item.canAcceptNotice ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
         ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${relatedHTML(item)}${historyHTML(item)}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
     });
     footer.hidden = !item || item.kind !== 'review' || item.state !== 'pending';
-    footer.innerHTML = item ? `<p class="error" id="detail-error" role="alert" hidden></p>${item.kind === 'task' ? '<button class="button" data-action="refresh-edit" hidden>刷新并核对最新内容</button>' : ''}${!footer.hidden ? `<p id="pending-confirm-help">${item.action === 'cancel' ? '确认后取消关联任务。' : item.targetTaskId ? '确认后更新关联任务；已有正式记录仍保留。' : '补齐正式日期后加入任务，保留原消息来源。'}</p><button class="button primary" id="pending-confirm-button" data-action="accept-review" ${!item.canAccept ? 'disabled' : ''}>${item.action === 'cancel' ? '确认取消关联任务' : item.targetTaskId ? '确认并更新任务' : '确认并加入任务'}</button>` : ''}` : '';
+    footer.innerHTML = item ? `<p class="error" id="detail-error" role="alert" hidden></p>${item.kind === 'task' ? '<button class="button" data-action="refresh-edit" hidden>刷新并核对最新内容</button>' : ''}${!footer.hidden ? `<p id="pending-confirm-help">${item.canAcceptNotice ? '核对原消息适用于自己后，确认保存到通知列表；无需填写任务日期。' : item.action === 'cancel' ? '确认后取消关联任务。' : item.targetTaskId ? '确认后更新关联任务；已有正式记录仍保留。' : '补齐正式日期后加入任务，保留原消息来源。'}</p><button class="button primary" id="pending-confirm-button" data-action="${item.canAcceptNotice ? 'accept-notice' : 'accept-review'}" ${!item.canAccept && !item.canAcceptNotice ? 'disabled' : ''}>${item.canAcceptNotice ? '确认并加入通知' : item.action === 'cancel' ? '确认取消关联任务' : item.targetTaskId ? '确认并更新任务' : '确认并加入任务'}</button>` : ''}` : '';
     if (item && footer.hidden) { footer.hidden = false; footer.classList.add('error-only'); }
     else footer.classList.remove('error-only');
     detailSignature = signature;
@@ -747,7 +751,7 @@ function updateDetailControls() {
     const options = courseOptions().map(course => `<option value="${html(course)}"></option>`).join('');
     if (courseList.innerHTML !== options) courseList.innerHTML = options;
   }
-  $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && (busy.has(item.id) || busy.has(structureBusyKey(snapshot?.accountId, item.id)))) || (button.id === 'pending-confirm-button' && !item?.canAccept); });
+  $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && (busy.has(item.id) || busy.has(structureBusyKey(snapshot?.accountId, item.id)))) || (button.id === 'pending-confirm-button' && !item?.canAccept && !item?.canAcceptNotice); });
   const structuralForm = $('merge-task-form') || $('split-task-form'), structuralDraft = structureDraft();
   if (structuralForm && structuralDraft) {
     const saving = busy.has(structureBusyKey(snapshot.accountId, item.id)) || busy.has(item.id);
@@ -990,6 +994,8 @@ document.addEventListener('click', event => {
   }
   if (action === 'accept-review') {
     acceptReview(item);
+  } else if (action === 'accept-notice') {
+    if (item?.canAcceptNotice && item.state === 'pending') command('accept-notice', item);
   } else if (action === 'edit-task') { /* The form submit handler validates and sends this command. */ }
   else if (action === 'convert-notice') { /* The form submit handler validates and sends this command. */ }
   else if (action === 'open-target') {

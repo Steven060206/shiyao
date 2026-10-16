@@ -192,6 +192,7 @@ public sealed partial class AccountWorkspace
                         candidate.ReviewReasons.Append(reason).Distinct().ToArray(), candidate.SuggestedTime,
                     review.State == ReviewState.Pending && reason is null) with
                     { RelatedItemIds = review.SplitParentTaskId is { } parentId ? [CurrentTaskId(parentId)] : null,
+                      CanAcceptNotice = review.State == ReviewState.Pending && candidate.Action == RuleAction.Inform && candidate.TargetTaskId is null,
                       TimeKind = (candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind ?? review.SplitTimeKind ?? Core.TimeKind.Deadline).ToString().ToLowerInvariant() });
             }
             foreach (var notice in router.ListNotices())
@@ -323,6 +324,10 @@ public sealed partial class AccountWorkspace
                     tasks.KeepSeparate(command.Id, command.MergeWithId, command.OperationId, command.Version,
                         command.MergeWithVersion ?? throw new ArgumentException("须核对另一事项版本。"), now); break;
                 case "split-task": SplitTask(command, now); break;
+                case "accept-notice":
+                    if (command.Date is not null || command.Time is not null || command.TimeKind is not null)
+                        throw new ArgumentException("确认通知无需填写任务日期。", nameof(command));
+                    router.AcceptReviewAsNotice(command.Id, command.OperationId, command.Version, now); break;
                 case "accept-review":
                     var review = tasks.FindReview(command.Id) ?? throw new KeyNotFoundException("待确认事项不存在。");
                     var candidate = review.Candidate;
@@ -432,7 +437,7 @@ public sealed partial class AccountWorkspace
 
     private static string? AcceptanceProblem(RuleCandidate candidate, bool targetExists, bool userSplit = false)
     {
-        if (candidate.Action == RuleAction.Inform) return "此项需要确认为通知，当前事项入口尚不支持。";
+        if (candidate.Action == RuleAction.Inform) return "普通通知请使用“确认并加入通知”。";
         if (!userSplit && candidate.Action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement && candidate.TargetTaskId is null)
             return "关联变更缺少目标事项，需先核对关联。";
         if (candidate.TargetTaskId is not null && !targetExists) return "关联目标事项不存在，需先核对关联。";

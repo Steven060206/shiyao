@@ -12,7 +12,7 @@ public static class AppBridgeProtocol
     private static readonly HashSet<string> Operations = new(StringComparer.Ordinal)
     {
         "snapshot", "sync-now", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
-        "reject", "accept-review", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart",
+        "reject", "accept-review", "accept-notice", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart",
         "merge-tasks", "keep-separate", "split-task", "clean-cache", "export-backup", "inspect-backup",
         "restore-backup", "cancel-backup", "open-backup-location"
     };
@@ -100,6 +100,8 @@ public static class AppBridgeProtocol
                     || number < (operation is "confirm-group" or "create-task" or "clean-cache" ? 0 : 1)
                     || operation is "create-task" or "clean-cache" && number != 0) return false;
             }
+            if (operation == "accept-notice" && parameters.EnumerateObject().Any(p =>
+                p.Name is not ("accountId" or "id" or "operationId" or "version" or "generation"))) return false;
             if (operation == "clean-cache" && (parameters.EnumerateObject().Count() != (parameters.TryGetProperty("generation", out _) ? 5 : 4)
                 || parameters.GetProperty("id").GetString() != "cache")) return false;
             if (operation is "merge-tasks" or "keep-separate")
