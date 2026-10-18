@@ -200,7 +200,7 @@ public sealed partial class AccountWorkspace
                 var convertedId = CurrentTaskId("notice-task-" + notice.Id);
                 var converted = taskList.FirstOrDefault(task => task.Id == convertedId);
                 items.Add(Item(notice.Id, "notice", notice.Candidate.Title, notice.Candidate.Course,
-                    converted is null ? "active" : "converted", notice.Candidate.Time, notice.ProcessingVersion,
+                    converted is null ? "active" : "converted", NoticeTime(notice), notice.ProcessingVersion,
                     notice.Candidate.Evidence, notice.Candidate.Action, now, converted?.Id, converted?.Version,
                     reasons: notice.Candidate.ReviewReasons, suggested: notice.Candidate.SuggestedTime));
             }
@@ -401,11 +401,25 @@ public sealed partial class AccountWorkspace
         if (notice.AccountId != AccountId) throw new ArgumentException("通知账号不属于当前工作区。", nameof(command));
         if (notice.ProcessingVersion != command.Version)
             throw new InvalidOperationException("通知已有变化，请重新读取后再转换。");
-        var time = ReadTime(command, notice.Candidate.Time?.Kind ?? notice.Candidate.SuggestedTime?.Kind)
+        var time = ReadTime(command, NoticeTime(notice)?.Kind ?? notice.Candidate.SuggestedTime?.Kind)
             ?? throw new ArgumentException("加入任务前须填写正式日期。", nameof(command));
         tasks.CreateTaskFromNotice("notice-task-" + notice.Id, notice.Id, notice.Candidate,
             time, PriorityCalculator.Calculate(time, now, false),
             command.OperationId, now);
+    }
+
+    private TaskTime? NoticeTime(StoredNotice notice)
+    {
+        if (notice.Candidate.Time is { } time) return time;
+        // Older notices retain their original candidate and audit. Resolve only text from
+        // the actual source message, using its send time; OCR remains a suggestion.
+        var source = messages.Find(notice.Source)?.Message;
+        if (source is null) return null;
+        var text = string.Join("\n", source.Segments.Where(segment => segment.Kind == SegmentKind.Text)
+            .Select(segment => segment.Text));
+        return (notice.Candidate.Action == RuleAction.Attend
+            ? MessageDateParser.Parse(text, source.SentAt, "China Standard Time", Core.TimeKind.Start)
+            : MessageDateParser.ParseNotice(text, source.SentAt, "China Standard Time")).Time;
     }
 
     private void SplitTask(WorkspaceCommand command, DateTimeOffset now)

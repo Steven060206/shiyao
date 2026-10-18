@@ -226,4 +226,174 @@ public class MessageDateParserTests
         Assert.Equal(DateIssue.Invalid, result.Issue);
         Assert.Null(result.Time);
     }
+
+    [Fact]
+    public void ActivityNotice_WithWeekdayDateAliasAndRoom_RetainsStartFromOriginalMessageDate()
+    {
+        const string text = "关于26餐饮设计比赛赛前打磨工作的通知：\n时间：下周二(10.20)下午1点～4点\n地点：北4-302";
+        var result = MessageDateParser.Parse(text, DateTimeOffset.Parse("2026-10-16T18:00:00+08:00"),
+            Zone, TimeKind.Start);
+
+        Assert.Equal(DateIssue.None, result.Issue);
+        Assert.Equal(new DateOnly(2026, 10, 20), result.Time!.Date);
+        Assert.Equal(new TimeOnly(13, 0), result.Time.Time);
+        Assert.Equal(TimeKind.Start, result.Time.Kind);
+    }
+
+    [Theory]
+    [InlineData("明天下午1点～4点", 13, 0)]
+    [InlineData("明天1点到下午4点", 13, 0)]
+    [InlineData("明天下午1点至16点", 13, 0)]
+    [InlineData("明天13点至下午4点", 13, 0)]
+    [InlineData("明天下午12点到1点", 12, 0)]
+    [InlineData("明天上午11点至下午1点", 11, 0)]
+    [InlineData("明天上午9点至中午12点", 9, 0)]
+    [InlineData("明天晚上8点～10点", 20, 0)]
+    [InlineData("明天凌晨1点到3点", 1, 0)]
+    [InlineData("明天9点至11点", 9, 0)]
+    [InlineData("明天13:00-16:00", 13, 0)]
+    [InlineData("明天13时00分—16时00分", 13, 0)]
+    [InlineData("明天 下午1点半 ~ 4点30分", 13, 30)]
+    [InlineData("明天上午9:15到11:45", 9, 15)]
+    public void ReliableSameDayActivityRange_UsesStartAndSharesPeriodOnlyWithinRange(
+        string text, int hour, int minute)
+    {
+        var result = MessageDateParser.Parse(text, SentAt, Zone, TimeKind.Start);
+        var notice = MessageDateParser.ParseNotice(text, SentAt, Zone);
+        var deadline = MessageDateParser.Parse(text, SentAt, Zone, TimeKind.Deadline);
+
+        Assert.Equal(DateIssue.None, result.Issue);
+        Assert.Equal(new DateOnly(2026, 10, 11), result.Time!.Date);
+        Assert.Equal(new TimeOnly(hour, minute), result.Time.Time);
+        Assert.Equal(TimeKind.Start, result.Time.Kind);
+        Assert.Equal(result, notice);
+        Assert.Equal(DateIssue.Ambiguous, deadline.Issue);
+        Assert.Null(deadline.Time);
+    }
+
+    [Theory]
+    [InlineData("通知：明天", null)]
+    [InlineData("通知：明天下午1点", 13)]
+    public void NoticeWithSingleDateOrClock_KeepsExistingDeadlineSemantics(string text, int? hour)
+    {
+        var result = MessageDateParser.ParseNotice(text, SentAt, Zone);
+
+        Assert.Equal(DateIssue.None, result.Issue);
+        Assert.Equal(new DateOnly(2026, 10, 11), result.Time!.Date);
+        Assert.Equal(hour is null ? (TimeOnly?)null : new TimeOnly(hour.Value, 0), result.Time.Time);
+        Assert.Equal(TimeKind.Deadline, result.Time.Kind);
+    }
+
+    [Theory]
+    [InlineData("2026-10-16T18:00:00+08:00", "下周二(10.20)", 2026, 10, 20)]
+    [InlineData("2026-12-31T18:00:00+08:00", "下周二（1.5）", 2027, 1, 5)]
+    [InlineData("2027-10-15T18:00:00+08:00", "下周三(10.20)", 2027, 10, 20)]
+    [InlineData("2026-10-16T18:00:00+08:00", "2027年10月20日(10.20)", 2027, 10, 20)]
+    public void BracketedMonthDayAlias_ValidatesAgainstDateAndInheritsItsYear(
+        string sentAt, string date, int year, int month, int day)
+    {
+        var result = MessageDateParser.ParseNotice($"通知：{date}下午1点～4点",
+            DateTimeOffset.Parse(sentAt), Zone);
+
+        Assert.Equal(DateIssue.None, result.Issue);
+        Assert.Equal(new DateOnly(year, month, day), result.Time!.Date);
+        Assert.Equal(new TimeOnly(13, 0), result.Time.Time);
+    }
+
+    [Theory]
+    [InlineData("下周二(10.21)", DateIssue.Ambiguous)]
+    [InlineData("下周三(10.20)", DateIssue.Ambiguous)]
+    [InlineData("2027年10月20日(10.21)", DateIssue.Ambiguous)]
+    [InlineData("下周二(13.20)", DateIssue.Invalid)]
+    [InlineData("下周二(2.30)", DateIssue.Invalid)]
+    [InlineData("下周二(2.29)", DateIssue.Invalid)]
+    [InlineData("下周二(100.20)", DateIssue.Invalid)]
+    [InlineData("下周二(10.20.1)", DateIssue.Invalid)]
+    [InlineData("下周二(10.20或10.21)", DateIssue.Invalid)]
+    [InlineData("下周二(10.20", DateIssue.Invalid)]
+    public void ConflictingOrInvalidMonthDayAlias_DoesNotSilentlyIgnoreExplicitDate(
+        string date, DateIssue expectedIssue)
+    {
+        var result = MessageDateParser.ParseNotice($"通知：{date}下午1点～4点",
+            DateTimeOffset.Parse("2026-10-16T18:00:00+08:00"), Zone);
+
+        Assert.Equal(expectedIssue, result.Issue);
+        Assert.Null(result.Time);
+    }
+
+    [Theory]
+    [InlineData("预算10.20万元")]
+    [InlineData("评分10.20分")]
+    [InlineData("版本v1.2通知")]
+    [InlineData("预算(10.20)通知")]
+    [InlineData("10.20下午1点～4点")]
+    public void DecimalOrStandaloneDotNumbers_DoNotInventCalendarDate(string text)
+    {
+        var result = MessageDateParser.ParseNotice(text, SentAt, Zone);
+
+        Assert.Equal(DateIssue.Missing, result.Issue);
+        Assert.Null(result.Time);
+    }
+
+    [Fact]
+    public void DecimalElsewhereInMessage_DoesNotBecomeConflictingDateAlias()
+    {
+        var result = MessageDateParser.ParseNotice("明天（预算10.20万元）下午1点～4点", SentAt, Zone);
+
+        Assert.Equal(DateIssue.None, result.Issue);
+        Assert.Equal(new DateOnly(2026, 10, 11), result.Time!.Date);
+        Assert.Equal(new TimeOnly(13, 0), result.Time.Time);
+    }
+
+    [Theory]
+    [InlineData("明天9点或11点")]
+    [InlineData("明天9点或者11点")]
+    [InlineData("明天9点、11点")]
+    [InlineData("明天9点，11点")]
+    [InlineData("明天11点到9点")]
+    [InlineData("明天9点到9点")]
+    [InlineData("明天23点到1点")]
+    [InlineData("明天晚上11点到凌晨1点")]
+    [InlineData("明天晚上10点到12点")]
+    [InlineData("明天中午11点到1点")]
+    [InlineData("明天9点到11点到13点")]
+    [InlineData("明天9点到11点，13点到15点")]
+    [InlineData("明天9点到后天11点")]
+    [InlineData("10月12日至10月12日9点到11点")]
+    [InlineData("明天9点到25点")]
+    [InlineData("明天下午13点到16点")]
+    [InlineData("明天9:00到11:00:00")]
+    [InlineData("明天9点到11点一刻")]
+    [InlineData("明天9点30秒到11点")]
+    [InlineData("9点到11点")]
+    public void UnreliableRange_ProducesNoStartForTaskOrNotice(string text)
+    {
+        var activity = MessageDateParser.Parse(text, SentAt, Zone, TimeKind.Start);
+        var notice = MessageDateParser.ParseNotice(text, SentAt, Zone);
+
+        Assert.NotEqual(DateIssue.None, activity.Issue);
+        Assert.Null(activity.Time);
+        Assert.NotEqual(DateIssue.None, notice.Issue);
+        Assert.Null(notice.Time);
+    }
+
+    [Fact]
+    public void ThreeRepeatedClocks_CannotBecomeActivityStart()
+    {
+        var result = MessageDateParser.Parse("明天9点（9点）（9点）", SentAt, Zone, TimeKind.Start);
+
+        Assert.Equal(DateIssue.Ambiguous, result.Issue);
+        Assert.Null(result.Time);
+    }
+
+    [Theory]
+    [InlineData("2026-03-08 01:30-02:30")]
+    [InlineData("2026-11-01 00:30-01:30")]
+    public void ActivityRange_InvalidOrAmbiguousEndInSavedZone_IsNotDiscarded(string text)
+    {
+        var result = MessageDateParser.ParseNotice(text, SentAt, "Eastern Standard Time");
+
+        Assert.Equal(DateIssue.Invalid, result.Issue);
+        Assert.Null(result.Time);
+    }
 }

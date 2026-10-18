@@ -721,7 +721,7 @@ function renderDetail() {
         ${pendingChangesHTML(item)}
         ${item.kind === 'review' && item.reviewReasons?.length ? `<div class="change-box">需要核对<p>${html(item.reviewReasons.join(' · '))}</p></div>` : ''}
         <div class="detail-actions">${actionsHTML(item)}</div>
-        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : (standaloneChange(item) ? '<p class="hint">未找到可关联的旧任务；确认后按完整原消息新建任务，并保留原文和证据。</p>' : '') + formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；确认正式日期后，可将它加入待办。</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
+        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : (standaloneChange(item) ? '<p class="hint">未找到可关联的旧任务；确认后按完整原消息新建任务，并保留原文和证据。</p>' : '') + formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；${item.due ? '已识别日期' + (item.time ? '和时间' : '') + '，请核对或修改后加入任务。' : '确认正式日期后，可将它加入待办。'}</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
         ${item.kind === 'review' && item.state === 'pending' && !item.canAccept && !item.canAcceptNotice ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
         ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${relatedHTML(item)}${historyHTML(item)}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
@@ -989,7 +989,7 @@ document.addEventListener('click', event => {
   if (action === 'keep-separate') { saveStructure('keep-separate'); return; }
   if (action === 'use-suggestion') {
     const draft = draftFor(item); draft.date = item.suggestedDue || ''; draft.time = item.suggestedTime || '';
-    const form = $('review-form') || $('time-form');
+    const form = $('review-form') || $('time-form') || $('notice-form');
     form.elements.date.value = draft.date; form.elements.time.value = draft.time;
     detailError = null; updateDetailControls(); return;
   }

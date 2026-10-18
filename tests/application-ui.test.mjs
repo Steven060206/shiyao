@@ -810,6 +810,42 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.match(await evaluate('document.querySelector(".detail-title").textContent'), /赛前打磨/);
       assert.match(await evaluate('document.querySelector(".detail-scroll").textContent'), /原消息正文/);
     });
+    await t.test('已有活动通知带出可靠日期和开始时间，核对后转任务并打开关联任务', async () => {
+      const notice = { ...structuredClone(fixture.items.at(-1)), id: 'notice-existing-activity', title: '赛前打磨工作的通知', due: '2026-10-20', time: '13:00', timeKind: 'start', version: 7, evidence: [{ ...evidence[0], text: '赛前打磨安排在下周二(10.20)下午1点～4点。' }] };
+      const before = await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").length');
+      await push({ ...structuredClone(fixture), items: [...structuredClone(fixture.items), notice] });
+      await nav('notices'); await select(notice.id);
+      assert.deepEqual(await evaluate('["date","time","timeKind"].map(name=>document.querySelector("#notice-form [name="+name+"]").value)'), ['2026-10-20', '13:00', 'start']);
+      assert.match(await evaluate('document.querySelector(".detail-scroll > .hint").textContent'), /已识别日期和时间.*核对.*加入任务/);
+      assert.doesNotMatch(await evaluate('document.querySelector(".detail-scroll > .hint").textContent'), /确认正式日期后/);
+      assert.match(await evaluate('document.querySelector(".detail-scroll").textContent'), /下周二\(10.20\)下午1点～4点/);
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").length'), before);
+      await click('[data-action="convert-notice"]');
+      await waitFor('backend.snapshot.items.find(item=>item.id==="notice-existing-activity").state==="converted"');
+      const command = await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").at(-1)');
+      assert.equal(command.parameters.id, notice.id); assert.equal(command.parameters.version, 7);
+      assert.equal(command.parameters.date, '2026-10-20'); assert.equal(command.parameters.time, '13:00'); assert.equal(command.parameters.timeKind, 'start');
+      await click('[data-action="open-target"]');
+      assert.equal(await evaluate('document.querySelector("[aria-current=page]").dataset.page'), 'tasks');
+      assert.equal(await evaluate('document.querySelector(".task-row.selected").dataset.id'), 'notice-task-' + notice.id);
+      assert.match(await evaluate('document.querySelector(".detail-title").textContent'), /赛前打磨/);
+    });
+    await t.test('通知图片建议日期不自动填入，缺日期仍拦截，显式采用只改变草稿', async () => {
+      const notice = { ...structuredClone(fixture.items[2]), id: 'notice-image-suggestion', kind: 'notice', state: 'active', canAccept: false };
+      await push({ ...structuredClone(fixture), items: [...structuredClone(fixture.items), notice] });
+      await nav('notices'); await select(notice.id);
+      assert.deepEqual(await evaluate('["date","time"].map(name=>document.querySelector("#notice-form [name="+name+"]").value)'), ['', '']);
+      assert.equal(await evaluate('document.querySelector("#notice-form [name=date]").required'), true);
+      assert.doesNotMatch(await evaluate('document.querySelector(".detail-scroll > .hint").textContent'), /已识别日期/);
+      const before = await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").length');
+      await click('[data-action="convert-notice"]');
+      assert.match(await evaluate('document.querySelector("#detail-error").textContent'), /正式日期/);
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").length'), before);
+      await click('[data-action="use-suggestion"]');
+      assert.deepEqual(await evaluate('["date","time"].map(name=>document.querySelector("#notice-form [name="+name+"]").value)'), ['2026-12-21', '18:00']);
+      assert.equal(await evaluate('backend.snapshot.items.find(item=>item.id==="notice-image-suggestion").due'), null);
+      assert.equal(await evaluate('backend.messages.filter(message=>message.operation==="convert-notice").length'), before);
+    });
     await push(fixture);
     await t.test('普通通知可补正式日期转为任务并保留通知入口', async () => {
       await nav('notices'); await select('notice1');

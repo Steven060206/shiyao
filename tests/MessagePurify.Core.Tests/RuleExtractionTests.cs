@@ -730,4 +730,60 @@ public class RuleExtractionTests
         Assert.Null(candidate.Time);
         Assert.Null(candidate.SuggestedTime);
     }
+
+    [Theory]
+    [InlineData("高等数学", RuleDisposition.Notice)]
+    [InlineData(null, RuleDisposition.Pending)]
+    public void ActivityNotice_RetainsReliableStartWithoutChangingInformClassification(
+        string? course, RuleDisposition disposition)
+    {
+        const string text = "关于26餐饮设计比赛赛前打磨工作的通知：\n时间：下周二(10.20)下午1点～4点\n地点：北4-302";
+        var message = Message(text) with { SentAt = DateTimeOffset.Parse("2026-10-16T18:00:00+08:00") };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context(course)).Candidates);
+
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(RuleAction.Inform, candidate.Action);
+        Assert.Equal(disposition, candidate.Disposition);
+        Assert.Equal(new DateOnly(2026, 10, 20), candidate.Time!.Date);
+        Assert.Equal(new TimeOnly(13, 0), candidate.Time.Time);
+        Assert.Equal(TimeKind.Start, candidate.Time.Kind);
+        Assert.Null(candidate.SuggestedTime);
+        Assert.Equal(message.Key, Assert.Single(candidate.Evidence));
+    }
+
+    [Theory]
+    [InlineData("明天9点至11点必须参加活动", RuleAction.Attend, RuleDisposition.Task, true)]
+    [InlineData("明天9点至11点交实验报告", RuleAction.Submit, RuleDisposition.Pending, false)]
+    [InlineData("通知：明天9点或11点", RuleAction.Inform, RuleDisposition.Notice, false)]
+    public void RangeSupportPreservesActionAndDeadlineSafety(
+        string text, RuleAction action, RuleDisposition disposition, bool hasTime)
+    {
+        var candidate = Single(text);
+
+        Assert.Equal(action, candidate.Action);
+        Assert.Equal(disposition, candidate.Disposition);
+        Assert.Equal(hasTime, candidate.Time is not null);
+        if (hasTime)
+        {
+            Assert.Equal(TimeKind.Start, candidate.Time!.Kind);
+            Assert.Equal(new TimeOnly(9, 0), candidate.Time.Time);
+        }
+    }
+
+    [Theory]
+    [InlineData("通知：时间见图片")]
+    [InlineData("")]
+    public void ActivityNoticeOcr_RemainsSuggestionEvenWithReliableRange(string text)
+    {
+        const string imageText = "通知：明天下午1点～4点，地点北4-302";
+        var message = Message(text) with { Segments =
+            [new(SegmentKind.Text, text), new(SegmentKind.Image, imageText, AssetId: "image")] };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context()).Candidates);
+
+        Assert.Equal(RuleAction.Inform, candidate.Action);
+        Assert.Null(candidate.Time);
+        Assert.Equal(new DateOnly(2026, 10, 11), candidate.SuggestedTime!.Date);
+        Assert.Equal(new TimeOnly(13, 0), candidate.SuggestedTime.Time);
+        Assert.Equal(TimeKind.Start, candidate.SuggestedTime.Kind);
+    }
 }

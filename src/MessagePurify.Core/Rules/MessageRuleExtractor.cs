@@ -66,8 +66,12 @@ public static class MessageRuleExtractor
                 (quotedTarget && target!.ConfirmedPublisherId == message.SenderId);
             var kind = action == RuleAction.Attend ? TimeKind.Start :
                 change && target is not null ? target.Time.Kind : TimeKind.Deadline;
-            var parsed = MessageDateParser.Parse(WithoutBackgroundDates(part), message.SentAt, context.TimeZoneId, kind);
-            var suggestion = MessageDateParser.Parse(imageText, message.SentAt, context.TimeZoneId, kind);
+            var parsed = action == RuleAction.Inform
+                ? MessageDateParser.ParseNotice(WithoutBackgroundDates(part), message.SentAt, context.TimeZoneId)
+                : MessageDateParser.Parse(WithoutBackgroundDates(part), message.SentAt, context.TimeZoneId, kind);
+            var suggestion = action == RuleAction.Inform
+                ? MessageDateParser.ParseNotice(imageText, message.SentAt, context.TimeZoneId)
+                : MessageDateParser.Parse(imageText, message.SentAt, context.TimeZoneId, kind);
             var formalTime = ocr ? null : parsed.Time;
             var suggestedTime = ocr ? parsed.Time : formalTime is null ? suggestion.Time : null;
             var needsTime = action != RuleAction.Cancel && action != RuleAction.Remind && action != RuleAction.Inform;

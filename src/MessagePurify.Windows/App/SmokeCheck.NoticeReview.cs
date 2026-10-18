@@ -12,7 +12,8 @@ internal static partial class SmokeCheck
 {
     private static readonly string[] NoticeReviewChecks = ["notice-review-pending", "notice-review-no-date",
         "notice-review-confirm-button", "notice-review-list-source", "notice-review-desktop-hide",
-        "notice-review-reopen-replay", "notice-review-convert-task"];
+        "notice-review-reopen-replay", "notice-review-convert-task",
+        "notice-time-defaults", "notice-time-convert-start"];
 
     private static async Task CheckNoticeReviewAsync(string dataRoot, string reportFile)
     {
@@ -95,18 +96,20 @@ internal static partial class SmokeCheck
             await EvaluateAsync(reopenedWindow, "document.querySelector('.task-row').click()");
             await WaitAsync(reopenedWindow, "document.querySelector('#notice-form') !== null"
                 + " && document.querySelector('.source-section .message')?.textContent === " + JsonSerializer.Serialize(text));
-            var chosenDate = now.ToOffset(TimeSpan.FromHours(8)).AddDays(5).ToString("yyyy-MM-dd");
-            await SetFormFieldsAsync(reopenedWindow, "notice-form", new { date = chosenDate, time = "", timeKind = "start" });
+            await WaitAsync(reopenedWindow, "document.querySelector('#notice-form [name=date]').value === '2026-10-20'"
+                + " && document.querySelector('#notice-form [name=time]').value === '13:00'"
+                + " && document.querySelector('#notice-form [name=timeKind]').value === 'start'"
+                + " && !document.querySelector('.detail-scroll').textContent.includes('确认正式日期后')");
             await EvaluateAsync(reopenedWindow, "document.querySelector('#notice-form').requestSubmit()");
             await WaitAsync(() => reopened.Snapshot(DateTimeOffset.UtcNow).Items.Any(item => item.Kind == "task"));
             var converted = reopened.Snapshot(DateTimeOffset.UtcNow);
             var task = converted.Items.Single(item => item.Kind == "task");
             var preservedNotice = converted.Items.Single(item => item.Kind == "notice");
-            if (converted.Items.Count != 2 || task.Due != chosenDate || task.Time is not null
+            if (converted.Items.Count != 2 || task.Due != "2026-10-20" || task.Time != "13:00"
                 || task.TimeKind != "start" || task.Title != text || !task.Evidence.SequenceEqual(review.Evidence)
                 || preservedNotice.Id != restoredNotice.Id || preservedNotice.TargetTaskId != task.Id
                 || !preservedNotice.Evidence.SequenceEqual(review.Evidence))
-                throw new InvalidDataException("人工确认的通知应仍可通过正式表单转任务，并保留通知、所选日期和原消息。");
+                throw new InvalidDataException("活动通知应带出可靠开始时间，经确认加入任务并保留通知及原消息。");
         }
         finally { reopenedWindow.Exiting = true; reopenedWindow.Close(); await reopenedRuntime.StopAsync(); }
     }
