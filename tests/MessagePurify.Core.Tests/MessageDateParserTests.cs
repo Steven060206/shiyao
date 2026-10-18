@@ -241,6 +241,44 @@ public class MessageDateParserTests
     }
 
     [Theory]
+    [InlineData("合成楼1-101")]
+    [InlineData("南楼4-302")]
+    [InlineData("4-302")]
+    [InlineData(" 4-1302教室")]
+    public void ActivityNoticeWithExplicitRoomCode_DoesNotParseRoomAsInvalidDate(string room)
+    {
+        var text = $"关于合成餐饮比赛赛前交流工作的通知：\n时间：下周二(10.20)下午1点～4点\n地点：{room}";
+        var result = MessageDateParser.ParseNotice(text,
+            DateTimeOffset.Parse("2026-10-16T18:00:00+08:00"), Zone);
+
+        Assert.Equal(DateIssue.None, result.Issue);
+        Assert.Equal(new DateOnly(2026, 10, 20), result.Time!.Date);
+        Assert.Equal(new TimeOnly(13, 0), result.Time.Time);
+        Assert.Equal(TimeKind.Start, result.Time.Kind);
+    }
+
+    [Theory]
+    [InlineData("地点另行通知，10-20下午1点～4点")]
+    [InlineData("地点：4-302，10-20下午1点～4点")]
+    public void NumericDateAfterLocation_RemainsAvailableForActivity(string text)
+    {
+        var result = MessageDateParser.ParseNotice(text, SentAt, Zone);
+
+        Assert.Equal(DateIssue.None, result.Issue);
+        Assert.Equal(new DateOnly(2026, 10, 20), result.Time!.Date);
+        Assert.Equal(new TimeOnly(13, 0), result.Time.Time);
+    }
+
+    [Fact]
+    public void InvalidNumericDateWithoutRoomContext_RemainsInvalid()
+    {
+        var result = MessageDateParser.ParseNotice("4-302下午1点～4点", SentAt, Zone);
+
+        Assert.Equal(DateIssue.Invalid, result.Issue);
+        Assert.Null(result.Time);
+    }
+
+    [Theory]
     [InlineData("明天下午1点～4点", 13, 0)]
     [InlineData("明天1点到下午4点", 13, 0)]
     [InlineData("明天下午1点至16点", 13, 0)]

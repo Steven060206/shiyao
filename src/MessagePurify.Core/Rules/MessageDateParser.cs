@@ -22,7 +22,7 @@ public static class MessageDateParser
         @"|(?<week>下|本|这)?(?:星期|周|礼拜))(?<weekday>[一二三四五六日天]))");
 
     private static readonly Regex Clocks = Pattern(
-        @"(?<![0-9.:])(?<period>上午|下午|晚上|中午|凌晨|早上)?\s*" +
+        @"(?<period>上午|下午|晚上|中午|凌晨|早上)?\s*(?<![0-9.:])" +
         @"(?<hour>[0-9]+)(?::(?<minute>[0-9]+)(?<seconds>:[0-9]+)?" +
         @"|[点时](?:(?<half>半)|(?<minute>[0-9]+)分?)?)(?![0-9])");
 
@@ -36,6 +36,8 @@ public static class MessageDateParser
         @"(?:[0-9]+(?:\.[0-9]+)?|[零〇一二两三四五六七八九十]+)[点时](?:半|一刻|三刻|[0-9零〇一二两三四五六七八九十]+(?:分(?:[0-9]+秒)?|秒)?)?" +
         @"|[0-9]+:[0-9]+(?::[0-9]+)?");
     private static readonly Regex NumericDateExpressions = Pattern(@"(?<![0-9])[0-9]+(?:[-/][0-9]+){2,}");
+    private static readonly Regex RoomIdentifiers = Pattern(
+        @"(?:楼\s*|(?:地点|教室|场地)\s*:\s*)[0-9]{1,2}-[0-9]{3,4}(?![0-9-])");
     private static readonly Regex UnsupportedWeeks = Pattern(@"(?:上|下下)(?:周|星期|礼拜)");
 
     /// <summary>通知单个日期/钟点沿用截止语义；可靠的同日活动时间段以开始时间供人工确认。</summary>
@@ -58,9 +60,13 @@ public static class MessageDateParser
             var messageDate = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(sentAt, zone).DateTime);
             var normalized = text.Normalize(NormalizationForm.FormKC);
             var clocks = Clocks.Matches(normalized).ToArray();
+            var rooms = RoomIdentifiers.Matches(normalized).ToArray();
             // 13:00-16:00 中的 00-16 不是月日；日期表达不能占用钟点数字。
             var dates = Dates.Matches(normalized).Where(date => !clocks.Any(clock =>
-                date.Index < clock.Index + clock.Length && clock.Index < date.Index + date.Length)).ToArray();
+                date.Index < clock.Index + clock.Length && clock.Index < date.Index + date.Length) &&
+                // 明确楼号或地点字段后的房间码保留原文，不作为数字日期。
+                !rooms.Any(room => room.Index <= date.Index &&
+                    room.Index + room.Length >= date.Index + date.Length)).ToArray();
             // 完整表达必须覆盖，不能把上周星期一或多段数字日期的后半截当成新日期。
             if (UnsupportedWeeks.IsMatch(normalized))
                 return Issue(DateIssue.Missing, "存在尚未支持的星期表达，需要确认。");

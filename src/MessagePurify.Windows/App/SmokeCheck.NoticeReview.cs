@@ -81,6 +81,9 @@ internal static partial class SmokeCheck
         var restoredNotice = restored.Items.Single();
         if (restoredNotice.Kind != "notice" || !restoredNotice.Evidence.SequenceEqual(review.Evidence))
             throw new InvalidDataException("普通通知重开、重放后必须保留完整原文且不重新出现待确认或任务。");
+        if (restoredNotice.Due != "2026-10-20" || restoredNotice.Time != "13:00" || restoredNotice.TimeKind != "start")
+            throw new InvalidDataException("通知活动时间读取错误：" + JsonSerializer.Serialize(new
+                { restoredNotice.Due, restoredNotice.Time, restoredNotice.TimeKind }));
         var reopenedRuntime = new AppRuntime(root, reopened);
         var reopenedWindow = new AppWindow(reopenedRuntime, root, hidden: true, registerStartup: false);
         try

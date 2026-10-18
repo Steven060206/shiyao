@@ -10,7 +10,9 @@
 
 已实现ParseNotice：可靠同日连续活动时间段带出开始时间，截图全文输出2026-10-20 13:00 Start；截止范围保持保守语义。校验括号中的月日别名并继承对应年份，拒绝冲突、非法、反向、跨夜、任选、多日期及未支持钟点，独立小数不构造日期。Inform不扩大为自动任务；OCR仍只提供建议。AccountWorkspace对旧通知仅从其准确Source原消息、原发送时间解析缺失时间，不写回旧候选或审核历史；通知转换的默认类型与预览一致。页面根据已识别日期/时间显示核对提示，修复通知“填入建议日期”的表单定位；保持用户显式加入任务。新增旧记录/原文及审核不变、重开/重复转换、缺日期和图片建议回归，以及Native表单默认开始时间检查。
 
-已实际运行：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release`403/403；同参数Infrastructure735/735、Windows477/477；Infrastructure专项NoticeTimeTests/NoticeReviewAcceptanceTests/AccountWorkspaceTests81/81；`node --test tests/*.test.mjs`180/180，页面专项92/92；`node --test tests/project-rules.test.mjs`50/50；`python -m unittest discover -s tests -p release_packaging_test.py`4/4；应用Release build退出0、无警告错误。Core与页面回归修复前已实际复现失败。当前正在从干净已提交源码构建beta.6并准备Native/ZIP/Setup验证，尚未部署或发布。工作区既有app.css/index.html及application-ui.test.mjs视觉改动保留，不混入本轮提交。maintain-context-hygiene技能仍未找到，已人工核对有效需求、实际代码及交接。
+已实际运行：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release`最终410/410；同参数Infrastructure735/735、Windows477/477；Infrastructure专项NoticeTimeTests/NoticeReviewAcceptanceTests/AccountWorkspaceTests81/81；`node --test tests/*.test.mjs`180/180，页面专项92/92，首次干净提交源码同为180/180；`node --test tests/project-rules.test.mjs`50/50；`python -m unittest discover -s tests -p release_packaging_test.py`4/4；应用Release build退出0、无警告错误。Core与页面回归修复前已实际复现失败。工作区既有app.css/index.html及application-ui.test.mjs视觉改动保留，不混入本轮提交。maintain-context-hygiene技能仍未找到，已人工核对有效需求、实际代码及交接。
+
+首个修复提交373afc5的干净发布Native检查未通过：合成原文的“合成楼1-101”仍误匹配日期，后续exe诊断确认通知Due/Time均null；已补明确楼号及地点/教室/场地字段后的房间码过滤，独立非法数字日期仍拦截。补查“10-20下午1点～4点”发现数字日期紧邻时段时“下午”前缀被边界判断丢弃，已修正并回归。直接dotnet托管dll的诊断先在既有DesktopAppearance空引用退出，未据此修改无关产品逻辑；后续诊断使用正式命名exe。首次失败产物与报告保留于`.tools/notice-time-validation/`；修复后Release构建exe以`DOTNET_ROOT=.tools/dotnet`运行`--smoke-test --report .tools/notice-time-validation/native-final-source.json`退出0、131项合成Native检查通过。正在重建干净自包含发布包，尚未部署或发布。
 
 ### 无目标变更审核及同类入口检查（2026-10-16，已实现、部署并发布beta.5）
 
