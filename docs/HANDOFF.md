@@ -2,9 +2,9 @@
 
 最后更新：2026-10-18（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 通知日期与活动时间段（2026-10-18，已实现并通过自动回归，部署发布进行中）
+### 通知日期与活动时间段（2026-10-18，已实现、部署并发布beta.6）
 
 用户反馈赛前打磨通知已有“下周二(10.20)下午1点～4点”，通知转任务仍显示固定的“确认正式日期后”提示且日期为空，明确要求修复并覆盖后续同类消息。根因包括通知页面提示未按时间状态区分、单时间解析将活动时间段视为Ambiguous并返回Time=null，以及“北4-302”教室号误匹配日期而导致Invalid；此前解释仅提到前两项，已由完整原文回归补齐第三项。
 
@@ -12,7 +12,13 @@
 
 已实际运行：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release`最终410/410；同参数Infrastructure735/735、Windows477/477；Infrastructure专项NoticeTimeTests/NoticeReviewAcceptanceTests/AccountWorkspaceTests81/81；`node --test tests/*.test.mjs`180/180，页面专项92/92，首次干净提交源码同为180/180；`node --test tests/project-rules.test.mjs`50/50；`python -m unittest discover -s tests -p release_packaging_test.py`4/4；应用Release build退出0、无警告错误。Core与页面回归修复前已实际复现失败。工作区既有app.css/index.html及application-ui.test.mjs视觉改动保留，不混入本轮提交。maintain-context-hygiene技能仍未找到，已人工核对有效需求、实际代码及交接。
 
-首个修复提交373afc5的干净发布Native检查未通过：合成原文的“合成楼1-101”仍误匹配日期，后续exe诊断确认通知Due/Time均null；已补明确楼号及地点/教室/场地字段后的房间码过滤，独立非法数字日期仍拦截。补查“10-20下午1点～4点”发现数字日期紧邻时段时“下午”前缀被边界判断丢弃，已修正并回归。直接dotnet托管dll的诊断先在既有DesktopAppearance空引用退出，未据此修改无关产品逻辑；后续诊断使用正式命名exe。首次失败产物与报告保留于`.tools/notice-time-validation/`；修复后Release构建exe以`DOTNET_ROOT=.tools/dotnet`运行`--smoke-test --report .tools/notice-time-validation/native-final-source.json`退出0、131项合成Native检查通过。正在重建干净自包含发布包，尚未部署或发布。
+首个修复提交373afc5的干净发布Native检查未通过：合成原文的“合成楼1-101”仍误匹配日期，后续exe诊断确认通知Due/Time均null；已补明确楼号及地点/教室/场地字段后的房间码过滤，独立非法数字日期仍拦截。补查“10-20下午1点～4点”发现数字日期紧邻时段时“下午”前缀被边界判断丢弃，已修正并回归。直接dotnet托管dll的诊断先在既有DesktopAppearance空引用退出，未据此修改无关产品逻辑；后续诊断使用正式命名exe。首次失败产物与报告保留于`.tools/notice-time-validation/`；修复后Release构建exe以`DOTNET_ROOT=.tools/dotnet`运行`--smoke-test --report .tools/notice-time-validation/native-final-source.json`退出0、131项合成Native检查通过。后续干净自包含发布、验包、本机部署与公开发布均已完成，详见下文。
+
+最终程序源码提交17177268c104d6b210f1442cdac22db0851c7097。首次失败产物目录已在核对工作区绝对路径后改名为`.tools/release-stage-beta6-first/`及`.tools/published/github-release-0.1.0-beta.6-first/`保留；以新提交重新git archive导出`.tools/release-stage-beta6/`，Release/self-contained发布`.tools/published/github-release-0.1.0-beta.6/`退出0。干净源码`node --test tests/*.test.mjs`180/180；`python tests/app_desktop_test.py --executable .tools/published/github-release-0.1.0-beta.6/MessagePurify.exe`退出0、131项Native/真实父窗检查通过。`python .tools/release-stage-beta6/tools/build_release.py --publish-directory .tools/published/github-release-0.1.0-beta.6 --napcat-archive .tools/napcat/framework/v4.18.37/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.6`生成119932508字节、518条目的ZIP；`python .tools/notice-time-validation/verify-archive.py`与`verify-package.py`退出0，495个非PDB程序文件、ZIP完整性、官方NapCat原包、个人文件缺失及合成CheckOnly/Setup通过。中文空格解压版`python tests/app_desktop_test.py --executable .tools/releases/验包 中文空格 0.1.0-beta.6/Shiyao/app/MessagePurify.exe`退出0、131项检查通过。
+
+本机通过托盘正常退出旧PID34496，`.tools/notice-time-validation/run-physical-data.ps1 -Mode capture -Snapshot before-deploy`由无包身份WMI Python保护真实四库及4份设置；`deploy.ps1`复制498个验证文件至原正式目录，`start-explorer-background.ps1`由已有Explorer独立后台启动PID29512。`check-process-isolation.ps1 -FormalProcessId 29512`确认不在工具Job、无包身份且正常响应；`run-physical-data.ps1 -Mode verify -Snapshot before-deploy -FormalProcessId 29512`退出0，四库14表全行及4份设置原样、498文件一致，activeTasks=3/pendingReviews=0，提醒卡可见/待确认卡隐藏，两卡均附着SHELLDLL_DefView、child/noActivate=true、topmost=false。该数据核对在打开主窗口前完成；后续只查看，不回滚正常已读变化。
+
+托盘打开实测QQ进程未变、3001/6099无监听。`check-real-notice.ps1 -ProcessId 29512 -CaptureScreenshot`只导航到原“赛前打磨”通知并读取：2026-10-20、13:00、开始时间、已识别核对提示和可用加入任务按钮均通过，未编辑字段、未提交任务，页面留在原通知。首次Windows PowerShell 5读取新增检查脚本时因无BOM误解码，补UTF-8 BOM后退出0；不涉及产品改动。报告、原图、物理数据保护与发布验证位于`.tools/notice-time-validation/`，均不入公开仓库或下载包。
 
 ### 无目标变更审核及同类入口检查（2026-10-16，已实现、部署并发布beta.5）
 
@@ -72,6 +78,10 @@
 
 修复前 Core 新回归 21失败/82通过，旧兼容回归6失败/2通过；修复后均通过。全量初次暴露7处依赖旧自动拆分的测试，按整条审核/显式拆分调整；后续备份夹具遍历新增内部枚举导致数量5而预期4，改为明确四种人工状态，并新增合并状态备份保留回归。新加测试曾误用 ignore-review 操作名，改为实际 ignore 后最终704/704通过。前轮文档定位提交77db15c、51项文档及2项旧行为检查保留为历史。本轮日志位于 `.tools/message-review-validation/`。修复已限定文件提交，随后完成干净源码构建、Native/ZIP/本机部署验证与beta.3发布；本轮提交标识以 Git 日志为准。
 
+### GitHub 更新同步（2026-10-18，beta.6源码和下载包已发布）
+
+`git -c http.https://github.com.proxy= push origin HEAD:main`退出0，main由99bbde1快进至1717726。`gh release create v0.1.0-beta.6 .tools/releases/Shiyao-0.1.0-beta.6-win-x64.zip --repo Steven060206/shiyao --target 17177268c104d6b210f1442cdac22db0851c7097 --prerelease --title ... --notes-file .tools/notice-time-validation/release-notes.md`退出0。`gh api repos/Steven060206/shiyao/releases/tags/v0.1.0-beta.6`核对附件uploaded、119932508字节、draft=false、prerelease=true、target完整SHA一致。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.6；`curl.exe --noproxy '*' --head --location --silent --show-error --max-time 30 --output NUL --write-out 'HTTP %{http_code}' https://github.com/Steven060206/shiyao/releases/download/v0.1.0-beta.6/Shiyao-0.1.0-beta.6-win-x64.zip`退出0、匿名下载HTTP200。源码和下载包不含个人聊天库、账号配置、Token或登录材料。文档随后单独提交并推main，功能包仍对应已验证1717726，不因交付记录变化重建。
+
 ### GitHub 更新同步（2026-10-16，beta.5源码和下载包已发布）
 
 修复提交afe019c5b3b9754d9b9c3fd18a0afce3dba52eaa通过`git -c http.https://github.com.proxy= push origin HEAD:main`推送成功，远端main由0fa4b06快进到afe019c。本地工作分支仍为codex/m3-integration-probes，不将本地main当作本轮源码。`gh release create v0.1.0-beta.5 .tools/releases/Shiyao-0.1.0-beta.5-win-x64.zip --repo Steven060206/shiyao --target afe019c5b3b9754d9b9c3fd18a0afce3dba52eaa --prerelease --title ... --notes-file .tools/standalone-change-validation/release-notes.md`退出0；`gh release view ... --json url,isDraft,isPrerelease,assets,tagName`核对附件uploaded、119930696字节、draft=false、prerelease=true。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.5；`curl.exe --noproxy '*' -I -L --max-time 30 -s -o NUL -w 'HTTP %{http_code}'`核对公开附件，匿名下载HTTP200。源码和包不含个人聊天库、账号配置、Token或登录材料。旧Release保留；文档交付记录随后另行提交并推main，不重建功能相同的下载包。
@@ -106,13 +116,15 @@ App csproj用 `--no-restore --configuration Release --self-contained true --outp
 
 maintain-context-hygiene在两处技能目录仍无SKILL.md，按项目规则人工核对新需求、交接、实际源码、测试结果、下载包和远端状态。发布结果同步需求与交接，并新增最新版本/构建示例一致性检查；`node --test tests/project-rules.test.mjs`50/50、最终`node --test tests/*.test.mjs`174/174，均退出0，日志docs-published-final.log及node-published-final.log。`git diff --check`退出0；通过后创建发布结果记录commit并推main，标识以Git日志为准。下一步供同学下载试用；后续软件改动交付时继续同步源码与下载包，其他电脑及QQ版本试用、实际游戏、多屏/恢复和长期稳定性保留既有验收范围。
 
-### 当前接续（无目标变更审核，2026-10-16，已实现、部署并发布beta.5）
+### 当前接续（通知日期与活动时间段，2026-10-18，已实现、部署并发布beta.6）
 
-正式入口为`.tools/published/app-card-controls/`，沿用MessagePurify.Shiyao、黑色标题栏、约2 DIP吸附间距和桌面/开始菜单/Run入口及个人配置。498个文件与干净提交afe019c的发布版一致；Explorer独立后台PID29460无包身份、不在工具Job内、正常响应。真实四库14表和4份设置与升级前保护原样，当前2个待办、3个待确认，两卡真实附着桌面；打开窗口前取得原样核对结果。托盘只打开主窗口、不发同步，截图中原消息的确认按钮已核对为可用，没有代用户处理。
+正式入口已切换到最新版`.tools/published/app-card-controls/`，沿用MessagePurify.Shiyao独立身份、黑色标题栏、约2 DIP吸附间距、桌面/开始菜单/Run入口与个人配置。498个文件与干净提交1717726的发布版一致；Explorer独立后台PID29512无包身份、不在工具Job内、正常响应。打开主窗口前核对真实四库14表及4份设置与升级前保护原样，3个待办、0个待确认，两卡真实附着SHELLDLL_DefView、按数量显示。
 
-本轮修复了无目标Postpone/NewRequirement被永久阻止、自愿行动Pending无法保留通知，并覆盖改为/改成/共享时间和否定/拟议变更。完整消息保留，用户确认后建任务；无目标取消/催交继续阻止。Core336、Infrastructure729、Windows477、Node178、规则基线68、129项Native/桌面与ZIP/Setup验证通过；beta.5源码与公开附件uploaded、draft=false、prerelease=true，匿名下载HTTP200。详细命令、首次重连测试失败根因及数据保留证据见上方本轮记录。
+本轮修复明确日期及同日活动时间段丢失、教室号误匹配数字日期、紧连数字日期的下午时段丢失、通知固定补日期提示，并兼容旧通知时间预填。原文、通知、审核历史保留；仍需用户显式加入任务。Core410、Infrastructure735、Windows477、Node180、131项Native/桌面检查和ZIP/合成Setup通过；beta.6源码与119932508字节公开附件已同步GitHub，uploaded、draft=false、prerelease=true、匿名下载HTTP200，具体命令及首次Native失败定位见上方记录。
 
-交付记录同步后，`node --test tests/project-rules.test.mjs tests/message-review-requirements.test.mjs`52/52通过；`git diff --check -- README.md docs/HANDOFF.md docs/requirements.md`退出0。下一步由用户在现有消息上点击“确认并加入任务”；既有日期和18:00直接带出，无需重同步。真实登录自启动、实际游戏、多屏/恢复和长期稳定性继续按原范围验收。三个既有视觉文件的改动保留未提交，未混入本轮发布；本轮UI新增回归已单独提交。maintain-context-hygiene技能仍未找到，已人工核对需求、交接、源码、发布包与真实数据。证据路径`.tools/standalone-change-validation/`，版本源码afe019c。
+真实原通知已只读核对为2026-10-20、13:00、开始时间，新提示及加入任务按钮可用；未编辑、未代用户提交，页面停在该通知。托盘打开QQ进程未变、3001/6099未监听。下一步由用户核对后点击“加入任务”，已有通知无需重新同步或重新审核。真实Windows登录自启动、实际游戏、多屏/恢复和长期稳定性仍按原范围验收。既有app.css/index.html/application-ui.test.mjs视觉改动保留未提交，本轮页面新增回归已单独提交。maintain-context-hygiene技能仍未找到，已人工核对需求、交接、源码、发布包和真实数据。证据路径`.tools/notice-time-validation/`，程序源码1717726。
+
+收尾文档回归首次因最新交付摘要遗漏MessagePurify.Shiyao及2 DIP有效字段失败，已补回准确描述，未修改测试断言。最终`node --test tests/project-rules.test.mjs`50/50通过，`git diff --check -- README.md docs/HANDOFF.md docs/requirements.md`退出0；交付记录另行提交并推main。
 
 ### 上一段（一条原消息一项审核，2026-10-15，已实现、部署并发布beta.3）
 
@@ -1229,3 +1241,5 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 | 2026-10-13 | 完成桌面卡片恢复与多屏可见布局 | 实际父窗/styles检查、宿主丢失/返回、系统事件与跨await/旧回调隔离、单卡片偏好保存已接入。Core306/306、Infrastructure675/675、Windows390/390、Node139/139、App build/publish及新写入83项Native合成检查通过；截图已查看。真实Explorer重启、物理多屏、睡眠/长期稳定性仍未验收，睡眠漏同步政策未确认，默认入口/真实账号未切换；下一阶段统一真实验收 |
 
 2026-10-16：用户要求修复准确时间消息无法加入任务并检查同类入口。已放行无目标延期/补交的人工确认，补齐自愿通知去向、改期同义词与否定/拟议保护、旧记录与批量/Native回归；修复提交afe019c，Core336/Infrastructure729/Windows477/Node178/Native129及ZIP/Setup通过。beta.5已公开、附件119930696字节且匿名HTTP200；本机498文件更新、四库14表/4设置保留，真实按钮可用，无代用户审核。
+
+2026-10-18：修复明确活动日期与时间段丢失、教室号误匹配日期及通知固定提示，兼容已有通知并保留原文/审核。Core410、Infrastructure735、Windows477、Node180、Native131及ZIP/Setup通过；373afc5和1717726已提交，beta.6已部署原目录，真实通知已只读核对为2026-10-20 13:00开始，四库14表/4设置保留。GitHub源码与119932508字节公开附件已同步、uploaded且匿名HTTP200。
