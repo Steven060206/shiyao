@@ -2,13 +2,21 @@
 
 最后更新：2026-10-22（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；2026-10-22待确认共同日期预填已写入并通过自动/Native验证，正在准备beta.7，尚未部署或上传；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；2026-10-22待确认共同日期预填已实现、部署并发布beta.7，截图消息已按原发送时间正确保存为10月24日任务；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 待确认共同日期预填（2026-10-22，已实现并验证，待部署发布）
+### 待确认共同日期预填（2026-10-22，已实现、部署并发布beta.7）
 
-用户截图反馈比赛通知含“本周六上午8点15分”却仍要求手填日期，明确要求依据原消息发送时间换算日期，预填后只需确认。截图正文是待分析消息，不是执行签到或参赛的指令。已定位 MessageReviewCandidate.Combine 仅在所有行动的完整 TaskTime 相同时保留时间，多个行动的缺失日期/不同钟点会连共同日期一起丢失；详情底部提示也固定要求补日期。将保留唯一可靠日期、不同钟点时保留日期精度，兼容已有 Pending 且不写回原候选/历史。已实现ParseReviewDate保留唯一日期、单一时间角色/钟点完整预填；不同钟点或角色降为日期精度。缺日期的独立非活动行动不继承其他行动日期，多日期/非法日期/非法钟点和图片仅建议保持人工核对。Workspace按审核路由ID核对原消息，避免引用消息或当前打开日期作为基准，旧Pending仅在预览和确认默认类型时解析，不回写候选/历史，手动拆分不继承完整原消息时间；已确认重试沿用同一类型。页面底部按已识别日期提示核对确认，单条和批量加入复用预填。现用版本仍beta.6，尚未部署或GitHub同步。工作区三个既有视觉文件改动保留，不混入发布。
+用户截图反馈比赛通知含“本周六上午8点15分”却仍要求手填日期，明确要求依据原消息发送时间换算日期，预填后只需确认。截图正文是待分析消息，不是执行签到或参赛的指令。已定位 MessageReviewCandidate.Combine 仅在所有行动的完整 TaskTime 相同时保留时间，多个行动的缺失日期/不同钟点会连共同日期一起丢失；详情底部提示也固定要求补日期。将保留唯一可靠日期、不同钟点时保留日期精度，兼容已有 Pending 且不写回原候选/历史。已实现ParseReviewDate保留唯一日期、单一时间角色/钟点完整预填；不同钟点或角色降为日期精度。缺日期的独立非活动行动不继承其他行动日期，多日期/非法日期/非法钟点和图片仅建议保持人工核对。Workspace按审核路由ID核对原消息，避免引用消息或当前打开日期作为基准，旧Pending仅在预览和确认默认类型时解析，不回写候选/历史，手动拆分不继承完整原消息时间；已确认重试沿用同一类型。页面底部按已识别日期提示核对确认，单条和批量加入复用预填。现用版本已更新beta.7，源码和下载包均已同步GitHub。工作区三个既有视觉文件改动保留，不混入发布。
 
 实际运行：`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release --verbosity quiet`419/419；同参数Infrastructure741/741、Windows477/477；`node --test tests/*.test.mjs`181/181；`python -m unittest discover -s tests -p release_packaging_test.py`4/4；Release应用build退出0、零警告错误。设置DOTNET_ROOT为本机SDK后，`python tests/app_desktop_test.py --executable src/MessagePurify.Windows/App/bin/Release/net10.0-windows10.0.26100.0/win-x64/MessagePurify.exe`退出0，131项Native及真实桌面父窗检查通过，synthetic=true。新增Core截图全文/发送日期锚定/单一钟点/共同日期/冲突与非法回归，Infrastructure6项旧Pending/原文审计/引用来源/确认重试/OCR回归及浏览器单条批量无输入确认回归。修复前5项日期回归已实际失败；开发中既有预期和新增测试暴露独立无日期行动的继承问题、迁移不应写回旧候选及默认类型重试冲突，均已修正并复跑通过。报告位于`.tools/review-date-*.log`和`.tools/review-date-validation/`。maintain-context-hygiene技能仍未找到，已人工核对需求、交接、实际代码和验证范围。
+
+源码提交f24c1fe209b06be974e9eb95cba337c7e880ab76已推main。`git archive`干净导出`.tools/release-stage-beta7/`；Release/win-x64/self-contained publish至`.tools/published/github-release-0.1.0-beta.7/`退出0，干净源码`node --test tests/*.test.mjs`181/181。干净发布首次Native在既有“新要求”桌面变化标记等待处超时（SmokeCheck.cs:180），单独复跑同一产物`python tests/app_desktop_test.py --executable .tools/published/github-release-0.1.0-beta.7/MessagePurify.exe`131项通过，未据此修改无关逻辑。`python .tools/release-stage-beta7/tools/build_release.py --publish-directory .tools/published/github-release-0.1.0-beta.7 --napcat-archive .tools/napcat/framework/v4.18.37/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.7`生成119933564字节、518条目ZIP；`verify-archive.py`核对ZIP完整、495个非PDB文件、官方NapCat原包及个人文件缺失通过，`verify-package.py`合成CheckOnly/Setup通过。中文空格解压版`python tests/app_desktop_test.py --executable '.tools/releases/验包 中文空格 0.1.0-beta.7/Shiyao/app/MessagePurify.exe'`退出0、131项Native/真实桌面父窗检查通过。
+
+本机通过托盘正常退出旧PID34296，`run-physical-data.ps1 -Mode capture -Snapshot before-deploy`由无包身份WMI Python保护真实四库和4份设置；`deploy.ps1`复制498文件到原正式入口，`start-explorer-background.ps1`经Explorer独立后台启动PID39692。`check-process-isolation.ps1 -FormalProcessId 39692`确认无包身份、不在工具Job、正常响应。最初用Windows PowerShell 5调用隔离脚本时C#编译器不支持out var，改由当前PowerShell运行后通过，不涉及产品改动。
+
+升级前快照中截图原消息唯一匹配，发送时间2026-10-20 13:51:22（北京时间），“本周六”换算2026-10-24。启动后11:45:51已出现一笔正常accept-review操作（本轮没有执行真实确认命令或点击确认），因此最初要求所有行完全原样的检查失败；没有回滚正常操作。`audit-confirm.py`对照操作before/after和真实四库快照退出0：新任务2026-10-24/空钟点/Start与确认请求一致，原候选完全不变，其他137条审核、7条原任务、281笔旧操作原样，messages/routing全部行及4份设置原样，仅新增对应任务证据、操作和匹配提醒计划，原提醒与投递未变。随后`run-physical-data.ps1 -Mode capture -Snapshot after-confirm`保护确认后数据，再以`-Mode verify -Snapshot after-confirm -FormalProcessId 39692`核对四库14表全行及4份设置原样、498文件一致；activeTasks=2/pendingReviews=0，提醒卡可见/待确认卡隐藏，均附着SHELLDLL_DefView，child/noActivate=true、topmost=false。
+
+通过既有`check-real-tray.ps1 -OpenApplication`打开主窗口，QQ进程未变、3001/6099无监听。`check-real-task.ps1 -ProcessId 39692 -ExpectedDate 2026-10-24 -CaptureScreenshot`仅导航到原任务并读取，日期2026-10-24、空钟点、开始类型、原文和可用保存按钮通过，FieldsEdited/TaskSubmitted均false。此前误用只核对托盘存在的app_tray_test默认入口未显示主窗口，第一次只读UI检查停在main_window并未进入任何表单；补用正确打开入口后通过。最终页面停在该任务。报告、截图、数据保护与审计位于`.tools/review-date-validation/`，均不入公开仓库或下载包。
 
 ### 通知日期与活动时间段（2026-10-18，已实现、部署并发布beta.6）
 
@@ -84,6 +92,10 @@
 
 修复前 Core 新回归 21失败/82通过，旧兼容回归6失败/2通过；修复后均通过。全量初次暴露7处依赖旧自动拆分的测试，按整条审核/显式拆分调整；后续备份夹具遍历新增内部枚举导致数量5而预期4，改为明确四种人工状态，并新增合并状态备份保留回归。新加测试曾误用 ignore-review 操作名，改为实际 ignore 后最终704/704通过。前轮文档定位提交77db15c、51项文档及2项旧行为检查保留为历史。本轮日志位于 `.tools/message-review-validation/`。修复已限定文件提交，随后完成干净源码构建、Native/ZIP/本机部署验证与beta.3发布；本轮提交标识以 Git 日志为准。
 
+### GitHub 更新同步（2026-10-22，beta.7源码和下载包已发布）
+
+修复提交f24c1fe209b06be974e9eb95cba337c7e880ab76通过`git -c http.https://github.com.proxy= push origin HEAD:main`推送main成功。`gh release create v0.1.0-beta.7 .tools/releases/Shiyao-0.1.0-beta.7-win-x64.zip --repo Steven060206/shiyao --target f24c1fe209b06be974e9eb95cba337c7e880ab76 --title ... --notes-file .tools/review-date-validation/release-notes.md --prerelease`退出0；首次传短SHA被API拒绝为target_commitish invalid，换完整SHA后成功。`gh api repos/Steven060206/shiyao/releases/tags/v0.1.0-beta.7`核对附件uploaded、119933564字节、draft=false、prerelease=true及完整target。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.7；Python urllib无认证HEAD核对公开附件匿名下载HTTP200，Range GET返回HTTP206且首字节符合ZIP。源码与包不含个人聊天数据、账号库、Token或登录材料。交付记录单独提交并推送，功能包仍对应已验证f24c1fe。
+
 ### GitHub 更新同步（2026-10-18，beta.6源码和下载包已发布）
 
 `git -c http.https://github.com.proxy= push origin HEAD:main`退出0，main由99bbde1快进至1717726。`gh release create v0.1.0-beta.6 .tools/releases/Shiyao-0.1.0-beta.6-win-x64.zip --repo Steven060206/shiyao --target 17177268c104d6b210f1442cdac22db0851c7097 --prerelease --title ... --notes-file .tools/notice-time-validation/release-notes.md`退出0。`gh api repos/Steven060206/shiyao/releases/tags/v0.1.0-beta.6`核对附件uploaded、119932508字节、draft=false、prerelease=true、target完整SHA一致。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.6；`curl.exe --noproxy '*' --head --location --silent --show-error --max-time 30 --output NUL --write-out 'HTTP %{http_code}' https://github.com/Steven060206/shiyao/releases/download/v0.1.0-beta.6/Shiyao-0.1.0-beta.6-win-x64.zip`退出0、匿名下载HTTP200。源码和下载包不含个人聊天库、账号配置、Token或登录材料。文档随后单独提交并推main，功能包仍对应已验证1717726，不因交付记录变化重建。
@@ -122,7 +134,13 @@ App csproj用 `--no-restore --configuration Release --self-contained true --outp
 
 maintain-context-hygiene在两处技能目录仍无SKILL.md，按项目规则人工核对新需求、交接、实际源码、测试结果、下载包和远端状态。发布结果同步需求与交接，并新增最新版本/构建示例一致性检查；`node --test tests/project-rules.test.mjs`50/50、最终`node --test tests/*.test.mjs`174/174，均退出0，日志docs-published-final.log及node-published-final.log。`git diff --check`退出0；通过后创建发布结果记录commit并推main，标识以Git日志为准。下一步供同学下载试用；后续软件改动交付时继续同步源码与下载包，其他电脑及QQ版本试用、实际游戏、多屏/恢复和长期稳定性保留既有验收范围。
 
-### 当前接续（通知日期与活动时间段，2026-10-18，已实现、部署并发布beta.6）
+### 当前接续（待确认共同日期，2026-10-22，已实现、部署并发布beta.7）
+
+正式入口已切换到最新版`.tools/published/app-card-controls/`，498个文件与已提交f24c1fe的干净发布版一致；Explorer独立后台PID39692无包身份、不在工具Job，正常响应。MessagePurify.Shiyao、黑色标题栏、约2 DIP吸附间距、原快捷方式与个人配置保留。Core419/Infrastructure741/Windows477/Node181、131项Native、ZIP/Setup及公开下载验证通过，beta.7源码和119933564字节附件已同步GitHub。
+
+截图原消息10月20日发送，“本周六”正确换算10月24日。启动后已出现一笔正常确认操作并创建该日任务，本轮没有代为确认或填写日期；原候选及其他137条审核、7条原任务、281笔旧操作、原文/路由和4份设置保留。确认后再核对四库14表及4份设置原样，498文件一致；2个待办、0个待确认，两卡附着SHELLDLL_DefView并按数量显隐。真实任务详情日期2026-10-24、空钟点、开始类型只读核对通过，页面停在该任务；托盘打开不切换QQ，3001/6099无监听。无需重新同步或重填此日期；以后明确日期预填后核对确认即可。真实Windows登录自启动仍未验收，实际游戏、多屏/恢复、其他电脑和长期稳定性继续沿用既有范围。既有app.css/index.html/application-ui.test.mjs视觉改动保留，不混入发布。maintain-context-hygiene技能未找到，已人工核对需求、交接、实际文件、包与数据。证据位于`.tools/review-date-validation/`。
+
+### 上一段（通知日期与活动时间段，2026-10-18，已实现、部署并发布beta.6）
 
 正式入口已切换到最新版`.tools/published/app-card-controls/`，沿用MessagePurify.Shiyao独立身份、黑色标题栏、约2 DIP吸附间距、桌面/开始菜单/Run入口与个人配置。498个文件与干净提交1717726的发布版一致；Explorer独立后台PID29512无包身份、不在工具Job内、正常响应。打开主窗口前核对真实四库14表及4份设置与升级前保护原样，3个待办、0个待确认，两卡真实附着SHELLDLL_DefView、按数量显示。
 
@@ -1098,7 +1116,7 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 
 ## 8. 变更记录
 
-2026-10-22：用户要求明确相对日期按原消息发送时间换算并预填，只需核对确认；已修复多行动/钟点丢失共同日期，兼容旧Pending并保留原候选和审核历史，Core419/Infrastructure741/Windows477/Node181及131项Native检查通过；部署和beta.7发布正在准备。
+2026-10-22：用户要求明确相对日期按原消息发送时间换算并预填，只需核对确认；已修复多行动/钟点丢失共同日期，兼容旧Pending并保留原候选和审核历史，Core419/Infrastructure741/Windows477/Node181及131项Native检查通过；已部署PID39692并发布beta.7，公开附件119933564字节、uploaded且匿名HTTP200；实际原消息换算为10月24日并已通过正常确认保存，原候选及其他数据保留，详细审计见本轮小节。
 
 2026-10-16：用户要求修复待确认普通通知无法加入通知的流程。已新增独立accept-notice与CanAcceptNotice、原子通知/审核/历史写入、无日期确认按钮、成功定位通知及14项存储/21项协议/浏览器和7项Native验证。Core323、Infrastructure718、Windows477、Node177、Native126及ZIP/Setup通过；修复提交0dee017，干净源码beta.4已部署原正式目录并由Explorer独立启动PID45728，四库14表/4份设置原样、498个文件一致。GitHub main及beta.4公开附件已同步，119928968字节、uploaded且匿名HTTP200；没有代用户审核消息。
 
