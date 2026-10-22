@@ -711,11 +711,12 @@ public class RuleExtractionTests
     }
 
     [Fact]
-    public void CompositeCannotChooseOneOfTwoTimeRolesOnTheSameDate()
+    public void CompositeRetainsSharedDateWithoutChoosingOneOfTwoTimeRoles()
     {
         var candidate = Single("10月12日报名截止；10月12日必须参加活动");
         Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
-        Assert.Null(candidate.Time);
+        Assert.Equal(new DateOnly(2026, 10, 12), candidate.Time!.Date);
+        Assert.Null(candidate.Time.Time);
         Assert.Null(candidate.Priority);
         Assert.False(candidate.Assessments.Time.Reliable);
     }
@@ -729,6 +730,53 @@ public class RuleExtractionTests
         Assert.Equal("【重要通知】\n明天交报告；后天完成习题", candidate.Title);
         Assert.Null(candidate.Time);
         Assert.Null(candidate.SuggestedTime);
+    }
+
+    [Theory]
+    [InlineData("2026-10-22T12:00:00+08:00", 24)]
+    [InlineData("2026-10-15T12:00:00+08:00", 17)]
+    public void CompetitionReviewRetainsSaturdayFromSendDateDespiteDifferentActionClocks(string sentAt, int day)
+    {
+        const string text = "各位老师和同学，请各单位派一位老师或者同学，本周六上午8点15分左右参与本次餐饮设计比赛的开幕式，进行签到，地点：学校南区大学生活动中心一楼。不参加开幕式的老师和同学，北4教学楼进行签到，教学楼的3楼进行产品准备，比赛9点开始，各组准备好5份产品计划书，以备评审专家查阅！注意：隐去单位和参赛人员和老师名字，只允许保留产品名称";
+        var message = Message(text) with { SentAt = DateTimeOffset.Parse(sentAt) };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context(course: null)).Candidates);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Equal(text, candidate.Title);
+        Assert.Equal(new DateOnly(2026, 10, day), candidate.Time!.Date);
+        Assert.Null(candidate.Time.Time);
+        Assert.Null(candidate.SuggestedTime);
+        Assert.DoesNotContain("缺少可可靠解析的正式时间", candidate.ReviewReasons);
+    }
+
+    [Theory]
+    [InlineData("本周六8点签到，比赛9点开始")]
+    [InlineData("本周六8点签到，北楼签到，比赛9点开始")]
+    public void SingleDayReviewCanConfirmDateWithoutReenteringIt(string text)
+    {
+        var candidate = Single(text, Context(course: null));
+        Assert.Equal(new DateOnly(2026, 10, 10), candidate.Time!.Date);
+        Assert.Null(candidate.Time.Time);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+    }
+
+    [Theory]
+    [InlineData("本周六25点签到，比赛9点开始")]
+    [InlineData("本周六8点签到，下周一9点参加比赛")]
+    [InlineData("10月32日8点签到，比赛9点开始")]
+    [InlineData("本周六或下周一8点签到，比赛9点开始")]
+    public void ReviewDateFallbackDoesNotChooseConflictingOrInvalidDates(string text)
+    {
+        Assert.Null(Single(text, Context(course: null)).Time);
+    }
+
+    [Fact]
+    public void SharedEventWithOneClockPrefillsBothDateAndClock()
+    {
+        var candidate = Single("本周六上午8点15分签到，北楼签到", Context(course: null));
+        Assert.Equal(new DateOnly(2026, 10, 10), candidate.Time!.Date);
+        Assert.Equal(new TimeOnly(8, 15), candidate.Time.Time);
+        Assert.Equal(TimeKind.Start, candidate.Time.Kind);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
     }
 
     [Theory]
@@ -753,7 +801,7 @@ public class RuleExtractionTests
 
     [Theory]
     [InlineData("明天9点至11点必须参加活动", RuleAction.Attend, RuleDisposition.Task, true)]
-    [InlineData("明天9点至11点交实验报告", RuleAction.Submit, RuleDisposition.Pending, false)]
+    [InlineData("明天9点至11点交实验报告", RuleAction.Submit, RuleDisposition.Pending, true)]
     [InlineData("通知：明天9点或11点", RuleAction.Inform, RuleDisposition.Notice, false)]
     public void RangeSupportPreservesActionAndDeadlineSafety(
         string text, RuleAction action, RuleDisposition disposition, bool hasTime)
@@ -763,10 +811,16 @@ public class RuleExtractionTests
         Assert.Equal(action, candidate.Action);
         Assert.Equal(disposition, candidate.Disposition);
         Assert.Equal(hasTime, candidate.Time is not null);
-        if (hasTime)
+        if (hasTime && action == RuleAction.Attend)
         {
             Assert.Equal(TimeKind.Start, candidate.Time!.Kind);
             Assert.Equal(new TimeOnly(9, 0), candidate.Time.Time);
+        }
+        else if (hasTime)
+        {
+            Assert.Equal(new DateOnly(2026, 10, 11), candidate.Time!.Date);
+            Assert.Null(candidate.Time.Time);
+            Assert.Equal(TimeKind.Deadline, candidate.Time.Kind);
         }
     }
 

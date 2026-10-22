@@ -37,7 +37,8 @@ public static class MessageRuleExtractor
         var businessCandidates = candidates.Where(candidate => candidate.Disposition != RuleDisposition.Ignored).ToArray();
         if (businessCandidates.Length == 0)
             return Diagnostic(string.Join("；", candidates.SelectMany(candidate => candidate.ReviewReasons).Distinct()), RuleDisposition.Ignored);
-        return new(RuleVersion, [MessageReviewCandidate.Combine(originalMessage, businessCandidates)]);
+        return new(RuleVersion, [MessageReviewCandidate.ResolveTime(originalMessage,
+            MessageReviewCandidate.Combine(originalMessage, businessCandidates), context.TimeZoneId)]);
 
         RuleExtractionResult Diagnostic(string reason, RuleDisposition disposition)
         {
@@ -212,6 +213,19 @@ public static class MessageRuleExtractor
         message.Segments.Any(segment => segment.Kind == SegmentKind.Quote &&
             segment.Reference is not null && segment.Reference.AccountId == message.Key.AccountId &&
             segment.Reference.GroupId == message.Key.GroupId && target.Evidence.Contains(segment.Reference));
+
+    internal static TaskTime? ResolveReviewTime(string text, DateTimeOffset sentAt, string timeZoneId, TimeKind kind)
+    {
+        var parts = SplitActions(text);
+        var sharedDate = parts.Count > 0 && (parts.All(part => GetAction(part.Text) == RuleAction.Attend) ||
+            parts.All(part => MessageDateParser.ParseReviewDate(WithoutBackgroundDates(part.Text),
+                sentAt, timeZoneId, TimeKind.Deadline).Time is not null));
+        if (!sharedDate) return null;
+        var parsedText = WithoutBackgroundDates(text);
+        var sameRole = parts.All(part => (GetAction(part.Text) == RuleAction.Attend) == (kind == TimeKind.Start));
+        var exact = sameRole ? MessageDateParser.Parse(parsedText, sentAt, timeZoneId, kind).Time : null;
+        return exact ?? MessageDateParser.ParseReviewDate(parsedText, sentAt, timeZoneId, kind).Time;
+    }
 
     private static string WithoutBackgroundDates(string text)
     {

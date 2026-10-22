@@ -70,6 +70,30 @@ public static class MessageReviewCandidate
             candidates.All(candidate => select(candidate).Reliable));
     }
 
+    /// <summary>为待确认保留可靠日期和单一钟点，不替用户选择多个钟点或确认事项。</summary>
+    public static RuleCandidate ResolveTime(SchoolMessage message, RuleCandidate candidate, string timeZoneId)
+    {
+        if (candidate.Time is not null || candidate.Disposition != RuleDisposition.Pending ||
+            candidate.TargetTaskId is not null || IsChange(candidate.Action)) return candidate;
+        var text = string.Join("\n", MessageNormalizer.Normalize(message).Segments
+            .Where(segment => segment.Kind == SegmentKind.Text).Select(segment => segment.Text));
+        if (!MessageRuleExtractor.HasAction(text)) return candidate;
+        var time = MessageRuleExtractor.ResolveReviewTime(text,
+            message.SentAt, timeZoneId, candidate.Action == RuleAction.Attend ? TimeKind.Start : TimeKind.Deadline);
+        if (time is null) return candidate;
+        return candidate with
+        {
+            Time = time,
+            SuggestedTime = null,
+            ReviewReasons = candidate.ReviewReasons.Where(reason => reason != "缺少可可靠解析的正式时间" &&
+                reason != "多个行动的时间不同、角色不同或尚不完整，不能自动选择其中一个时间")
+                .Append(time.Time is null
+                    ? "已按原消息发送时间识别日期，请核对；多个钟点或时间角色需分别查看原文，钟点可不填"
+                    : "已按原消息发送时间识别日期和时间，请核对后确认")
+                .Distinct().ToArray()
+        };
+    }
+
     internal static string FullContent(SchoolMessage message)
     {
         var normalized = MessageNormalizer.Normalize(message);

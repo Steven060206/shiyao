@@ -50,6 +50,14 @@ public static class MessageDateParser
 
     public static DateParseResult Parse(string text, DateTimeOffset sentAt,
         string timeZoneId, TimeKind kind)
+        => ParseCore(text, sentAt, timeZoneId, kind, dateOnly: false);
+
+    internal static DateParseResult ParseReviewDate(string text, DateTimeOffset sentAt,
+        string timeZoneId, TimeKind kind)
+        => ParseCore(text, sentAt, timeZoneId, kind, dateOnly: true);
+
+    private static DateParseResult ParseCore(string text, DateTimeOffset sentAt,
+        string timeZoneId, TimeKind kind, bool dateOnly)
     {
         try
         {
@@ -86,8 +94,8 @@ public static class MessageDateParser
 
             // 保留多个完整日期给上层按行动语义拆分，不在这里择早或择晚。
             if (parsedDates.Distinct().Count() > 1 ||
-                (!activityRange && (parsedClocks.Distinct().Count() > 1 || HasRange(normalized, clocks))) ||
-                (kind == TimeKind.Start && clocks.Length > 2) ||
+                (!dateOnly && !activityRange && (parsedClocks.Distinct().Count() > 1 || HasRange(normalized, clocks))) ||
+                (!dateOnly && kind == TimeKind.Start && clocks.Length > 2) ||
                 (activityRange && parsedClocks[1] <= parsedClocks[0]) || HasRange(normalized, dates) ||
                 AbbreviatedDateRange.IsMatch(normalized) ||
                 clocks.Any(clock => clock.Groups["period"].Value == "晚上" && Number(clock.Groups["hour"]) == 12))
@@ -103,7 +111,7 @@ public static class MessageDateParser
                 return Issue(DateIssue.Missing, "缺少明确日期，需要补充或确认。");
 
             var time = new TaskTime(kind, parsedDates[0],
-                parsedClocks.Length == 0 ? null : parsedClocks[0], timeZoneId);
+                dateOnly || parsedClocks.Length == 0 ? null : parsedClocks[0], timeZoneId);
             // 复用正式时间校验，不猜测夏令时跳过或重复的当地钟点。
             _ = time.GetExactInstant();
             if (activityRange)

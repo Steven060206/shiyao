@@ -181,7 +181,7 @@ public sealed partial class AccountWorkspace
             }
             foreach (var review in reviews.Where(review => review.State is ReviewState.Pending or ReviewState.Ignored || review.SplitParentTaskId is not null))
             {
-                var candidate = review.Candidate;
+                var candidate = ReviewCandidate(review);
                 var targetId = candidate.TargetTaskId ?? (review.State == ReviewState.Accepted ? review.AcceptedTaskId : null);
                 var target = targetId is null ? null : taskList.FirstOrDefault(task => task.Id == CurrentTaskId(targetId));
                 var reason = AcceptanceProblem(candidate, target is not null, review.SplitParentTaskId is not null);
@@ -330,7 +330,7 @@ public sealed partial class AccountWorkspace
                     router.AcceptReviewAsNotice(command.Id, command.OperationId, command.Version, now); break;
                 case "accept-review":
                     var review = tasks.FindReview(command.Id) ?? throw new KeyNotFoundException("待确认事项不存在。");
-                    var candidate = review.Candidate;
+                    var candidate = ReviewCandidate(review);
                     var problem = AcceptanceProblem(candidate, candidate.TargetTaskId is not null && tasks.FindTask(candidate.TargetTaskId) is not null,
                         review.SplitParentTaskId is not null);
                     if (problem is not null) throw new ArgumentException(problem);
@@ -406,6 +406,22 @@ public sealed partial class AccountWorkspace
         tasks.CreateTaskFromNotice("notice-task-" + notice.Id, notice.Id, notice.Candidate,
             time, PriorityCalculator.Calculate(time, now, false),
             command.OperationId, now);
+    }
+
+    private RuleCandidate ReviewCandidate(PendingReview review)
+    {
+        if (review.State is not (ReviewState.Pending or ReviewState.Accepted) ||
+            review.SplitParentTaskId is not null || review.Candidate.Time is not null)
+            return review.Candidate;
+        // Evidence order may put a quote first. Only the original routing identity anchors relative dates.
+        foreach (var key in review.Candidate.Evidence)
+        {
+            var source = messages.Find(key);
+            if (source?.Extraction is null || !Enumerable.Range(0, source.Extraction.Candidates.Count)
+                .Any(index => AccountCandidateRouter.ReviewId(key, index) == review.Id)) continue;
+            return MessageReviewCandidate.ResolveTime(source.Message, review.Candidate, "China Standard Time");
+        }
+        return review.Candidate;
     }
 
     private TaskTime? NoticeTime(StoredNotice notice)

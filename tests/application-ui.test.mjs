@@ -783,6 +783,28 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.equal(command.parameters.id, 'standalone-1'); assert.equal(command.parameters.date, '2026-10-19'); assert.equal(command.parameters.time, '18:00');
     });
     await push(fixture);
+    await t.test('待确认已识别日期只需核对确认，钟点可空，批量复用预填日期', async () => {
+      const data = { ...structuredClone(fixture), items: ['relative-single', 'relative-batch'].map(id => ({
+        ...structuredClone(fixture.items[2]), id, title: '本周六8点15分签到，比赛9点开始',
+        due: '2026-10-17', time: null, timeKind: 'start', action: 'attend', canAccept: true,
+        suggestedDue: null, suggestedTime: null
+      })) };
+      await push(data); await nav('pending'); await select('relative-single');
+      assert.equal(await evaluate('document.querySelector("#review-form [name=date]").value'), '2026-10-17');
+      assert.equal(await evaluate('document.querySelector("#review-form [name=time]").value'), '');
+      assert.match(await evaluate('document.querySelector("#pending-confirm-help").textContent'), /已识别日期.*核对.*确认/);
+      assert.doesNotMatch(await evaluate('document.querySelector("#pending-confirm-help").textContent'), /补齐|填写/);
+      await click('#pending-confirm-button');
+      await waitFor('backend.snapshot.items.find(item=>item.id==="relative-single").kind==="task"');
+      let command = await evaluate('backend.messages.filter(message=>message.operation==="accept-review").at(-1)');
+      assert.equal(command.parameters.date, '2026-10-17'); assert.equal(command.parameters.time, '');
+      assert.equal(command.parameters.timeKind, 'start');
+      await nav('pending'); await click('#batch-select-all'); await click('[data-action=batch-accept]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("已加入 1 项")');
+      command = await evaluate('backend.messages.filter(message=>message.operation==="accept-review").at(-1)');
+      assert.equal(command.parameters.id, 'relative-batch'); assert.equal(command.parameters.date, '2026-10-17');
+    });
+    await push(fixture);
     await t.test('待确认普通通知无需日期即可确认，失败保留原文，成功后进入通知', async () => {
       const noticeReview = { ...structuredClone(fixture.items[2]), id: 'notice-review', title: '赛前打磨工作的通知', action: 'inform', course: '', due: null, suggestedDue: null, suggestedTime: null, canAccept: false, canAcceptNotice: true, reviewReasons: ['课程或群关联尚未确认'] };
       await push({ ...structuredClone(fixture), items: [...structuredClone(fixture.items), noticeReview] });
