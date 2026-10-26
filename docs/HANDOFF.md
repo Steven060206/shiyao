@@ -2,13 +2,19 @@
 
 最后更新：2026-10-26（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；2026-10-22待确认共同日期预填已实现、部署并发布beta.7，截图消息已按原发送时间正确保存为10月24日任务；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；2026-10-26开课关键词误报已修复、部署并发布beta.8，截图误报已通过原有忽略入口移入回收站，保留原文和撤销；2026-10-22待确认共同日期预填已实现、部署并发布beta.7，截图消息已按原发送时间正确保存为10月24日任务；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### 开课关键词误报（2026-10-26，已修改并通过自动回归，待部署发布）
+### 开课关键词误报（2026-10-26，已实现、部署并发布beta.8）
 
-用户截图指出娱乐回复被推入待确认，已明确要求修改。上一轮以无包身份进程只读核对真实物理数据，唯一匹配截图发送时间2026-10-25 18:38:20（北京时间）；候选为Inform/Pending，原因仅为课程或群关联尚未确认。对当前正式Core DLL运行截图全文、最小“你打开课本的速度和入睡的速度一样快”、移除该词及正常通知/作业对照，确认HasAction裸匹配“开课”误命中“打开课本”。临时诊断位于系统TEMP/shiyao-rule-review-20261026，未改真实数据。当前按小任务直接修正规则并补回归；既有三个视觉文件改动保留。本机仍为beta.7，尚未部署或发布新版本。
+用户截图指出娱乐回复被推入待确认，已明确要求修改。上一轮以无包身份进程只读核对真实物理数据，唯一匹配截图发送时间2026-10-25 18:38:20（北京时间）；候选为Inform/Pending，原因仅为课程或群关联尚未确认。对当前正式Core DLL运行截图全文、最小“你打开课本的速度和入睡的速度一样快”、移除该词及正常通知/作业对照，确认HasAction裸匹配“开课”误命中“打开课本”。临时诊断位于系统TEMP/shiyao-rule-review-20261026，未改真实数据。本轮按小任务直接修正规则并补回归；既有三个视觉文件改动保留。现本机已更新beta.8，源码和下载包均已发布。
 
-HasAction将“开课”限制为前非“打”、后非“本”，避免打开课程/课件和翻开课本误触发，不按账号封禁。新增Core9项覆盖截图全文、相邻表达、真开课及独立作业，Infrastructure2项覆盖已/未确认课程的持久化Ignored、保留原文、重开与重复同步不产生任务/通知/待确认。修复前Core专项实际6失败/3通过；修复后`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release --verbosity quiet`428/428，同参数Infrastructure743/743、Windows477/477；`node --test tests/*.test.mjs`181/181；`python -m unittest discover -s tests -p release_packaging_test.py`4/4，均退出0。本轮五个改动文件的`git diff --check -- <明确路径>`通过；全工作区diff检查遇到既有app.css末尾空行，未修改或暂存该视觉改动。日志和本机数据/发布脚本位于`.tools/class-start-validation/`，尚未部署或上传。maintain-context-hygiene技能仍未找到，已人工核对需求、交接和实际实现。
+HasAction将“开课”限制为前非“打”、后非“本”，避免打开课程/课件和翻开课本误触发，不按账号封禁。新增Core9项覆盖截图全文、相邻表达、真开课及独立作业，Infrastructure2项覆盖已/未确认课程的持久化Ignored、保留原文、重开与重复同步不产生任务/通知/待确认。修复前Core专项实际6失败/3通过；修复后`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release --verbosity quiet`428/428，同参数Infrastructure743/743、Windows477/477；`node --test tests/*.test.mjs`181/181；`python -m unittest discover -s tests -p release_packaging_test.py`4/4，均退出0。本轮五个改动文件的`git diff --check -- <明确路径>`通过；全工作区diff检查遇到既有app.css末尾空行，未修改或暂存该视觉改动。日志和本机数据/发布脚本位于`.tools/class-start-validation/`。maintain-context-hygiene技能仍未找到，已人工核对需求、交接和实际实现。
+
+源码提交4f1ead24d86033d0a2901f94db22af945a799bd6已通过`git -c http.https://github.com.proxy= push origin HEAD:main`推送。`git archive`导出`.tools/release-stage-beta8/`，`.tools/dotnet/dotnet.exe publish .tools/release-stage-beta8/src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj --configuration Release --runtime win-x64 --self-contained true --output .tools/published/github-release-0.1.0-beta.8`退出0，无编译警告或错误；干净源码`node --test tests/*.test.mjs`181/181。发布版及中文空格解压版分别运行`python tests/app_desktop_test.py --executable <对应MessagePurify.exe>`均退出0，131项Native/真实桌面父窗检查通过，synthetic=true。`python .tools/release-stage-beta8/tools/build_release.py --publish-directory .tools/published/github-release-0.1.0-beta.8 --napcat-archive .tools/napcat/framework/v4.18.37/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.8`生成119933563字节、518条目的ZIP。`verify-archive.py`和`verify-package.py`退出0，495个非PDB文件、ZIP完整、官方NapCat原包、个人数据缺失及合成CheckOnly/Setup通过。
+
+本机经托盘正常退出旧PID37184，`run-physical-data.ps1 -Mode capture -Snapshot before-deploy`以无包身份进程保护真实四库及4份设置；`deploy.ps1`复制498个文件至原正式入口，`start-explorer-background.ps1`经Explorer以--background独立启动PID54928。`check-process-isolation.ps1 -FormalProcessId 54928`确认无包身份、不在工具Job且正常响应。部署后`run-physical-data.ps1 -Mode verify -Snapshot before-deploy -FormalProcessId 54928`退出0，四库14表全行及4份设置原样，498个文件与beta.8一致，2个待办/23个待确认，两卡附着SHELLDLL_DefView。最初托盘退出命令链使用未设置的LASTEXITCODE判断而提前结束，部署未发生；随后独立执行部署及以上验证通过，不涉及产品逻辑。
+
+通过已有`check-real-tray.ps1 -ProcessId 54928 -OpenApplication`打开主窗口，QQ进程未变，3001/6099无监听。`dismiss-screenshot.ps1`核对完整截图关键词和准确发送时间2026/10/25 18:38:20，再仅点击该条“忽略”；首次因无UIAutomation暴露的rows容器找不到项而无修改退出，改用实际list-pane后通过。`run-physical-data.ps1 -Mode capture -Snapshot after-ignore`保护处理后数据，`audit-ignore.py`退出0：只新增1笔正常ignore操作，仅该审核State=Ignored/Version+1并保留24小时撤销，原候选不变，其他162条审核、全部任务/证据/关系及309笔旧操作不变；messages/routing/reminders全行原样，设置仅正常ReadVersions变化。随后`-Mode verify -Snapshot after-ignore -FormalProcessId 54928`退出0，四库14表/4份设置原样、498文件一致；activeTasks=2、pendingReviews=22，两卡可见、child/noActivate=true、topmost=false。未自动排除机器人或其他发送账号，未处理其他真实审核。真实数据和诊断均不进入公开仓库或包。
 
 ### 待确认共同日期预填（2026-10-22，已实现、部署并发布beta.7）
 
@@ -98,6 +104,10 @@ HasAction将“开课”限制为前非“打”、后非“本”，避免打�
 
 修复前 Core 新回归 21失败/82通过，旧兼容回归6失败/2通过；修复后均通过。全量初次暴露7处依赖旧自动拆分的测试，按整条审核/显式拆分调整；后续备份夹具遍历新增内部枚举导致数量5而预期4，改为明确四种人工状态，并新增合并状态备份保留回归。新加测试曾误用 ignore-review 操作名，改为实际 ignore 后最终704/704通过。前轮文档定位提交77db15c、51项文档及2项旧行为检查保留为历史。本轮日志位于 `.tools/message-review-validation/`。修复已限定文件提交，随后完成干净源码构建、Native/ZIP/本机部署验证与beta.3发布；本轮提交标识以 Git 日志为准。
 
+### GitHub 更新同步（2026-10-26，beta.8源码和下载包已发布）
+
+功能提交4f1ead24d86033d0a2901f94db22af945a799bd6已推main。`gh release create v0.1.0-beta.8 .tools/releases/Shiyao-0.1.0-beta.8-win-x64.zip --repo Steven060206/shiyao --target 4f1ead24d86033d0a2901f94db22af945a799bd6 --title ... --notes-file .tools/class-start-validation/release-notes.md --prerelease`退出0。`gh api repos/Steven060206/shiyao/releases/tags/v0.1.0-beta.8`核对附件uploaded、119933563字节、draft=false、prerelease=true、target与完整源码SHA一致。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.8；`curl.exe --noproxy '*' --head --location --silent --show-error --max-time 45 --output NUL --write-out 'HTTP %{http_code}' https://github.com/Steven060206/shiyao/releases/download/v0.1.0-beta.8/Shiyao-0.1.0-beta.8-win-x64.zip`退出0，匿名下载HTTP200。公开源码和包不含聊天数据、账号数据库、Token或登录材料；README构建示例和交付记录随后另行提交推main，功能包保持对应已验证4f1ead2。
+
 ### GitHub 更新同步（2026-10-22，beta.7源码和下载包已发布）
 
 修复提交f24c1fe209b06be974e9eb95cba337c7e880ab76通过`git -c http.https://github.com.proxy= push origin HEAD:main`推送main成功。`gh release create v0.1.0-beta.7 .tools/releases/Shiyao-0.1.0-beta.7-win-x64.zip --repo Steven060206/shiyao --target f24c1fe209b06be974e9eb95cba337c7e880ab76 --title ... --notes-file .tools/review-date-validation/release-notes.md --prerelease`退出0；首次传短SHA被API拒绝为target_commitish invalid，换完整SHA后成功。`gh api repos/Steven060206/shiyao/releases/tags/v0.1.0-beta.7`核对附件uploaded、119933564字节、draft=false、prerelease=true及完整target。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.7；Python urllib无认证HEAD核对公开附件匿名下载HTTP200，Range GET返回HTTP206且首字节符合ZIP。源码与包不含个人聊天数据、账号库、Token或登录材料。交付记录单独提交并推送，功能包仍对应已验证f24c1fe。
@@ -140,7 +150,13 @@ App csproj用 `--no-restore --configuration Release --self-contained true --outp
 
 maintain-context-hygiene在两处技能目录仍无SKILL.md，按项目规则人工核对新需求、交接、实际源码、测试结果、下载包和远端状态。发布结果同步需求与交接，并新增最新版本/构建示例一致性检查；`node --test tests/project-rules.test.mjs`50/50、最终`node --test tests/*.test.mjs`174/174，均退出0，日志docs-published-final.log及node-published-final.log。`git diff --check`退出0；通过后创建发布结果记录commit并推main，标识以Git日志为准。下一步供同学下载试用；后续软件改动交付时继续同步源码与下载包，其他电脑及QQ版本试用、实际游戏、多屏/恢复和长期稳定性保留既有验收范围。
 
-### 当前接续（待确认共同日期，2026-10-22，已实现、部署并发布beta.7）
+### 当前接续（开课关键词误报，2026-10-26，已实现、部署并发布beta.8）
+
+正式入口已切换到最新版`.tools/published/app-card-controls/`，498个文件与干净提交4f1ead2发布版一致；Explorer独立后台PID54928无包身份、不在工具Job且正常响应。保留MessagePurify.Shiyao、黑色标题栏、约2 DIP吸附间距、原快捷方式和个人配置。Core428/Infrastructure743/Windows477/Node181、打包4项、两份131项Native及ZIP/Setup通过；beta.8源码和119933563字节附件已同步GitHub，匿名下载HTTP200。
+
+截图误报已通过原有忽略入口移入回收站，可在24小时内撤销；原候选、其余162条审核、全部任务和309笔旧操作、原文/路由/提醒保留。最终真实物理数据为2个待办、22个待确认，两卡附着SHELLDLL_DefView且按数量显示。升级不会自动重分类其他已有审核；后续此类新消息在已/未确认课程均过滤，不自动封禁发送账号。没有触发QQ同步或代用户确认其他事项。maintain-context-hygiene技能仍未找到，已人工核对需求、交接、实际代码、发布包和真实数据。既有三个视觉文件改动保留。证据位于`.tools/class-start-validation/`。真实Windows登录自启动、实际游戏、多屏/恢复、其他电脑及长期稳定性沿用既有未验收范围。
+
+### 上一段（待确认共同日期，2026-10-22，已实现、部署并发布beta.7）
 
 正式入口已切换到最新版`.tools/published/app-card-controls/`，498个文件与已提交f24c1fe的干净发布版一致；Explorer独立后台PID39692无包身份、不在工具Job，正常响应。MessagePurify.Shiyao、黑色标题栏、约2 DIP吸附间距、原快捷方式与个人配置保留。Core419/Infrastructure741/Windows477/Node181、131项Native、ZIP/Setup及公开下载验证通过，beta.7源码和119933564字节附件已同步GitHub。
 
@@ -1121,6 +1137,8 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 - 用户希望每次只选择一个问题、选项同时写在正文、等待明确答复；不因等待时间过去就默认选项或进入下一题。
 
 ## 8. 变更记录
+
+2026-10-26：修复“打开课本”等表达误命中“开课”，新增Core9项与Infrastructure2项回归；Core428/Infrastructure743/Windows477/Node181、打包4项及两份131项Native/桌面检查通过。源码4f1ead2和beta.8下载包已公开，本机498文件已更新并经Explorer独立后台运行。仅通过原有忽略入口处理截图误报，保留原文、原候选、其他审核、任务和历史；数据核对及上传/公开下载验证通过。既有视觉改动保留。
 
 2026-10-22：用户要求明确相对日期按原消息发送时间换算并预填，只需核对确认；已修复多行动/钟点丢失共同日期，兼容旧Pending并保留原候选和审核历史，Core419/Infrastructure741/Windows477/Node181及131项Native检查通过；已部署PID39692并发布beta.7，公开附件119933564字节、uploaded且匿名HTTP200；实际原消息换算为10月24日并已通过正常确认保存，原候选及其他数据保留，详细审计见本轮小节。
 
