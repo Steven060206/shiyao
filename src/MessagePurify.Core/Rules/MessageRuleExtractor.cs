@@ -159,7 +159,7 @@ public static class MessageRuleExtractor
     }
 
     internal static bool HasAction(string text) => GetAction(text) != RuleAction.Inform ||
-        (Match(text, "通知|放假|停课|开课|安排|课程调整|(?:作业|报告|论文).*(?:格式|要求)") &&
+        (Match(text, "通知|放假|停课|(?<!打)开课(?!本)|安排|课程调整|(?:作业|报告|论文).*(?:格式|要求)") &&
          !Match(text, "^(?:【(?:重要通知|通知|课程安排|安排|变更通知)】|通知|重要通知|课程安排|安排)[:：]?$"));
 
     // Reuse the same action boundaries for persisted reviews as for fresh extraction.

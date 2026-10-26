@@ -48,6 +48,28 @@ public sealed class AccountWorkspaceTests : IDisposable
         Assert.Empty(snapshot.Groups);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void OpeningCourseMaterialsIsStoredWithoutReviewOrNoticeAndStaysIgnoredOnReopen(bool confirmed)
+    {
+        var workspace = Workspace();
+        Groups(workspace);
+        if (confirmed) Confirm(workspace);
+        var message = Message(text: "🎉 抓到一只新猪猪啦！\n【上课猪】\n在听了在听了\n> 你打开课本的速度和入睡的速度一样快。教室是你找到的最便宜的午休场所，还附赠白噪音。老师问你在不在听，你条件反射地点头——梦里确实在听。\n> 🐝不需要@就可以玩幽幽子的方法");
+        Assert.True(workspace.Ingest(message, Pinned(), MessageOrigin.History, "history", Now));
+        Assert.Empty(workspace.Snapshot(Now).Items);
+        var stored = new AccountMessageStore(root, Account).Find(message.Key)!;
+        Assert.Equal(message.Segments[0].Text, stored.Message.Segments[0].Text);
+        Assert.Equal(RuleDisposition.Ignored, Assert.Single(stored.Extraction!.Candidates).Disposition);
+
+        var reopened = Workspace();
+        Assert.False(reopened.Ingest(message, Pinned(), MessageOrigin.Realtime, "live", Now.AddHours(1)));
+        Assert.Empty(reopened.Snapshot(Now.AddHours(1)).Items);
+        Assert.Empty(Tasks().ListReviews());
+        Assert.Empty(Tasks().ListTasks());
+    }
+
     [Fact]
     public void Ingest_UnconfirmedCourseCreatesReviewWithOriginalEvidence()
     {

@@ -70,6 +70,37 @@ public class RuleExtractionTests
     }
 
     [Theory]
+    [InlineData("你打开课本的速度和入睡的速度一样快")]
+    [InlineData("翻开课本看看")]
+    [InlineData("打开课程表看看")]
+    [InlineData("打开课件看看")]
+    [InlineData("🎉 抓到一只新猪猪啦！\n【上课猪】\n在听了在听了\n> 你打开课本的速度和入睡的速度一样快。教室是你找到的最便宜的午休场所，还附赠白噪音。老师问你在不在听，你条件反射地点头——梦里确实在听。\n> 🐝不需要@就可以玩幽幽子的方法")]
+    public void OpeningCourseMaterialsDoesNotMeanClassesStart(string text)
+    {
+        Assert.Equal(RuleDisposition.Ignored, Single(text).Disposition);
+        Assert.Equal(RuleDisposition.Ignored, Single(text, Context(course: null)).Disposition);
+    }
+
+    [Theory]
+    [InlineData("明天开课")]
+    [InlineData("下周一正式开课")]
+    [InlineData("打开课本。下周一开课")]
+    public void GenuineClassStartNoticesRemainVisible(string text)
+    {
+        Assert.Equal(RuleDisposition.Notice, Single(text).Disposition);
+        Assert.Equal(RuleDisposition.Pending, Single(text, Context(course: null)).Disposition);
+    }
+
+    [Fact]
+    public void OpeningCourseMaterialsDoesNotHideIndependentHomework()
+    {
+        var candidate = Single("打开课本。明天交作业");
+        Assert.Equal(RuleDisposition.Task, candidate.Disposition);
+        Assert.Equal(RuleAction.Submit, candidate.Action);
+        Assert.Equal(new DateOnly(2026, 10, 11), candidate.Time!.Date);
+    }
+
+    [Theory]
     [InlineData("听说明天交作业")]
     [InlineData("可能明天交作业")]
     [InlineData("老师说明天交作业")]
