@@ -2,13 +2,25 @@
 
 最后更新：2026-10-28（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
-当前总览：M3 正在实施；2026-10-28课程关联历史重查已实现、部署并发布beta.10，人工处理保留、实际范围展示和课程冲突核对通过自动/Native合成验证；2026-10-28自动同步后的桌面左下角残留标题栏已修复、部署并发布beta.9，后台主窗口真正隐藏、托盘还原通过；2026-10-26开课关键词误报已修复、部署并发布beta.8，截图误报已通过原有忽略入口移入回收站，保留原文和撤销；2026-10-22待确认共同日期预填已实现、部署并发布beta.7，截图消息已按原发送时间正确保存为10月24日任务；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+当前总览：M3 正在实施；2026-10-28真实验收发现的备份空标题Ignored误拒已修复、部署并发布beta.11，正式导出/预览取消、真实副本隔离恢复、后台重开及五分钟观察通过，原图及长期验收范围保留；2026-10-28课程关联历史重查已实现、部署并发布beta.10，人工处理保留、实际范围展示和课程冲突核对通过自动/Native合成验证；2026-10-28自动同步后的桌面左下角残留标题栏已修复、部署并发布beta.9，后台主窗口真正隐藏、托盘还原通过；2026-10-26开课关键词误报已修复、部署并发布beta.8，截图误报已通过原有忽略入口移入回收站，保留原文和撤销；2026-10-22待确认共同日期预填已实现、部署并发布beta.7，截图消息已按原发送时间正确保存为10月24日任务；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
 
-### beta.10真实验收接续（2026-10-28，进行中）
+### 本机真实验收与备份修复（2026-10-28，已部署并发布beta.11）
 
-用户要求继续，先核对当前beta.10正式运行、真实备份导出、真实数据副本的隔离恢复及后台重开。实际游戏用户表示暂时不方便，先做其他验收；登录Windows、物理多屏/睡眠、跨电脑不以模拟替代。旧版两小时观察报告另作全样本核查，只说明历史版本范围。正式PID62076仍在原目录运行，既有三项视觉dirty保留。当前仅开始检查，结果尚未判定；不代用户确认课程、处理消息或向QQ发送消息。
+用户要求继续，实际游戏暂时不方便，先做其他验收。现已完成正式UI导出、恢复预览取消、真实备份副本隔离恢复及后台重开；没有向正式账号提交覆盖恢复。详细实际命令、有限结论和产物路径见[本机验收记录](verification/2026-10-28-local-acceptance.md)。M3仍正在实施，真实登录、多屏/睡眠、跨电脑、课程关系修改及长期稳定性未验收；OCR/原图备份仍后期。
 
-本轮进展：以WMI无包身份Python保护真实四库及4设置到`.tools/runtime-acceptance-beta10/before-acceptance/`，托盘打开前后QQ及既有接口监听保持原样。正式UI导出返回本地操作失败、未生成ZIP；先前文件对话框超时为验收脚本定位错误，已改按owner popup及原生Edit/Button识别，随后确认真实产品异常。已用隔离副本和单条纯图片消息复现：合法空标题Ignored提取结果被ValidateCandidate无条件标题检查误拒。已限定原始提取中的Ignored可为空标题，其他业务候选及其余字段仍严校验。8项新增回归修前4失败/4通过，修后AccountBackupTests34/34；全量回归、修复版发布及真实导出/隔离恢复仍进行中，不记为已交付。失败导出后物理四库15张业务表全行和4设置与保护快照原样。
+beta.10真实导出曾失败：无文本消息产生的合法空标题Ignored分析记录被ValidateCandidate误拒；已在隔离真实副本及单条纯图片场景复现。只对原始提取中的Ignored放开空标题，所有业务候选和其他字段继续校验，不改既有原文、候选或历史。8项新回归修前4失败/4通过，修后AccountBackupTests34/34。全量Core428、Infrastructure786、Windows477、发布前和干净源码Node191、OCR25、打包4通过；干净自包含publish零警告错误、发布版及中文空格解压版各139项Native（synthetic=true）、ZIP/Setup通过。
+
+功能提交41e02bd5406309df634c312789cfb29c79cfc153已推main；git archive导出.tools/release-stage-beta11，干净发布.tools/published/github-release-0.1.0-beta.11，下载包.tools/releases/Shiyao-0.1.0-beta.11-win-x64.zip为119942255字节/518条目。495个非PDB文件、官方NapCat原包及隐私文件缺失验证通过。GitHub公开prerelease附件uploaded、draft=false、prerelease=true，匿名下载HTTP200；包保持对应功能提交，后续文档单独提交。
+
+WMI无包身份Python保护正式物理profile四库及4设置。正常托盘退出beta.10、复制498文件并经Explorer --background启动PID49012；部署前后四库15表全行和4设置原样。真实UI最终导出585345字节ZIP，显示不完整范围；恢复预览打开后取消。引用beta.11二进制的隔离助手恢复四库14业务表2319行及设置/布局，自动恢复前备份、重开任务/审核/证据/操作及缺失任务库包拒绝通过；缺少70原图的引用明确保留，不冒充原图或跨电脑恢复。隔离applySettings:null，不操作QQ/注册表。
+
+期间用户自行忽略5条待确认，已明确确认来源，保留正常操作与24小时撤销。与验收前快照相比，仅5条审核正常状态/版本/撤销字段及兼容IsCourseConflict=false、5笔连续新ignore审计和序列变化；原8任务、8证据、184候选和371旧操作原样，messages/routing/reminders全行原样。3设置字节原样，工作区仅ReadVersions新增4/前进2，无删除或回退，课程关系保留。首轮严格before-acceptance验证因这些正常使用变化失败，已审计而非回滚；随后beta11-after-export快照在导出/预览后、重开及观察结束均严格验证四库全行/4设置原样。
+
+最终正常托盘退出并经Explorer后台重开PID44892，无包身份、不在工具Job、主窗口visible=false/iconic=false。0待办/0待确认，两卡附着SHELLDLL_DefView，child/noActivate=true、topmost=false且均隐藏。QQ进程身份和既有接口监听owner前后不变，Run只读核对为正式exe --background，未触发QQ同步。tests/watch_application.ps1 -Seconds 300 -IntervalSeconds 10实际退出0：300.08秒、30唯一样本全部响应和附着、空卡隐藏；私有内存107.473→100.055MiB，工作集175.707→170.484MiB，仅说明短时空闲。
+
+历史watch-2h.json全部238样本已审计，旧app-desktop-recovery在2026-10-13 16:40至18:40采样响应及附着通过；私有内存增长64.836MiB且无平台、连接标签始终等待下次同步，不能替代当前版长期稳定或QQ协议验收。maintain-context-hygiene仍未找到，已按项目规则人工核对需求、交接、报告、代码及正式产物；不为压缩删除文件。既有app.css/index.html/application-ui.test.mjs视觉dirty保留，不混入提交和包；所有真实备份、快照及本地助手留.tools，不公开。
+
+收尾新增验收文档边界回归，`node --test tests/project-rules.test.mjs tests/message-review-requirements.test.mjs`54/54、最终`node --test tests/*.test.mjs`192/192，均退出0。文档/README及对应测试单独提交推main；beta.11包继续对应41e02bd，不混入记录或既有视觉改动。
 
 ### 课程关联历史重查（2026-10-28，已实现、部署并发布beta.10）
 
@@ -140,6 +152,10 @@ HasAction将“开课”限制为前非“打”、后非“本”，避免打�
 
 修复前 Core 新回归 21失败/82通过，旧兼容回归6失败/2通过；修复后均通过。全量初次暴露7处依赖旧自动拆分的测试，按整条审核/显式拆分调整；后续备份夹具遍历新增内部枚举导致数量5而预期4，改为明确四种人工状态，并新增合并状态备份保留回归。新加测试曾误用 ignore-review 操作名，改为实际 ignore 后最终704/704通过。前轮文档定位提交77db15c、51项文档及2项旧行为检查保留为历史。本轮日志位于 `.tools/message-review-validation/`。修复已限定文件提交，随后完成干净源码构建、Native/ZIP/本机部署验证与beta.3发布；本轮提交标识以 Git 日志为准。
 
+### GitHub 更新同步（2026-10-28，beta.11源码和下载包已发布）
+
+功能提交41e02bd5406309df634c312789cfb29c79cfc153已推main；干净自包含beta.11已验包并部署本机。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.11，附件Shiyao-0.1.0-beta.11-win-x64.zip为119942255字节，uploaded、draft=false、prerelease=true，匿名下载HTTP200。发布目录不含账号、聊天数据、Token或登录材料；真实备份和快照仅留.tools。本机验收与回归结果见上方，后续记录单独提交，不重打包已验证二进制。
+
 ### GitHub 更新同步（2026-10-28，beta.10源码和下载包已发布）
 
 源码提交3b8757dc4a8caff15646799f9bdd2856dee8cdb1通过`git -c http.https://github.com.proxy= push origin HEAD:main`同步。`gh release create v0.1.0-beta.10 --repo Steven060206/shiyao --draft --prerelease --target 3b8757dc4a8caff15646799f9bdd2856dee8cdb1 --title '拾要 0.1.0-beta.10 · Windows 测试版' --notes-file .tools/course-recheck-validation/release-notes.md`、`gh release upload v0.1.0-beta.10 .tools/releases/Shiyao-0.1.0-beta.10-win-x64.zip --repo Steven060206/shiyao`、`gh release edit v0.1.0-beta.10 --repo Steven060206/shiyao --draft=false`均退出0。`gh api repos/Steven060206/shiyao/releases/tags/v0.1.0-beta.10`核对target、uploaded/119942141字节、draft=false、prerelease=true。`curl.exe --noproxy '*' --head --location --silent --show-error --max-time 30 --output NUL --write-out 'HTTP %{http_code}' https://github.com/Steven060206/shiyao/releases/download/v0.1.0-beta.10/Shiyao-0.1.0-beta.10-win-x64.zip`退出0，匿名下载HTTP200。Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.10。包和源码不含真实聊天/账号库/Token/登录材料；发布记录随后另行提交，包仍对应上述已验证功能提交。
@@ -194,9 +210,9 @@ App csproj用 `--no-restore --configuration Release --self-contained true --outp
 
 maintain-context-hygiene在两处技能目录仍无SKILL.md，按项目规则人工核对新需求、交接、实际源码、测试结果、下载包和远端状态。发布结果同步需求与交接，并新增最新版本/构建示例一致性检查；`node --test tests/project-rules.test.mjs`50/50、最终`node --test tests/*.test.mjs`174/174，均退出0，日志docs-published-final.log及node-published-final.log。`git diff --check`退出0；通过后创建发布结果记录commit并推main，标识以Git日志为准。下一步供同学下载试用；后续软件改动交付时继续同步源码与下载包，其他电脑及QQ版本试用、实际游戏、多屏/恢复和长期稳定性保留既有验收范围。
 
-### 当前接续（课程关联历史重查，2026-10-28，已实现、部署并发布beta.10）
+### 当前接续（本机验收与备份修复，2026-10-28，已部署并发布beta.11）
 
-正式入口已切换到最新版`.tools/published/app-card-controls/`，498个文件与干净提交3b8757d发布版一致；Explorer独立后台PID62076无包身份、不在工具Job且响应正常。保留MessagePurify.Shiyao、黑色标题栏、约2 DIP间距、原入口及配置；后台真正隐藏，托盘打开/关闭隐藏通过。课程重查设置页及空结果已真实只读核对，未代修改课程、消息或同步QQ；QQ进程和既有接口监听不变。原四库14表全行/4设置原样，仅新增空重查表。activeTasks=0/pendingReviews=5，提醒隐藏、待确认显示，两卡实际附着且样式正确。Core428/Infrastructure778/Windows477/Node190/OCR25/打包4、发布版和中文空格解压版139项Native及ZIP/Setup通过；beta.10源码和119942141字节附件已同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。下一阶段真实课程流程、Windows登录、游戏、多屏/恢复、跨电脑及长期稳定性验收；OCR/原图备份仍后期项目。三项既有视觉dirty保留。
+正式入口已切换到最新版`.tools/published/app-card-controls/`，498文件与干净提交41e02bd发布版一致；Explorer独立后台PID44892无包身份、不在工具Job且响应正常。保留MessagePurify.Shiyao、黑色标题栏、约2 DIP间距、原入口和个人数据。空标题Ignored备份错误已修复，真实UI导出/预览取消、真实副本隔离恢复、后台重开及五分钟观察通过；原图缺失明确不完整。用户5笔正常忽略与已读变化已审计并保留；使用后快照四库15表全行/4设置原样，0待办/0待确认，两卡正确隐藏且附着。QQ进程/既有监听不变；Run配置核对通过，真实Windows登录自启动仍未验收。Core428/Infrastructure786/Windows477、发布前及干净Node191/OCR25/打包4、两份Native139/ZIP/Setup通过。beta.11源码和119942255字节附件同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。下一步剩余真实课程流程、Windows登录、多屏/恢复、跨电脑及长期观察；实际游戏用户暂时延期，OCR/原图仍后期。详见verification/2026-10-28-local-acceptance.md；三项视觉dirty保留。
 
 ### 上一段（后台主窗口隐藏，2026-10-28，已实现、部署并发布beta.9）
 
@@ -1191,6 +1207,8 @@ Native 测试脚本修正三处前置条件/操作时机：闲聊应允许 Ignor
 - 用户希望每次只选择一个问题、选项同时写在正文、等待明确答复；不因等待时间过去就默认选项或进入下一题。
 
 ## 8. 变更记录
+
+2026-10-28：完成本机备份验收并修复空标题Ignored导出错误。用户延期实际游戏，继续独立验收。真实UI导出/预览取消、真实副本隔离恢复、后台重开和五分钟观察通过；8项新增回归，Core428/Infrastructure786/Windows477/Node191/OCR25/打包4/两份Native139。beta.11源码41e02bd和119942255字节公开包同步。用户5笔忽略及已读变化保留，重开后四库/设置原样，原图/跨电脑/实际系统及长期验收保持未完成。
 
 2026-10-26：修复“打开课本”等表达误命中“开课”，新增Core9项与Infrastructure2项回归；Core428/Infrastructure743/Windows477/Node181、打包4项及两份131项Native/桌面检查通过。源码4f1ead2和beta.8下载包已公开，本机498文件已更新并经Explorer独立后台运行。仅通过原有忽略入口处理截图误报，保留原文、原候选、其他审核、任务和历史；数据核对及上传/公开下载验证通过。既有视觉改动保留。
 

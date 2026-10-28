@@ -8,6 +8,25 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('本机备份验收区分真实副本、用户操作与短时观察范围', () => {
+  const report = read('docs/verification/2026-10-28-local-acceptance.md');
+  for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
+    assert.match(read(file), /2026-10-28-local-acceptance\.md/, file);
+  }
+  assert.match(report, /原始提取记录中的 Ignored 空标题/);
+  assert.match(report, /没有向正式账号提交覆盖恢复/);
+  assert.match(report, /14 张业务表、2319 行/);
+  assert.match(report, /70 个未下载原图/);
+  assert.match(report, /用户自行忽略了 5 条.*明确确认操作来源/);
+  assert.match(report, /没有回滚/);
+  assert.match(report, /300\.08 秒、30 个唯一样本/);
+  assert.match(report, /五分钟空闲观察，不能作为长期稳定性验收/);
+  assert.match(report, /旧 `app-desktop-recovery`，不是 beta\.10\/beta\.11/);
+  assert.match(report, /实际游戏暂停\/补同步（用户延期）/);
+  assert.match(report, /draft=false.*prerelease=true.*uploaded/);
+  assert.match(report, /匿名下载 HTTP200/);
+});
+
 test('课程关联重查已交付且保留人工决定，原图OCR仍为后期范围', () => {
   const requirements = read('docs/requirements.md');
   const current = read('docs/HANDOFF.md').split('### 课程关联历史重查')[1].split('### 自动同步后')[0];
