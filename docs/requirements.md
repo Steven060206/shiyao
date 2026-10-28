@@ -2,7 +2,7 @@
 
 更新日期：2026-10-28。本文记录已确认的产品需求，供后续界面设计和开发使用。
 
-自动同步后的桌面残留窗口修复（2026-10-28，用户已要求实施）：后台运行和请求自动同步后，不应在桌面左下角留下拾要主窗口的最小化标题栏。后台主窗口须真正隐藏，仍能通过托盘或桌面入口正常打开；已有最小化状态应正常还原，不改变一轮同步和普通QQ恢复逻辑。已实现并通过Core428、Infrastructure743、Windows477、Node181、打包4项及133项Native/真实桌面父窗检查，beta.9本机部署和GitHub同步待完成。截图残留已在正式进程中只读确认为visible=true、iconic=true、无任务栏按钮的拾要主窗口。
+自动同步后的桌面残留窗口修复（2026-10-28，用户已要求实施）：后台运行和请求自动同步后，不应在桌面左下角留下拾要主窗口的最小化标题栏。后台主窗口须真正隐藏，仍能通过托盘或桌面入口正常打开；已有最小化状态应正常还原，不改变一轮同步和普通QQ恢复逻辑。已实现、部署并发布beta.9：Core428、Infrastructure743、Windows477、Node181、打包4项及133项Native/真实桌面父窗检查通过；真实后台窗口已隐藏，托盘打开及最小化还原通过，QQ进程未变。GitHub源码和119933765字节下载包已同步，uploaded、draft=false、prerelease=true，匿名下载HTTP200。修复前截图残留在原正式进程中只读确认为visible=true、iconic=true、无任务栏按钮的拾要主窗口。
 
 开课关键词误报修复（2026-10-26，用户已要求实施）：娱乐消息中的“打开课本”“翻开课本”等表达不能仅因包含“开课”就识别为学校通知或进入待确认；真正的开课通知、同一消息中的作业和其他学校行动仍按现有规则识别。修复须覆盖截图全文、已确认与未确认课程及持久化路由；保留原消息、既有人工处理结果和历史，不自动排除发送账号。已实现、部署并发布beta.8：Core428、Infrastructure743、Windows477、Node181、打包4项及两份131项Native/桌面检查通过。当前截图误报已通过原有“忽略”入口移入回收站，可在24小时内撤销；原候选、其余162条审核、全部任务和309笔旧操作、原文与路由保留。GitHub源码和119933563字节下载包已同步，附件uploaded、draft=false、prerelease=true，匿名下载HTTP200。
 
@@ -14,11 +14,13 @@
 
 待确认通知修复（2026-10-16，用户已授权实施）：普通通知因课程/群关联等信息需要核对而进入待确认时，必须提供“确认并加入通知”，不能只允许加入任务而将通知永久拦住。确认单条通知不要求填写任务日期，不自动确认整个群的课程关系；保留完整原消息、证据及审核历史，从待确认移入“通知”列表，不创建任务。已有待确认通知沿用相同入口，重试或重新同步不重复生成通知；通知仍可按既有规则补正式日期后转为任务。修复已实现并部署：Core323、Infrastructure718、Windows477、Node177及126项Native/桌面验证通过；原四库14表和4份设置保留，未代用户处理真实消息。GitHub源码与beta.4下载包已发布，附件uploaded、draft=false、prerelease=true，匿名公开下载HTTP200，实际记录见交接。
 
-本机文件保留规则（2026-10-15，用户已确认）：项目继续使用；可删除旧发布副本、诊断和安装测试产物、验包副本及可重新生成的构建输出，只保留现用最新版程序与最新 beta.8 下载包。正式入口仍为 `.tools/published/app-card-controls/`，最新下载包为 `.tools/releases/Shiyao-0.1.0-beta.8-win-x64.zip`。源码、测试源码、开发运行依赖、QQ/NapCat 配置、账号数据及真实数据保护快照保留；本轮属于本机文件清理，不修改软件功能或重新发布版本。
+本机文件保留规则（2026-10-15，用户已确认）：项目继续使用；可删除旧发布副本、诊断和安装测试产物、验包副本及可重新生成的构建输出，只保留现用最新版程序与最新 beta.9 下载包。正式入口仍为 `.tools/published/app-card-controls/`，最新下载包为 `.tools/releases/Shiyao-0.1.0-beta.9-win-x64.zip`。源码、测试源码、开发运行依赖、QQ/NapCat 配置、账号数据及真实数据保护快照保留；本轮属于本机文件清理，不修改软件功能或重新发布版本。
 
 审核粒度反馈（2026-10-15，用户已选择 A，已实现、部署并发布beta.3）：已确认需要减少同一原消息的重复审核。默认一条 QQ 原消息只生成一个完整待确认项，保留完整内容，需要独立管理时由用户手动拆开；不采用多个事项集中一张审核卡的方案。原 MessageRuleExtractor.SplitActions 按标点及动作词产生多个候选、AccountCandidateRouter 逐候选保存，造成重复审核；现内部分析后仅输出完整业务候选。多个独立日期不自动任选其一；多项关联变更不误改某个已有任务。同一原消息已有、尚未处理的自动拆分项原子兼容为一个待确认项，保留已确认、已忽略、已拒绝和手动拆分的处理结果及操作历史。不同群或不同消息 ID 不因此合并。Core323/323、Infrastructure704/704、Windows456/456、Node175/175及正式发布包119项Native/桌面检查通过；beta.3 ZIP和合成Setup验证通过。正式498个文件与已验证产物相同，最终由Explorer独立后台启动PID23888；真实物理profile整理后3条待确认，12条旧拆分子项保留，99条审核、84条原已处理记录、1条原任务及187条其他历史操作核对通过；随后新增1条确认、1条完成和2条忽略操作，当前待确认0，原有处理与历史保留。四库正常、4份设置与使用后快照一致，托盘和卡片按真实数据核对通过。此前82条审核/pending0结论属于Codex MSIX包虚拟profile，已纠正验证范围，两套数据分别保护、未合并。源码和beta.3下载包均已同步GitHub，附件uploaded且匿名下载HTTP200。
 
-最新交付状态（2026-10-26，beta.8）：正式入口已切换到最新版 .tools/published/app-card-controls/，沿用MessagePurify.Shiyao独立身份、黑色标题栏、约2 DIP吸附间距和原入口/配置；Explorer独立后台PID54928，无包身份、不在工具Job内、正常响应。498个文件与干净提交4f1ead2发布版一致。升级前保护真实四库及4份设置，升级后先核对四库14表全行和设置原样；再通过原有忽略入口仅处理截图误报，原候选、其余162条审核、全部任务和309笔旧操作保留，messages/routing/reminders原样，设置仅正常已读版本变化。最终activeTasks=2、pendingReviews=22，两卡附着SHELLDLL_DefView且显隐正确，QQ进程未变、3001/6099无监听。Core428/Infrastructure743/Windows477/Node181、打包4项、两份131项Native及ZIP/Setup通过；源码与beta.8下载包已同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。
+最新交付状态（2026-10-28，beta.9）：正式入口已切换到最新版 .tools/published/app-card-controls/，498个文件与干净提交b6fec48发布版一致；Explorer独立后台PID44096，无包身份、不在工具Job内、正常响应。沿用MessagePurify.Shiyao独立身份、黑色标题栏、约2 DIP吸附间距及原入口/个人配置。后台主窗口visible=false、iconic=false，托盘打开、最小化后还原、关闭后隐藏均通过，QQ进程未变、3001/6099无监听。四库14表全行与升级前一致，设置仅正常新增1条ReadVersions，其余设置及原已读版本保留；after-startup快照的四库及4份设置核对原样。activeTasks=0、pendingReviews=5，提醒卡隐藏、待确认卡显示，两卡附着SHELLDLL_DefView且child/noActivate=true、topmost=false。Core428/Infrastructure743/Windows477/Node181、打包4项、发布版和中文空格解压版133项Native及ZIP/Setup通过；源码与119933765字节beta.9下载包已同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。
+
+上一轮交付状态（2026-10-26，beta.8）：正式入口已切换到最新版 .tools/published/app-card-controls/，沿用MessagePurify.Shiyao独立身份、黑色标题栏、约2 DIP吸附间距和原入口/配置；Explorer独立后台PID54928，无包身份、不在工具Job内、正常响应。498个文件与干净提交4f1ead2发布版一致。升级前保护真实四库及4份设置，升级后先核对四库14表全行和设置原样；再通过原有忽略入口仅处理截图误报，原候选、其余162条审核、全部任务和309笔旧操作保留，messages/routing/reminders原样，设置仅正常已读版本变化。最终activeTasks=2、pendingReviews=22，两卡附着SHELLDLL_DefView且显隐正确，QQ进程未变、3001/6099无监听。Core428/Infrastructure743/Windows477/Node181、打包4项、两份131项Native及ZIP/Setup通过；源码与beta.8下载包已同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。
 
 视觉方向确认（2026-10-14）：用户选择“安静的个人助理风格”。拾要采用温润资料室的视觉语言：米白纸张底、墨绿色主色、少量暖金强调，主界面、深色模式和桌面卡片共享同一套品牌色与文字层级。减少重复线框和同质圆角，强化标题、时间、来源与主要动作的层级；导航按处理、记录、偏好分组但不改变现有功能入口。深色模式继续遵守主界面深色底约束，改为暖黑与深墨绿层次；桌面卡片保留半透明和圆角，但与主界面的暖黑/墨绿/暖金系统统一。此次方向只改变视觉呈现，不改变数据、同步、消息状态或既有操作。
 
@@ -258,7 +260,7 @@
 - 分发包和公开仓库不得包含用户的 QQ 聊天数据、账号数据库、Token 或登录材料；同学使用各自的 QQ 账号和本地数据。
 - 2026-10-14 用户选择 A：公开源码，同时提供软件下载；明确授权助手直接上传到自己的 GitHub。仓库与打包等普通实现细节由助手处理，无需再次确认上传授权。
 - 后续每次软件更新，都同步 GitHub 源码和 Release 下载包；这是持续要求，无需重复确认。完成测试、验证和 Git commit 后推送 main，并构建、验证、发布新版下载包，核对附件上传状态和公开下载链接。失败或尚未完成时如实记录。
-- 当前最新测试版已发布：Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.8；下载附件`Shiyao-0.1.0-beta.8-win-x64.zip`，119933563字节（约114 MB），uploaded、draft=false、prerelease=true，匿名下载HTTP200。main已同步修复；下载包从已提交4f1ead2的干净源码构建，干净Node181、中文空格解压版131项Native及合成Setup通过。修复“打开课本”等表达误命中“开课”；保留真实开课通知及独立作业识别，原文、已有任务与历史保留。其他电脑试用仍待反馈。
+- 当前最新测试版已发布：Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.9；下载附件`Shiyao-0.1.0-beta.9-win-x64.zip`，119933765字节（约114 MB），uploaded、draft=false、prerelease=true，匿名下载HTTP200。main已同步修复；下载包从已提交b6fec48的干净源码构建，干净Node181、中文空格解压版133项Native及合成Setup通过。修复后台启动与自动同步后的桌面左下角最小化标题栏残留，托盘打开时正常还原窗口；原文、已有任务、设置和历史保留。其他电脑试用仍待反馈。
 - 公开源码与首次测试版已上传：仓库 https://github.com/Steven060206/shiyao，Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.1；下载附件`Shiyao-0.1.0-beta.1-win-x64.zip`，119915264字节（约114 MB），状态uploaded、draft=false、prerelease=true。同学完整解压后运行Setup.cmd，再运行Start.cmd或桌面快捷方式。
 
 ## 参考来源
