@@ -85,6 +85,26 @@ test('最新GitHub测试版、下载附件和构建示例版本一致，保留�
   }
 });
 
+test('端口修复交付区分真实连接成功与真实图片仍未验收', () => {
+  const report = read('docs/verification/2026-10-28-onebot-port.md');
+  const requirements = read('docs/requirements.md');
+  const handoff = read('docs/HANDOFF.md');
+  for (const content of [report, requirements, handoff]) {
+    assert.match(content, /13001/);
+    assert.match(content, /(?:同一|同一份).*NapCat.*配置.*(?:端点|端口).*(?:Token|凭据)/s);
+    assert.match(content, /兼容.*(?:旧|已有).*3001|已有\s*3001.*兼容/);
+    assert.match(content, /真实.*连接.*(?:登录账号|账号核对).*通过|(?:建立连接|连接正确NapCat).*账号.*(?:一致|成功|通过)/s);
+    assert.match(content, /真实QQ图片.*仍未验收/);
+    assert.match(content, /(?:四库|16表|16 表).*(?:原样|保留)/s);
+  }
+  assert.match(report, /追加探针未产生新报告/);
+  assert.match(report, /240617086/);
+  assert.match(report, /uploaded.*draft=false.*prerelease=true.*HTTP200/s);
+  const latest = requirements.match(/^最新交付状态.*$/m)?.[0];
+  assert.match(latest, /beta\.13/);
+  assert.doesNotMatch(latest, /仍受.*端口冲突/);
+});
+
 test('图片发布区分随包离线验证与受端口冲突阻碍的真实QQ验收', () => {
   const report = read('docs/verification/2026-10-28-image-ocr.md');
   for (const content of [report, read('docs/requirements.md'), read('docs/HANDOFF.md')]) {

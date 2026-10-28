@@ -2,9 +2,9 @@
 
 更新日期：2026-10-28。本文记录已确认的产品需求，供后续界面设计和开发使用。
 
-2026-10-28 用户确认换用其他本机端口解决 3001 冲突。新安装 OneBot 默认使用 127.0.0.1:13001；拾要从同一 NapCat 配置读取端点及凭据，兼容已有 3001 配置，不直接停止占用原端口的其他程序。实现及回归已通过，13001 已连接正确 NapCat 并核对登录账号；首轮 3 个图片引用未取得原图，真实QQ图片下载/OCR仍未验收。beta.13 干净发布与正式部署正在进行，详见 docs/verification/2026-10-28-onebot-port.md。
+2026-10-28 用户确认换用其他本机端口解决 3001 冲突。新安装 OneBot 默认使用 127.0.0.1:13001；拾要从同一 NapCat 配置读取端点及凭据，兼容已有 3001 配置，不直接停止原端口服务。实现、验证、正式部署及 beta.13 源码和下载包发布已完成；13001 已连接正确 NapCat 并核对登录账号，首轮 3 个图片引用未取得原图，真实QQ图片下载/OCR仍未验收。详见 docs/verification/2026-10-28-onebot-port.md。
 
-当前实施顺序（2026-10-28，用户已授权按建议开始）：先补齐课程/群关联修改后的本地历史重查，再推进现有功能的真实使用验收；重查已实现、部署并发布beta.10；beta.11本机备份验收通过。2026-10-28用户继续要求图片识别，图片下载、本地OCR和原图备份已实现、验证、部署并发布beta.12；真实QQ图片端到端受本机端口冲突阻碍，剩余实际游戏/系统/长期验收保持待完成。
+当前实施顺序（2026-10-28，用户已授权按建议开始）：先补齐课程/群关联修改后的本地历史重查，再推进现有功能的真实使用验收；重查已实现、部署并发布beta.10；beta.11本机备份验收通过。2026-10-28用户继续要求图片识别，图片下载、本地OCR和原图备份已实现、验证、部署并发布beta.12；beta.13 已修复本机同步端口并验证真实连接；真实QQ图片下载/OCR及剩余实际游戏/系统/长期验收保持待完成。
 
 真实验收接续（2026-10-28）：本机真实导出、恢复预览取消、真实备份副本隔离恢复及后台重开已通过；验收发现的空标题Ignored分析误拒已修复、部署并发布beta.11。用户确认期间自行忽略5条待确认，正常处理及已读变化保留，重开和五分钟观察后四库/设置与使用后快照一致。游戏用户暂时不方便，保留待验收；真实Windows登录、多屏/睡眠、跨电脑及长期稳定性仍未验收。详情见docs/verification/2026-10-28-local-acceptance.md。
 
@@ -26,7 +26,9 @@
 
 审核粒度反馈（2026-10-15，用户已选择 A，已实现、部署并发布beta.3）：已确认需要减少同一原消息的重复审核。默认一条 QQ 原消息只生成一个完整待确认项，保留完整内容，需要独立管理时由用户手动拆开；不采用多个事项集中一张审核卡的方案。原 MessageRuleExtractor.SplitActions 按标点及动作词产生多个候选、AccountCandidateRouter 逐候选保存，造成重复审核；现内部分析后仅输出完整业务候选。多个独立日期不自动任选其一；多项关联变更不误改某个已有任务。同一原消息已有、尚未处理的自动拆分项原子兼容为一个待确认项，保留已确认、已忽略、已拒绝和手动拆分的处理结果及操作历史。不同群或不同消息 ID 不因此合并。Core323/323、Infrastructure704/704、Windows456/456、Node175/175及正式发布包119项Native/桌面检查通过；beta.3 ZIP和合成Setup验证通过。正式498个文件与已验证产物相同，最终由Explorer独立后台启动PID23888；真实物理profile整理后3条待确认，12条旧拆分子项保留，99条审核、84条原已处理记录、1条原任务及187条其他历史操作核对通过；随后新增1条确认、1条完成和2条忽略操作，当前待确认0，原有处理与历史保留。四库正常、4份设置与使用后快照一致，托盘和卡片按真实数据核对通过。此前82条审核/pending0结论属于Codex MSIX包虚拟profile，已纠正验证范围，两套数据分别保护、未合并。源码和beta.3下载包均已同步GitHub，附件uploaded且匿名下载HTTP200。
 
-最新交付状态（2026-10-28，beta.12）：图片下载、本地OCR、原图详情/重试与原图备份已实现并验证，正式目录.tools/published/app-card-controls/已保留数据部署；Explorer独立后台PID84364无包身份、不在工具Job且响应，保留MessagePurify.Shiyao、黑色标题栏和约2 DIP间距。2676文件与干净提交06240f8发布版一致，原四库15表全行/4设置原样，仅新增70pending图队列；0待办/0待确认，两卡附着且隐藏，主窗口真正隐藏，QQ及既有服务未变。Core428、Infrastructure865、Windows513、Node202、OCR25、便携7、打包9、开发及中文空格解压版Native147/合成Setup/随包离线OCR四图通过。源码及240616437字节beta.12公开包已同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。真实QQ图片端到端未验收：本机3001当前被其他Node服务占用，不是可确认的NapCat；未关闭该服务、触发QQ同步或代用户处理事项。真实课程修改、Windows登录、游戏、多屏/恢复、跨电脑和长期仍保留验收范围。
+最新交付状态（2026-10-28，beta.13）：本机同步端口修复已实现、验证、部署并发布；拾要与 NapCat 使用同一配置中的端点及 Token，新安装默认 127.0.0.1:13001，兼容旧 3001。正式目录 .tools/published/app-card-controls/ 已通过 Explorer 独立后台启动 PID54604，无包身份、不在工具Job且响应，保留 MessagePurify.Shiyao、黑色标题栏和约2 DIP间距；2676文件与干净提交6f7fd4e发布版一致。原四库16表全行及4设置原样，0待办/0待确认，两卡附着且隐藏，主窗口真正隐藏。Core428、Infrastructure865、Windows522、工作区及干净源码Node204、OCR25、便携7、打包9、发布版及中文空格解压版各147项Native/合成Setup/随包离线OCR四图通过。240617086字节beta.13附件uploaded、draft=false、prerelease=true，匿名下载HTTP200，SHA256已核对。真实13001连接和登录账号核对通过，首轮3个图片引用未取得原图，真实QQ图片下载/OCR仍未验收；普通QQ已通过Explorer重新打开，无NapCat遗留进程。实际游戏、Windows登录、多屏/恢复、跨电脑及长期仍待验收。
+
+上一轮交付状态（2026-10-28，beta.12）：图片下载、本地OCR、原图详情/重试与原图备份已实现并验证，正式目录.tools/published/app-card-controls/已保留数据部署；Explorer独立后台PID84364无包身份、不在工具Job且响应，保留MessagePurify.Shiyao、黑色标题栏和约2 DIP间距。2676文件与干净提交06240f8发布版一致，原四库15表全行/4设置原样，仅新增70pending图队列；0待办/0待确认，两卡附着且隐藏，主窗口真正隐藏，QQ及既有服务未变。Core428、Infrastructure865、Windows513、Node202、OCR25、便携7、打包9、开发及中文空格解压版Native147/合成Setup/随包离线OCR四图通过。源码及240616437字节beta.12公开包已同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。真实QQ图片端到端未验收：本机3001当前被其他Node服务占用，不是可确认的NapCat；未关闭该服务、触发QQ同步或代用户处理事项。真实课程修改、Windows登录、游戏、多屏/恢复、跨电脑和长期仍保留验收范围。
 
 上一轮交付状态（2026-10-26，beta.8）：正式入口已切换到最新版 .tools/published/app-card-controls/，沿用MessagePurify.Shiyao独立身份、黑色标题栏、约2 DIP吸附间距和原入口/配置；Explorer独立后台PID54928，无包身份、不在工具Job内、正常响应。498个文件与干净提交4f1ead2发布版一致。升级前保护真实四库及4份设置，升级后先核对四库14表全行和设置原样；再通过原有忽略入口仅处理截图误报，原候选、其余162条审核、全部任务和309笔旧操作保留，messages/routing/reminders原样，设置仅正常已读版本变化。最终activeTasks=2、pendingReviews=22，两卡附着SHELLDLL_DefView且显隐正确，QQ进程未变、3001/6099无监听。Core428/Infrastructure743/Windows477/Node181、打包4项、两份131项Native及ZIP/Setup通过；源码与beta.8下载包已同步GitHub，uploaded、draft=false、prerelease=true，匿名下载HTTP200。
 
@@ -126,7 +128,7 @@
 
 ## 4. 图片辅助（2026-10-28已实现、验证、部署并发布beta.12）
 
-实现已写入并通过Core428/Infrastructure865/Windows513/Node202/OCR25/便携7/发布打包9及147项Native合成验证，发布部署结果以交接最新记录为准。本机3001当前为其他Node服务而非已确认NapCat，无凭据Upgrade为HTTP401，真实QQ图片端到端未验收；未触发QQ同步或重启。同步后的失败纯图片可从设置“待处理图片”查看并重试。
+实现已写入并通过Core428/Infrastructure865/Windows513/Node202/OCR25/便携7/发布打包9及147项Native合成验证，发布部署结果以交接最新记录为准。beta.12验收时3001由其他Node服务占用，无凭据Upgrade为HTTP401；beta.13已换13001并在临时NapCat会话中核对真实连接及登录账号，普通QQ已重新打开。首轮3次图片请求未取得原图，真实QQ图片端到端未验收。同步后的失败纯图片可从设置“待处理图片”查看并重试。
 
 - 2026-10-28用户要求继续图片识别，现接入原图下载、账号附件存储、持久OCR队列和重分析。复用现有RapidOCR离线CPU worker，解释器、模型及依赖随包，不要求安装Python，不上传图片。
 - 点击同步时通过只读get_image取得置顶且未排除群的原图并保存；后台顺序识别，失败保留原文/原图并允许重试，游戏、停止及恢复期间暂停，过时结果不得写回恢复后的工作区。
@@ -276,7 +278,7 @@
 - 分发包和公开仓库不得包含用户的 QQ 聊天数据、账号数据库、Token 或登录材料；同学使用各自的 QQ 账号和本地数据。
 - 2026-10-14 用户选择 A：公开源码，同时提供软件下载；明确授权助手直接上传到自己的 GitHub。仓库与打包等普通实现细节由助手处理，无需再次确认上传授权。
 - 后续每次软件更新，都同步 GitHub 源码和 Release 下载包；这是持续要求，无需重复确认。完成测试、验证和 Git commit 后推送 main，并构建、验证、发布新版下载包，核对附件上传状态和公开下载链接。失败或尚未完成时如实记录。
-- 当前最新测试版已发布：Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.12；下载附件`Shiyao-0.1.0-beta.12-win-x64.zip`，240616437字节（约229 MiB），uploaded、draft=false、prerelease=true，匿名下载HTTP200。main已同步图片识别及原图备份，下载包从提交06240f8干净源码构建，干净Node202、中文空格解压版147项Native/合成Setup/随包离线OCR四图通过。原有人工处理保留，真实QQ图片闭环仍受本机端口冲突阻碍，其他电脑恢复仍待验收。
+- 当前最新测试版已发布：Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.13；下载附件`Shiyao-0.1.0-beta.13-win-x64.zip`，240617086字节（约229 MiB），uploaded、draft=false、prerelease=true，匿名下载HTTP200。main已同步端口修复，下载包从提交6f7fd4e干净源码构建，干净Node204、发布版及中文空格解压版各147项Native/合成Setup/随包离线OCR四图通过。原有人工处理保留，真实13001连接和账号核对通过，真实QQ图片下载/OCR仍未验收；其他电脑恢复仍待验收。
 - 公开源码与首次测试版已上传：仓库 https://github.com/Steven060206/shiyao，Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.1；下载附件`Shiyao-0.1.0-beta.1-win-x64.zip`，119915264字节（约114 MB），状态uploaded、draft=false、prerelease=true。同学完整解压后运行Setup.cmd，再运行Start.cmd或桌面快捷方式。
 
 ## 参考来源

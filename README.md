@@ -17,6 +17,8 @@
 
 ## 当前测试版
 
+- beta.13 修复本机同步端口：新安装默认 13001，拾要读取 NapCat 实际配置，兼容已有端口；真实图片下载与识别闭环仍待验收。
+
 - 支持任务、待确认、普通通知、日期与优先级编辑、完成/撤销、合并/拆分、批量审核、搜索筛选、桌面卡片和本地备份恢复。
 - 保存课程关联后自动重查仍保留的本地消息，显示实际范围并找回可靠遗漏；原有人工处理和任务保留，课程冲突可打开原任务核对。
 - 已识别正式时间的补交、延期或改期消息，找不到旧任务时仍可确认成独立任务；旧待确认和批量加入同样可用，自愿活动可保留为通知。
@@ -47,7 +49,7 @@ python tools/prepare_ocr_runtime.py --python-archive PATH_TO/python-3.12.10-embe
 从 [NapCat 官方 v4.18.37 Release](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37) 下载未配置的 `NapCat.Framework.zip`，再用 Python 3 创建同学下载包。`--ocr-runtime-directory` 将完整 portable 目录复制到干净发布目录的 `ocr` 子目录；已存在时拒绝覆盖，省略此参数则要求发布目录已经包含完整 OCR。
 
 ```powershell
-python tools/build_release.py --publish-directory .tools/published/release --ocr-runtime-directory .tools/ocr/portable --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.12
+python tools/build_release.py --publish-directory .tools/published/release --ocr-runtime-directory .tools/ocr/portable --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.13
 ```
 
 测试命令：
