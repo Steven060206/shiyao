@@ -275,7 +275,7 @@ public sealed class AccountBackupService
                 {
                     var extraction = ParseStored<RuleExtractionResult>(reader.GetString(4));
                     if (string.IsNullOrWhiteSpace(extraction.RuleVersion) || extraction.Candidates is null) throw new InvalidDataException("备份提取结果无效。");
-                    foreach (var candidate in extraction.Candidates) ValidateCandidate(candidate, owner, null);
+                    foreach (var candidate in extraction.Candidates) ValidateCandidate(candidate, owner, null, allowEmptyIgnoredTitle: true);
                 }
                 allMessages.Add(key, message);
             }
@@ -394,9 +394,12 @@ public sealed class AccountBackupService
         ValidateCandidate(review.Candidate, owner, messages);
     }
 
-    private static void ValidateCandidate(RuleCandidate candidate, string owner, IReadOnlyDictionary<MessageKey, SchoolMessage>? messages)
+    private static void ValidateCandidate(RuleCandidate candidate, string owner, IReadOnlyDictionary<MessageKey, SchoolMessage>? messages,
+        bool allowEmptyIgnoredTitle = false)
     {
-        if (candidate is null || string.IsNullOrWhiteSpace(candidate.Title) || !Enum.IsDefined(candidate.Action) || !Enum.IsDefined(candidate.Disposition) ||
+        // 无文本消息的忽略诊断可保留空标题；实际待确认和通知仍须有标题。
+        if (candidate is null || (string.IsNullOrWhiteSpace(candidate.Title) && !(allowEmptyIgnoredTitle && candidate.Disposition == RuleDisposition.Ignored)) ||
+            !Enum.IsDefined(candidate.Action) || !Enum.IsDefined(candidate.Disposition) ||
             candidate.Evidence is null || candidate.Assessments is null || candidate.Assessments.Action is null || candidate.Assessments.Audience is null ||
             candidate.Assessments.Course is null || candidate.Assessments.Time is null || candidate.Assessments.Source is null || candidate.Assessments.Association is null || candidate.ReviewReasons is null)
             throw new InvalidDataException("备份候选内容无效。");

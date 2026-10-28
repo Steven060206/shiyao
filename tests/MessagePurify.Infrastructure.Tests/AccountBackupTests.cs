@@ -179,6 +179,58 @@ public sealed class AccountBackupTests : IDisposable
     }
 
     [Theory]
+    [InlineData(SegmentKind.Image, "")]
+    [InlineData(SegmentKind.Quote, "")]
+    [InlineData(SegmentKind.Text, "")]
+    [InlineData(SegmentKind.Text, " \t")]
+    public void ExportRestore_PreservesIgnoredExtractionWithoutText(SegmentKind kind, string text)
+    {
+        Seed();
+        var messages = new AccountMessageStore(root, Account);
+        var message = new SchoolMessage(new(Account, Group, "no-text"), "12345", Now,
+            [new(kind, text, kind == SegmentKind.Quote ? new(Account, Group, "task-Active") : null,
+                kind == SegmentKind.Image ? "synthetic-image" : null)]);
+        Assert.True(messages.TryEnqueue(message, MessageOrigin.History, "synthetic", Now));
+        var extraction = MessageRuleExtractor.Extract(message, new(Account, Group, "Asia/Shanghai", Now, "数学"));
+        var candidate = Assert.Single(extraction.Candidates);
+        Assert.Equal(RuleDisposition.Ignored, candidate.Disposition);
+        Assert.True(string.IsNullOrWhiteSpace(candidate.Title));
+        Assert.True(messages.TrySaveExtraction(message.Key, 0, extraction, Now));
+        var before = DumpAccount();
+
+        var result = Service().Export(Package, SettingsJson, Preferences, Now);
+        using var prepared = Service().Inspect(Package);
+        Assert.Equal(kind == SegmentKind.Image ? 1 : 0, result.MissingImageCount);
+        Tasks().CreateManualTask("later", "之后的任务", "数学", Time, null, "later", Now);
+        Service().Restore(prepared, SettingsJson, Preferences, Now.AddMinutes(1));
+
+        Assert.Equal(before, DumpAccount());
+    }
+
+    [Theory]
+    [InlineData(RuleDisposition.Task)]
+    [InlineData(RuleDisposition.Notice)]
+    [InlineData(RuleDisposition.Pending)]
+    [InlineData(RuleDisposition.Change)]
+    public void Export_RejectsBusinessExtractionWithoutTitle(RuleDisposition disposition)
+    {
+        Seed();
+        var messages = new AccountMessageStore(root, Account);
+        var message = new SchoolMessage(new(Account, Group, "invalid-title"), "12345", Now,
+            [new(SegmentKind.Text, "合成消息")]);
+        Assert.True(messages.TryEnqueue(message, MessageOrigin.History, "synthetic", Now));
+        var extraction = MessageRuleExtractor.Extract(message, new(Account, Group, "Asia/Shanghai", Now, "数学"));
+        var candidate = Assert.Single(extraction.Candidates) with { Title = " ", Disposition = disposition };
+        Assert.True(messages.TrySaveExtraction(message.Key, 0, extraction with { Candidates = [candidate] }, Now));
+        var before = DumpAccount();
+
+        Assert.Throws<InvalidDataException>(() => Service().Export(Package, SettingsJson, Preferences, Now));
+
+        Assert.False(File.Exists(Package));
+        Assert.Equal(before, DumpAccount());
+    }
+
+    [Theory]
     [InlineData("missing")]
     [InlineData("hash")]
     [InlineData("account")]
