@@ -4,13 +4,14 @@ using MessagePurify.Infrastructure.NapCat;
 
 namespace MessagePurify.Windows.App;
 
-internal static class NapCatConnectionConfiguration
+internal sealed record NapCatConnectionConfiguration(Uri Endpoint, string? AccessToken)
 {
-    public static string? ReadAccessToken(string? environmentToken, string configurationDirectory)
+    public const int DefaultPort = 13001;
+    public static NapCatConnectionConfiguration Read(string? environmentToken, string configurationDirectory)
     {
-        if (!string.IsNullOrEmpty(environmentToken)) return environmentToken;
-        if (!Directory.Exists(configurationDirectory)) return null;
-        var tokens = new List<string?>();
+        var fallback = new NapCatConnectionConfiguration(new Uri($"ws://127.0.0.1:{DefaultPort}/"), environmentToken);
+        if (!Directory.Exists(configurationDirectory)) return fallback;
+        var connections = new List<NapCatConnectionConfiguration>();
         try
         {
             foreach (var path in Directory.EnumerateFiles(configurationDirectory, "onebot11_*.json"))
@@ -25,20 +26,28 @@ internal static class NapCatConnectionConfiguration
                 {
                     if (server.ValueKind != JsonValueKind.Object
                         || !server.TryGetProperty("enable", out var enabled) || enabled.ValueKind != JsonValueKind.True
-                        || !server.TryGetProperty("port", out var port) || port.ValueKind != JsonValueKind.Number
-                        || !port.TryGetInt32(out var number) || number != 3001
                         || !server.TryGetProperty("host", out var host) || host.ValueKind != JsonValueKind.String
                         || !new[] { "127.0.0.1", "localhost", "::1" }.Contains(host.GetString(), StringComparer.OrdinalIgnoreCase)) continue;
+                    if (!server.TryGetProperty("port", out var port) || port.ValueKind != JsonValueKind.Number
+                        || !port.TryGetInt32(out var number) || number is < 1 or > 65535)
+                        throw new OneBotProtocolException("napcat-configuration-invalid");
                     if (server.TryGetProperty("token", out var token) && token.ValueKind is not (JsonValueKind.String or JsonValueKind.Null))
                         throw new OneBotProtocolException("napcat-configuration-invalid");
-                    tokens.Add(token.ValueKind == JsonValueKind.String ? token.GetString() : null);
+                    connections.Add(new(new UriBuilder("ws", host.GetString()!, number).Uri,
+                        string.IsNullOrEmpty(environmentToken) ? token.ValueKind == JsonValueKind.String ? token.GetString() : null : environmentToken));
                 }
             }
         }
         catch (JsonException) { throw new OneBotProtocolException("napcat-configuration-invalid"); }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         { throw new OneBotProtocolException("napcat-configuration-unavailable"); }
-        if (tokens.Count > 1) throw new OneBotProtocolException("napcat-configuration-ambiguous");
-        return tokens.SingleOrDefault();
+        if (connections.Count > 1) throw new OneBotProtocolException("napcat-configuration-ambiguous");
+        return connections.SingleOrDefault() ?? fallback;
+    }
+
+    public static string? ReadAccessToken(string? environmentToken, string configurationDirectory)
+    {
+        if (!string.IsNullOrEmpty(environmentToken)) return environmentToken;
+        return Read(environmentToken, configurationDirectory).AccessToken;
     }
 }

@@ -78,7 +78,7 @@ test('干净分发包在中文空格路径配置本机只读接口，不启动 Q
   assert.equal(network.websocketServers.length, 1);
   const endpoint = network.websocketServers[0];
   assert.equal(endpoint.host, '127.0.0.1');
-  assert.equal(endpoint.port, 3001);
+  assert.equal(endpoint.port, 13001);
   assert.equal(endpoint.enable, true);
   assert.equal(endpoint.messagePostFormat, 'array');
   assert.equal(endpoint.debug, false);
@@ -103,6 +103,7 @@ test('同账号重复配置逐字节保留账号配置与 token，已有完整�
   assert.equal(f.setup().status, 0);
   const config = JSON.parse(fs.readFileSync(f.config, 'utf8'));
   config.personalPreference = '保留自定义配置';
+  config.network.websocketServers[0].port = 3001; // Existing installs retain their original endpoint.
   const preserved = Buffer.from(JSON.stringify(config, null, 3) + '\n', 'utf8');
   fs.writeFileSync(f.config, preserved);
   fs.writeFileSync(f.archive, 'intentionally invalid ZIP: existing package must be reused');

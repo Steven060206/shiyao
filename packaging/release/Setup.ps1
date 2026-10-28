@@ -147,7 +147,7 @@ if (-not $configurationExists) {
         network = [ordered]@{
             httpServers = @(); httpSseServers = @(); httpClients = @(); websocketClients = @(); plugins = @()
             websocketServers = @([ordered]@{
-                name = 'shiyao-local'; enable = $true; host = '127.0.0.1'; port = 3001
+                name = 'shiyao-local'; enable = $true; host = '127.0.0.1'; port = 13001
                 messagePostFormat = 'array'; reportSelfMessage = $false
                 token = [Convert]::ToBase64String($tokenBytes); enableForcePushEvent = $true; debug = $false; heartInterval = 30000
             })

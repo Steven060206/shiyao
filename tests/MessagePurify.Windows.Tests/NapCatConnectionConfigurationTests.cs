@@ -1,3 +1,5 @@
+using System.Net;
+using System.Net.Sockets;
 using System.Text.Json;
 using MessagePurify.Infrastructure.NapCat;
 using MessagePurify.Windows.App;
@@ -23,11 +25,73 @@ public sealed class NapCatConnectionConfigurationTests : IDisposable
     public void DirectApplicationLaunchReadsOnlyTheSingleEnabledLocalEndpoint(string host)
     {
         Write("onebot11_1.json", Config(new { enable = false, port = 3001, host, token = "disabled" },
-            new { enable = true, port = 6099, host, token = "wrong-port" },
+            new { enable = false, port = 6099, host, token = "disabled-other-port" },
             new { enable = true, port = 3001, host = "0.0.0.0", token = "remote-bind" },
             new { enable = true, port = 3001, host, token = "synthetic-local" }));
         Write("unrelated.json", "corrupt");
         Assert.Equal("synthetic-local", NapCatConnectionConfiguration.ReadAccessToken(null, root));
+        Assert.Equal(3001, NapCatConnectionConfiguration.Read(null, root).Endpoint.Port);
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1", 13001)]
+    [InlineData("localhost", 3001)]
+    [InlineData("::1", 23456)]
+    public void EndpointAndCredentialComeFromTheSameConfiguration(string host, int port)
+    {
+        Write("onebot11_1.json", Config(new { enable = true, port, host, token = "configured-token" }));
+        var connection = NapCatConnectionConfiguration.Read(null, root);
+        Assert.Equal(new UriBuilder("ws", host, port).Uri, connection.Endpoint);
+        Assert.Equal("configured-token", connection.AccessToken);
+        var overridden = NapCatConnectionConfiguration.Read("environment-token", root);
+        Assert.Equal(connection.Endpoint, overridden.Endpoint);
+        Assert.Equal("environment-token", overridden.AccessToken);
+    }
+
+    [Fact]
+    public async Task ConfiguredNonDefaultPortConnectsToTheActualLoopbackWebSocket()
+    {
+        var reservation = new TcpListener(IPAddress.Loopback, 0);
+        reservation.Start();
+        var port = ((IPEndPoint)reservation.LocalEndpoint).Port;
+        reservation.Stop();
+        using var server = new HttpListener();
+        server.Prefixes.Add($"http://127.0.0.1:{port}/");
+        server.Start();
+        Write("onebot11_1.json", Config(new { enable = true, port, host = "127.0.0.1", token = "loopback-token" }));
+        var configuration = NapCatConnectionConfiguration.Read(null, root);
+        var connecting = OneBotClient.ConnectAsync(configuration.Endpoint, configuration.AccessToken);
+        var request = await server.GetContextAsync().WaitAsync(TimeSpan.FromSeconds(10));
+        using var socket = (await request.AcceptWebSocketAsync(null)).WebSocket;
+        await using var client = await connecting;
+        Assert.Equal("Bearer loopback-token", request.Request.Headers["Authorization"]);
+    }
+
+    [Fact]
+    public void MissingConfigurationUsesTheNewDefault()
+    {
+        Assert.Equal(new Uri("ws://127.0.0.1:13001/"), NapCatConnectionConfiguration.Read(null, root).Endpoint);
+    }
+
+    [Fact]
+    public void MultipleEnabledPortsAreAmbiguousEvenWithAnEnvironmentCredential()
+    {
+        Write("onebot11_1.json", Config(
+            new { enable = true, port = 3001, host = "127.0.0.1", token = "old-token" },
+            new { enable = true, port = 13001, host = "127.0.0.1", token = "new-token" }));
+        var error = Assert.Throws<OneBotProtocolException>(() => NapCatConnectionConfiguration.Read("override", root));
+        Assert.Equal("napcat-configuration-ambiguous", error.Code);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(65536)]
+    public void InvalidLocalPortIsRejected(int port)
+    {
+        Write("onebot11_1.json", Config(new { enable = true, port, host = "127.0.0.1" }));
+        Assert.Equal("napcat-configuration-invalid",
+            Assert.Throws<OneBotProtocolException>(() => NapCatConnectionConfiguration.Read(null, root)).Code);
     }
 
     [Theory]

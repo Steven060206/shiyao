@@ -27,6 +27,7 @@ public sealed class AppRuntime
     private int restoring;
     private int syncRequested;
     private string? accessToken;
+    private Uri oneBotEndpoint = new($"ws://127.0.0.1:{NapCatConnectionConfiguration.DefaultPort}/");
     private QqSyncConfiguration? qqSyncConfiguration;
     public bool IsRestoring => Volatile.Read(ref restoring) != 0;
     public AccountWorkspace? Workspace { get; private set; }
@@ -242,7 +243,7 @@ public sealed class AppRuntime
 
     private async Task<MessageHostStatus> RunBatchAsync(CancellationToken cancellationToken)
     {
-        var endpoint = new Uri("ws://127.0.0.1:3001/");
+        var endpoint = oneBotEndpoint;
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -285,7 +286,10 @@ public sealed class AppRuntime
     private void ReadAccessToken()
     {
         qqSyncConfiguration = QqSyncConfiguration.Load(AppContext.BaseDirectory);
-        accessToken = ReadAccessToken(qqSyncConfiguration, Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN"));
+        var connection = NapCatConnectionConfiguration.Read(Environment.GetEnvironmentVariable("MESSAGEPURIFY_NAPCAT_TOKEN"),
+            qqSyncConfiguration.TokenConfigurationDirectory);
+        oneBotEndpoint = connection.Endpoint;
+        accessToken = connection.AccessToken;
     }
 
     internal static string? ReadAccessToken(QqSyncConfiguration configuration, string? environmentToken) =>

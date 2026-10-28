@@ -19,10 +19,10 @@ if ([string]::IsNullOrEmpty($appToken) -and (Test-Path -LiteralPath $NapCatConfi
         try { $appConfiguration = Get-Content -LiteralPath $appConfigurationFile.FullName -Raw -Encoding UTF8 | ConvertFrom-Json }
         catch { throw 'Local NapCat configuration cannot be read. Original configuration was preserved.' }
         $appEndpoints += @($appConfiguration.network.websocketServers | Where-Object {
-            $_.enable -eq $true -and $_.port -eq 3001 -and $_.host -in @('127.0.0.1', 'localhost', '::1')
+            $_.enable -eq $true -and $_.port -ge 1 -and $_.port -le 65535 -and $_.host -in @('127.0.0.1', 'localhost', '::1')
         })
     }
-    if ($appEndpoints.Count -gt 1) { throw 'Local NapCat configuration is ambiguous. Provide MESSAGEPURIFY_NAPCAT_TOKEN in the process environment.' }
+    if ($appEndpoints.Count -gt 1) { throw 'Local NapCat configuration is ambiguous. Keep exactly one enabled loopback WebSocket endpoint.' }
     if ($appEndpoints.Count -eq 1) { $appToken = [string]$appEndpoints[0].token }
 }
 if ($CheckOnly) {

@@ -57,7 +57,7 @@ test('正式应用入口支持中文空格路径，缺界面文件时停止', ()
   }
 });
 
-test('启动入口从唯一启用的本机配置取得鉴权，不输出凭据', () => {
+for (const port of [3001, 13001]) test(`启动入口从唯一启用的本机端口 ${port} 取得鉴权，不输出凭据`, () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'messagepurify-local-auth-'));
   try {
     fs.writeFileSync(path.join(directory,'MessagePurify.exe'),'check only');
@@ -65,7 +65,7 @@ test('启动入口从唯一启用的本机配置取得鉴权，不输出凭据',
     fs.writeFileSync(path.join(directory,'ui/index.html'),'<html></html>');
     const config = path.join(directory,'config'); fs.mkdirSync(config);
     const secret = 'synthetic-test-auth-value';
-    fs.writeFileSync(path.join(config,'onebot11_123.json'),JSON.stringify({network:{websocketServers:[{enable:true,host:'127.0.0.1',port:3001,token:secret}]}}));
+    fs.writeFileSync(path.join(config,'onebot11_123.json'),JSON.stringify({network:{websocketServers:[{enable:true,host:'127.0.0.1',port,token:secret}]}}));
     const env = {...process.env}; delete env.MESSAGEPURIFY_NAPCAT_TOKEN;
     const ready = spawnSync('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',
       path.join(root,'packaging/app/Start-MessagePurify.ps1'),'-PublishDirectory',directory,'-NapCatConfigurationDirectory',config,'-CheckOnly'],{env,encoding:'utf8',windowsHide:true});
