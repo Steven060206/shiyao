@@ -19,7 +19,7 @@ public sealed record PendingReview(string Id, string AccountId,
     DateTimeOffset? IgnoredAt, DateTimeOffset? UndoExpiresAt, long Version,
     string? AcceptedTaskId = null, string? UndoOperationId = null,
     string? SplitParentTaskId = null, TaskState? SplitState = null, TimeKind? SplitTimeKind = null,
-    string? ConsolidatedIntoId = null);
+    string? ConsolidatedIntoId = null, bool IsCourseConflict = false);
 
 public sealed record TaskMergeSelection(string TitleTaskId, string CourseTaskId,
     string TimeTaskId, string PriorityTaskId, string StateTaskId);

@@ -17,7 +17,8 @@ public sealed record WorkspaceCommand(string AccountId, string Operation, string
 public sealed record ApplicationSnapshot(string AccountId, IReadOnlyList<ApplicationItem> Items,
     IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt,
     IReadOnlyList<TaskReminderPlan> Reminders, CacheCleanupResult? CacheCleanup = null,
-    string? CacheCleanupError = null, long Generation = 0);
+    string? CacheCleanupError = null, long Generation = 0,
+    CourseRecheckResult? CourseRecheck = null, string? CourseRecheckError = null);
 
 public sealed record ApplicationItem(string Id, string Kind, string Title, string? Course,
     string Group, string State, string? Due, string? Time, string TimeKind, int? Priority,
@@ -29,7 +30,7 @@ public sealed record ApplicationItem(string Id, string Kind, string Title, strin
     IReadOnlyList<ApplicationPendingChange>? PendingChanges = null, string Source = "qq",
     string? MergedIntoId = null, IReadOnlyList<string>? RelatedItemIds = null,
     ApplicationMergeSuggestion? MergeSuggestion = null, DateTimeOffset? MessageTime = null,
-    bool CanAcceptNotice = false);
+    bool CanAcceptNotice = false, bool IsCourseConflict = false);
 
 public sealed record ApplicationMergeSuggestion(string FirstTaskId, long FirstTaskVersion,
     string SecondTaskId, long SecondTaskVersion);

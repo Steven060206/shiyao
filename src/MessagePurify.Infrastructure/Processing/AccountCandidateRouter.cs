@@ -357,6 +357,11 @@ public sealed partial class AccountCandidateRouter
                 id INTEGER PRIMARY KEY CHECK(id=1), record_json TEXT NOT NULL);
             """))
             cleanup.ExecuteNonQuery();
+        using (var recheck = Command(connection, transaction, """
+            CREATE TABLE IF NOT EXISTS course_recheck_result(
+                id INTEGER PRIMARY KEY CHECK(id=1), record_json TEXT NOT NULL);
+            """))
+            recheck.ExecuteNonQuery();
         transaction.Commit();
     }
 

@@ -1,5 +1,9 @@
 # 项目检查
 
+## 2026-10-28 课程关联历史重查
+
+`CourseRecheckTests`覆盖保留消息恢复、原发送时间、全部人工决定与任务状态、合并拆分、跨账号/群隔离、非置顶、缺失证据、跨库回滚重试、旧备份与自动冲突往返。`node --test tests/course-recheck-ui.test.mjs`使用真实Chrome DOM检查范围/转义/草稿和课程冲突入口；Native的6项`course-recheck-*`通过正式WebView2修改合成关联、查看原任务并核对数据不变。合成结果不替代真实账号课程操作和跨电脑验收，实际命令与结果见交接。
+
 ## 2026-10-15 一条原消息一个完整审核项
 
 Core 的 RuleExtractionTests 与 RuleFixtureTests 覆盖完整原文、单候选、不同日期和关联变更；MessageReviewCompatibilityTests 覆盖旧片段整理、人工结果、引用/账号/来源隔离、重开和备份恢复。Native Smoke 的 `message-review-one-row`、`message-review-full-source`、`message-review-single-accept`、`message-review-manual-split` 使用真实 WebView2 页面与合成数据检查一项审核、一次接受及显式手动拆分。实际执行结果与日志路径见 docs/HANDOFF.md，未运行的验证不计为通过。

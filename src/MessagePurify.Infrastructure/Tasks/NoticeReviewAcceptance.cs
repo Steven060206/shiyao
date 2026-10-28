@@ -19,6 +19,8 @@ public sealed partial class AccountTaskStore
                 CheckVersion(review.Version, expectedVersion);
                 if (review.State != ReviewState.Pending)
                     throw new InvalidOperationException("只有待确认状态的通知可以接受。");
+                if (review.IsCourseConflict)
+                    throw new InvalidOperationException("课程关联冲突须打开原任务核对，不可接受为通知。");
                 ValidateCandidate(review.Candidate);
                 if (!MessageRuleExtractor.IsNoticeCandidate(review.Candidate))
                     throw new ArgumentException("只有普通通知可以从通知入口接受。", nameof(reviewId));

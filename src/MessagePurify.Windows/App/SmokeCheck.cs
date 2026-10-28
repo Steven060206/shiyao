@@ -245,6 +245,7 @@ internal static partial class SmokeCheck
         await CheckBatchReviewAsync(dataRoot, reportFile);
         await CheckMessageReviewAsync(dataRoot);
         await CheckNoticeReviewAsync(dataRoot, reportFile);
+        await CheckCourseRecheckAsync(dataRoot, reportFile);
         var expectedCards = workspace.Snapshot(DateTimeOffset.UtcNow);
         await desktop.RefreshAsync();
         await WaitAsync(() => desktop.Snapshot?.Tasks.Count == expectedCards.Items.Count(item => item.Kind == "task" && item.State == "active")
@@ -276,7 +277,7 @@ internal static partial class SmokeCheck
                 "cross-group-merge-confirm", "cross-group-merge-evidence-old-id", "cross-group-merge-suggestion-hide",
                 "cache-cleanup-page", "cache-cleanup-old-chat", "cache-cleanup-task-evidence",
                 "cache-cleanup-review-evidence", "cache-cleanup-notice-evidence", "cache-cleanup-reopen",
-                "cache-cleanup-replay-dedup" }.Concat(BackupChecks).Concat(DesktopRecoveryChecks).Concat(DesktopAppearanceChecks).Concat(NoticeReviewChecks).ToArray(),
+                "cache-cleanup-replay-dedup" }.Concat(BackupChecks).Concat(DesktopRecoveryChecks).Concat(DesktopAppearanceChecks).Concat(NoticeReviewChecks).Concat(CourseRecheckChecks).ToArray(),
             taskCount = final.Items.Count(item => item.Kind == "task" && item.State != "merged"),
             activeTaskCount = final.Items.Count(item => item.Kind == "task" && item.State == "active"),
             mergedTaskCount = final.Items.Count(item => item.State == "merged"),

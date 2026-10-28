@@ -547,7 +547,7 @@ public sealed class CandidateRoutingTests : IDisposable
         Assert.Equal(1L, Scalar(router.RoutingDatabasePath, "PRAGMA user_version;"));
         Assert.Equal(1L, Scalar(Messages().DatabasePath, "PRAGMA user_version;"));
         Assert.Equal(1L, Scalar(Tasks().DatabasePath, "PRAGMA user_version;"));
-        Assert.Equal(new[] { "cache_cleanup_result", "notices", "route_receipts", "store_metadata" }, Tables(router.RoutingDatabasePath));
+        Assert.Equal(new[] { "cache_cleanup_result", "course_recheck_result", "notices", "route_receipts", "store_metadata" }, Tables(router.RoutingDatabasePath));
         Assert.NotEqual(router.RoutingDatabasePath, Router(OtherAccount).RoutingDatabasePath);
     }
 

@@ -496,7 +496,7 @@ function renderList() {
     <div class="row-meta"><span>${html(item.course || item.group || '来源待核对')}${item.source === 'manual' ? '<span class="manual-source">手动添加</span>' : ''}</span><span>${item.kind === 'task' ? html(dateLabel(item)) : html(states[item.state])}</span></div>
     ${reviewItem(item) && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}${page === 'pending' && batchReview(item) && (item.due || item.suggestedDue) ? `<p class="row-note">${item.due ? '日期' : '建议日期'}：${html(item.due || item.suggestedDue)}${html(item.due ? item.time ? ' ' + item.time : '' : item.suggestedTime ? ' ' + item.suggestedTime : '')}</p>` : ''}</button>${page === 'pending' && batchReview(item) ? '</div>' : ''}`).join('') : emptyMessage();
 }
-const batchReview = item => item.kind === 'review' && item.state === 'pending';
+const batchReview = item => item.kind === 'review' && item.state === 'pending' && !item.isCourseConflict;
 function resetBatchSelection() {
   batchEpoch++; batchRunning = false; batchResult = ''; batchSelection.clear();
   $('batch-date').value = ''; $('batch-use-suggestions').checked = false;
@@ -665,6 +665,7 @@ function saveStructure(operation) {
 }
 function actionsHTML(item) {
   const button = (action, label, primary = false) => `<button class="button ${primary ? 'primary' : ''}" data-action="${action}">${label}</button>`;
+  if (item.kind === 'review' && item.isCourseConflict) return (item.targetTaskId ? button('open-target', '查看原任务', true) : '') + (item.state === 'pending' ? button('ignore', '忽略') + button('reject', '保留原任务') : item.state === 'ignored' && canUndo(item) ? button('undo-ignore', '撤销') : '');
   if (item.kind === 'review') return item.state === 'pending' ? button('ignore', '忽略') + button('reject', '拒绝建议') : item.state === 'ignored' && canUndo(item) ? button('undo-ignore', '撤销') : '';
   if (item.kind === 'notice') return item.state === 'converted' && item.targetTaskId ? button('open-target', '查看任务', true) : '';
   if (item.kind !== 'task') return '';
@@ -714,19 +715,19 @@ function renderDetail() {
   if (signature !== detailSignature) {
     const sameItem = scroll.querySelector('form')?.dataset.id === item?.id;
     retainFocus(scroll, () => {
-      if (!item) scroll.innerHTML = `<div class="empty"><h2>${page === 'settings' ? '仅接收置顶群' : snapshot ? '查看事项详情' : initialMessage()[0]}</h2><p>${page === 'settings' ? '确认群课程后用于新消息。已有待确认仍需逐项核对。' : snapshot ? '选择左侧事项查看原文与操作。' : initialMessage()[1]}</p></div>`;
+      if (!item) scroll.innerHTML = `<div class="empty"><h2>${page === 'settings' ? '仅接收置顶群' : snapshot ? '查看事项详情' : initialMessage()[0]}</h2><p>${page === 'settings' ? '保存群课程关联后会重查仍保留的本地消息。已有人工处理和任务状态保留，课程冲突请逐项核对。' : snapshot ? '选择左侧事项查看原文与操作。' : initialMessage()[1]}</p></div>`;
       else if (item.kind === 'merge-review') scroll.innerHTML = mergeSuggestionHTML(item);
       else scroll.innerHTML = `<p class="eyebrow">${html(states[item.state] || pages[page])}</p><h2 class="detail-title">${html(item.title)}</h2>${item.changeLabel ? `<p class="detail-change-label change-badge">${html(item.changeLabel)}</p>` : ''}<p class="detail-sub">${html(item.course || '课程待核对')} · ${html(item.group || '来源待核对')}</p>
         ${item.kind === 'task' ? `<div class="deadline-box ${item.state === 'active' && past(item) && item.timeKind !== 'start' ? 'overdue' : ''}"><small>${timeLabel(item)}</small><b>${html(dateLabel(item))}</b><small>${item.state !== 'active' ? html(states[item.state]) : past(item) ? item.timeKind === 'start' ? '开始时间已过' : '已逾期，仍保留待处理' : '按正式日期和时间精度保存'}</small></div>` : ''}
         ${pendingChangesHTML(item)}
         ${item.kind === 'review' && item.reviewReasons?.length ? `<div class="change-box">需要核对<p>${html(item.reviewReasons.join(' · '))}</p></div>` : ''}
         <div class="detail-actions">${actionsHTML(item)}</div>
-        ${item.kind === 'review' && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : (standaloneChange(item) ? '<p class="hint">未找到可关联的旧任务；确认后按完整原消息新建任务，并保留原文和证据。</p>' : '') + formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；${item.due ? '已识别日期' + (item.time ? '和时间' : '') + '，请核对或修改后加入任务。' : '确认正式日期后，可将它加入待办。'}</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
-        ${item.kind === 'review' && item.state === 'pending' && !item.canAccept && !item.canAcceptNotice ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
+        ${item.kind === 'review' && !item.isCourseConflict && item.state === 'pending' && item.canAccept ? (item.action === 'cancel' ? '<p class="hint">确认后取消关联任务，保留原文和操作记录。</p>' : (standaloneChange(item) ? '<p class="hint">未找到可关联的旧任务；确认后按完整原消息新建任务，并保留原文和证据。</p>' : '') + formHTML(item)) : item.kind === 'task' && item.state === 'active' ? `<h3 class="section-label">编辑任务</h3>${formHTML(item)}` : item.kind === 'notice' && item.state === 'active' ? `<h3 class="section-label">加入任务</h3><p class="hint">普通通知默认只保留在通知列表；${item.due ? '已识别日期' + (item.time ? '和时间' : '') + '，请核对或修改后加入任务。' : '确认正式日期后，可将它加入待办。'}</p>${formHTML(item)}` : item.kind === 'notice' && item.state === 'converted' ? '<p class="hint">这条通知已保留原消息和转换记录，可从上方打开关联任务。</p>' : ''}
+        ${item.kind === 'review' && item.state === 'pending' && item.isCourseConflict ? '<p class="hint">原任务内容和状态已保留。请打开原任务核对，需要调整时在原任务中编辑；选择“保留原任务”会结束这条核对建议。</p>' : item.kind === 'review' && item.state === 'pending' && !item.canAccept && !item.canAcceptNotice ? '<p class="hint">当前建议无法直接接受，请核对上方原因。可忽略或拒绝建议。</p>' : ''}
         ${item.state === 'ignored' && !canUndo(item) || item.state === 'completed' && !canUndo(item) ? '<p class="hint">撤销期限已过。</p>' : ''}${relatedHTML(item)}${historyHTML(item)}${sourceHTML(item)}`;
       if (!sameItem) scroll.scrollTop = 0;
     });
-    footer.hidden = !item || item.kind !== 'review' || item.state !== 'pending';
+    footer.hidden = !item || item.kind !== 'review' || item.state !== 'pending' || item.isCourseConflict;
     footer.innerHTML = item ? `<p class="error" id="detail-error" role="alert" hidden></p>${item.kind === 'task' ? '<button class="button" data-action="refresh-edit" hidden>刷新并核对最新内容</button>' : ''}${!footer.hidden ? `<p id="pending-confirm-help">${item.canAcceptNotice ? '核对原消息适用于自己后，确认保存到通知列表；无需填写任务日期。' : item.action === 'cancel' ? '确认后取消关联任务。' : item.targetTaskId ? '确认后更新关联任务；已有正式记录仍保留。' : item.due ? '已识别日期，请核对后确认加入任务，保留原消息来源。' : '补齐正式日期后加入任务，保留原消息来源。'}</p><button class="button primary" id="pending-confirm-button" data-action="${item.canAcceptNotice ? 'accept-notice' : 'accept-review'}" ${!item.canAccept && !item.canAcceptNotice ? 'disabled' : ''}>${item.canAcceptNotice ? '确认并加入通知' : item.action === 'cancel' ? '确认取消关联任务' : item.targetTaskId ? '确认并更新任务' : '确认并加入任务'}</button>` : ''}` : '';
     if (item && footer.hidden) { footer.hidden = false; footer.classList.add('error-only'); }
     else footer.classList.remove('error-only');
@@ -774,8 +775,24 @@ function updateDetailControls() {
   }
   document.querySelectorAll('.group-setting button').forEach(button => { button.disabled = busy.has(button.closest('[data-group-id]').dataset.groupId); });
 }
+function currentCourseRecheck() {
+  const result = snapshot?.courseRecheck;
+  if (!result || result.accountId !== snapshot?.accountId) return null;
+  const group = snapshot.groups?.find(group => group.groupId === result.groupId);
+  return group && (group.course || null) === (result.course || null) && Boolean(group.excluded) === Boolean(result.excluded) ? result : null;
+}
+function courseRecheckHTML(result) {
+  if (!result) return '尚无课程关联重查记录。';
+  const group = snapshot.groups.find(group => group.groupId === result.groupId);
+  const heading = `最近重查：${html(group.name)} · ${html(syncTimeLabel(result.completedAt, '时间待确认'))}`;
+  if (result.skippedUnpinned) return `${heading}<br>此群当前未置顶，本次未重查消息。`;
+  const range = result.firstMessageAt && result.lastMessageAt ? `保留消息时间范围：${html(syncTimeLabel(result.firstMessageAt, '时间待确认'))} 至 ${html(syncTimeLabel(result.lastMessageAt, '时间待确认'))}。` : '本群暂无保留消息。';
+  return `${heading}<br>实际检查 ${html(result.checkedMessages)} 条本地消息、${html(result.checkedTasks)} 项任务；新增任务 ${html(result.addedTasks)} 项、通知 ${html(result.addedNotices)} 项、待确认 ${html(result.addedReviews)} 项；保留已有处理 ${html(result.preservedMessages)} 条。<br>${range}${result.missingEvidenceMessages ? `<br>有 ${html(result.missingEvidenceMessages)} 条任务证据原消息暂不可用，未恢复已清理消息。` : ''}`;
+}
 function renderSettings() {
   const pinnedGroups = (snapshot?.groups || []).filter(group => group.pinned);
+  const recheck = currentCourseRecheck();
+  const recheckError = snapshot?.courseRecheckError || '';
   const cleanup = snapshot?.cacheCleanup?.accountId === snapshot?.accountId ? snapshot.cacheCleanup : null;
   const cleanupError = cacheCleanupErrors.get(snapshot?.accountId)?.message || snapshot?.cacheCleanupError || '';
   const cleanupBusy = busy.has(cacheCleanupBusyKey(snapshot?.accountId));
@@ -783,14 +800,14 @@ function renderSettings() {
   const preview = backupPreview?.preview?.accountId === snapshot?.accountId ? backupPreview : null;
   const backingUp = backupBusy(), restoring = restoreLocked();
   if (!restoring && $('desktop-transparency-setting')?.matches(':active')) return;
-  const signature = JSON.stringify([snapshot?.accountId, generation(), pinnedGroups, cleanup, cleanupError, cleanupBusy, result, preview, backupError, backingUp, restoring, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
+  const signature = JSON.stringify([snapshot?.accountId, generation(), pinnedGroups, recheck, recheckError, cleanup, cleanupError, cleanupBusy, result, preview, backupError, backingUp, restoring, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
   if (signature === settingsSignature) return;
   retainFocus($('settings-panel'), () => {
     $('settings-panel').innerHTML = `<section class="settings-section"><h2>界面</h2><div class="setting-row"><span>主题</span><select id="theme-setting"><option value="system">跟随 Windows</option><option value="light">浅色</option><option value="dark">深色</option></select></div><div class="setting-row"><span>动画</span><select id="motion-setting"><option value="system">跟随系统</option><option value="reduce">减少动画</option></select></div></section>
       <section class="settings-section"><h2>启动</h2><div class="setting-row"><span>登录 Windows 后自动启动</span><select id="autostart-setting"><option value="on">开启</option><option value="off">关闭</option></select></div><p class="hint">开启后登录 Windows 时在托盘后台运行，桌面卡片继续显示。</p></section>
       <section class="settings-section backup-section"><h2>备份与恢复</h2><p>导出当前 QQ 账号的全部本地数据和历史。恢复会整份覆盖当前账号，并先自动生成恢复前备份。</p><p class="hint">凭据不包含在备份内，恢复后请核对 QQ 连接设置。尚未下载的图片只保留引用，请在 QQ 查看原图。</p><p id="backup-result">${result ? `${result.preRestoreBackupPath ? '恢复完成' : '最近导出'}：${html(syncTimeLabel(result.createdAt, '时间待确认'))} · ${backupCompleteness(result)}<br>${html(result.path)}${result.preRestoreBackupPath ? `<br>恢复前备份：${html(result.preRestoreBackupPath)}` : ''}` : '尚无备份记录。'}</p><p id="backup-error" class="error" role="alert" ${backupError ? '' : 'hidden'}>${html(backupError)}</p><div class="detail-actions"><button class="button small" data-action="export-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>导出备份</button><button class="button small" data-action="inspect-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>恢复备份</button><button class="button small" data-action="open-backup-location" ${!result || backingUp ? 'disabled' : ''}>打开备份位置</button></div>${preview ? `<div id="backup-preview" class="backup-preview" data-account-id="${html(preview.preview.accountId)}" data-created-at="${html(preview.preview.createdAt)}" data-task-count="${html(preview.preview.taskCount)}" data-review-count="${html(preview.preview.reviewCount)}" data-notice-count="${html(preview.preview.noticeCount)}"><h3>确认恢复范围</h3><p>QQ 账号：${html(preview.preview.accountId)} · ${html(syncTimeLabel(preview.preview.createdAt, '时间待确认'))}</p><p>任务 ${html(preview.preview.taskCount)} 项 · 待确认 ${html(preview.preview.reviewCount)} 项 · 通知 ${html(preview.preview.noticeCount)} 项</p><p>覆盖此账号全部数据、所有状态和历史，包括证据引用、课程关联、人工修改、提醒台账及原撤销期限。</p><p>共用设置也将恢复：自动启动、桌面卡片布局、主题与动画。</p><p>${backupCompleteness(preview.preview)}</p><p class="hint">不会合并当前历史，不重置撤销期限，也不发送旧提醒。</p><div class="detail-actions"><button class="button primary" data-action="restore-backup" ${backingUp || restoring ? 'disabled' : ''}>${restoring ? '正在恢复…' : '确认覆盖并恢复'}</button><button class="button" data-action="cancel-backup" ${backingUp || restoring ? 'disabled' : ''}>取消</button></div></div>` : ''}${restoring ? '<p class="hint" role="status">账号正在恢复，请等待结果。事项和卡片操作已暂停。</p>' : backingUp ? '<p class="hint" role="status">正在处理备份，请等待结果。</p>' : ''}</section>
       <section class="settings-section"><h2>清理消息缓存</h2><p>仅清理最近 7 天分析窗口之外、已处理且没有保留引用的临时消息。任务、待确认、普通通知的原始证据和处理记录长期保留；未处理消息及其引用也会保留。</p><p id="cache-cleanup-result">${cleanup ? `最近成功清理：${html(syncTimeLabel(cleanup.completedAt, '时间待确认'))} · 实际删除 ${html(cleanup.deletedMessages)} 条消息。` : '尚无成功清理记录。'}</p><p id="cache-cleanup-error" class="hint" role="alert" ${cleanupError ? '' : 'hidden'}>${html(cleanupError)}</p><button class="button small" data-action="clean-cache" ${!loadedAccount() || cleanupBusy ? 'disabled' : ''}>${cleanupBusy ? '正在清理…' : '清理消息缓存'}</button></section>
-      <section class="settings-section"><h2>课程与置顶群</h2><p>按真实置顶群名称确认课程；无需先填写课程名单。关联变更用于新消息，已有待确认仍需逐项核对。</p>
+      <section class="settings-section"><h2>课程与置顶群</h2><p>按真实置顶群名称确认课程；无需先填写课程名单。保存关联后重查仍保留的本地消息及任务证据，找回可靠遗漏事项；已有人工处理和任务状态保留，已有待确认仍需逐项核对，课程冲突进入待确认。</p><p id="course-recheck-result">${courseRecheckHTML(recheck)}</p><p id="course-recheck-error" class="hint" role="alert" ${recheckError ? '' : 'hidden'}>${html(recheckError)}</p>
       ${pinnedGroups.length ? pinnedGroups.map(group => {
         if (!groupDrafts.has(group.groupId)) groupDrafts.set(group.groupId, group.course || group.suggestedCourse || '');
         return `<div class="group-setting" data-group-id="${html(group.groupId)}"><h3>${html(group.name)}</h3><p>建议课程：${html(group.suggestedCourse || '请核对群名称')}${group.excluded ? ' · 已排除' : group.course ? ' · 已确认' : ' · 待确认'}</p><label class="field">课程或分类<input name="course" maxlength="80" value="${html(groupDrafts.get(group.groupId))}"></label><div class="detail-actions"><button class="button primary small" data-action="confirm-group">确认关联</button><button class="button small" data-action="exclude-group">${group.excluded ? '恢复接收并确认' : '排除此群'}</button></div></div>`;
@@ -848,6 +865,7 @@ function createTask() {
   request('create-task', { ...payload, operationId: draft.operationId }, draft.id);
 }
 function acceptReview(item) {
+  if (item?.isCourseConflict) return;
   if (!item?.canAccept || item.state !== 'pending') return;
   const time = item.action === 'cancel' && item.targetTaskId ? {} : validateTime(item);
   if (time) command('accept-review', item, { ...time, ...(item.targetTaskId ? { targetTaskVersion: item.targetTaskVersion } : {}) });
@@ -996,7 +1014,7 @@ document.addEventListener('click', event => {
   if (action === 'accept-review') {
     acceptReview(item);
   } else if (action === 'accept-notice') {
-    if (item?.canAcceptNotice && item.state === 'pending') command('accept-notice', item);
+    if (!item?.isCourseConflict && item?.canAcceptNotice && item.state === 'pending') command('accept-notice', item);
   } else if (action === 'edit-task') { /* The form submit handler validates and sends this command. */ }
   else if (action === 'convert-notice') { /* The form submit handler validates and sends this command. */ }
   else if (action === 'open-target') {

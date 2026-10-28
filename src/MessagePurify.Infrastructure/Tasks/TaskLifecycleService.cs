@@ -240,6 +240,8 @@ public sealed partial class AccountTaskStore
             CheckVersion(review.Version, expectedReviewVersion);
             if (review.State != ReviewState.Pending)
                 throw new InvalidOperationException("只有待确认状态的建议可以接受。");
+            if (review.IsCourseConflict)
+                throw new InvalidOperationException("课程关联冲突须打开原任务核对，不可直接接受为任务。");
             var candidate = review.Candidate;
             ValidateCandidate(candidate);
             if (MessageRuleExtractor.IsNoticeCandidate(candidate))

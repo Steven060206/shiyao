@@ -22,6 +22,7 @@ public sealed partial class AccountWorkspace
     private readonly string settingsPath;
     private WorkspaceSettings settings;
     private string? cacheCleanupError;
+    private string? courseRecheckError;
     private Dictionary<string, string> availableGroups = new(StringComparer.Ordinal);
     private HashSet<string> pinnedGroups = new(StringComparer.Ordinal);
     public string AccountId { get; }
@@ -184,7 +185,8 @@ public sealed partial class AccountWorkspace
                 var candidate = ReviewCandidate(review);
                 var targetId = candidate.TargetTaskId ?? (review.State == ReviewState.Accepted ? review.AcceptedTaskId : null);
                 var target = targetId is null ? null : taskList.FirstOrDefault(task => task.Id == CurrentTaskId(targetId));
-                var reason = AcceptanceProblem(candidate, target is not null, review.SplitParentTaskId is not null);
+                var reason = review.IsCourseConflict ? "课程关联已改变，请打开原任务核对；原任务和历史已保留。" :
+                    AcceptanceProblem(candidate, target is not null, review.SplitParentTaskId is not null);
                 items.Add(Item(review.Id, "review", candidate.Title, candidate.Course,
                     review.State.ToString().ToLowerInvariant(), candidate.Time, review.Version, candidate.Evidence,
                     candidate.Action, now, target?.Id ?? targetId, target?.Version, review.UndoOperationId,
@@ -192,7 +194,8 @@ public sealed partial class AccountWorkspace
                         candidate.ReviewReasons.Append(reason).Distinct().ToArray(), candidate.SuggestedTime,
                     review.State == ReviewState.Pending && reason is null) with
                     { RelatedItemIds = review.SplitParentTaskId is { } parentId ? [CurrentTaskId(parentId)] : null,
-                      CanAcceptNotice = review.State == ReviewState.Pending && MessageRuleExtractor.IsNoticeCandidate(candidate),
+                      IsCourseConflict = review.IsCourseConflict,
+                      CanAcceptNotice = !review.IsCourseConflict && review.State == ReviewState.Pending && MessageRuleExtractor.IsNoticeCandidate(candidate),
                       TimeKind = (candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind ?? review.SplitTimeKind ?? Core.TimeKind.Deadline).ToString().ToLowerInvariant() });
             }
             foreach (var notice in router.ListNotices())
@@ -229,7 +232,8 @@ public sealed partial class AccountWorkspace
                 });
             }
             return new(AccountId, items, groups, now, reminders.Synchronize(now),
-                router.ReadCacheCleanupResult(), cacheCleanupError, Generation);
+                router.ReadCacheCleanupResult(), cacheCleanupError, Generation,
+                router.ReadCourseRecheckResult(), courseRecheckError);
         }
     }
 
@@ -337,7 +341,7 @@ public sealed partial class AccountWorkspace
                     tasks.AcceptReview(command.Id, candidate.TargetTaskId ?? "accepted-" + command.Id,
                         command.OperationId, command.Version, ReadTime(command, candidate.Time?.Kind ?? candidate.SuggestedTime?.Kind ?? review.SplitTimeKind),
                         now, command.TargetTaskVersion); break;
-                case "confirm-group": ConfirmGroup(command); break;
+                case "confirm-group": ConfirmGroup(command, now); break;
                 case "set-reminder":
                     reminders.Configure(command.Id, command.Version,
                         command.ReminderVersion ?? throw new ArgumentException("须提供提醒计划版本。"),
@@ -382,7 +386,7 @@ public sealed partial class AccountWorkspace
         if (reminderSink is not null) reminders.ReconcileNotifications(reminderSink, now);
     }
 
-    private void ConfirmGroup(WorkspaceCommand command)
+    private void ConfirmGroup(WorkspaceCommand command, DateTimeOffset now)
     {
         if (!availableGroups.ContainsKey(command.Id) && !settings.Relationships.ContainsKey(command.Id))
             throw new ArgumentException("群不属于当前可用群列表。");
@@ -393,6 +397,16 @@ public sealed partial class AccountWorkspace
                 [command.Id] = new(GroupName(command.Id), string.IsNullOrWhiteSpace(command.Course) ? null : command.Course.Trim(), command.Excluded)
             }
         });
+        try
+        {
+            router.RecheckCourse(Context(command.Id, now), pinnedGroups);
+            courseRecheckError = null;
+        }
+        catch
+        {
+            courseRecheckError = "课程关联已保存，历史重查失败；请重新确认关联重试。原有事项和处理记录已保留。";
+            throw new InvalidOperationException(courseRecheckError);
+        }
     }
 
     private void ConvertNotice(WorkspaceCommand command, DateTimeOffset now)
