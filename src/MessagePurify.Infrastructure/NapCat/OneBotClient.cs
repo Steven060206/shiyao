@@ -74,6 +74,18 @@ public sealed class OneBotClient : IAsyncDisposable
         return OneBotJson.Array(data).Select(item => new OneBotGroup(OneBotJson.Id(item, "group_id"), OneBotJson.String(item, "group_name"))).ToArray();
     }
 
+    public async Task<OneBotImage> GetImageAsync(string file, CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(file);
+        var data = await CallAsync("get_image", new { file }, cancellationToken);
+        if (data.ValueKind != JsonValueKind.Object || !data.TryGetProperty("file", out var value) || value.ValueKind != JsonValueKind.String)
+            throw new OneBotProtocolException("image-path-invalid");
+        var path = value.GetString();
+        if (string.IsNullOrWhiteSpace(path) || !Path.IsPathFullyQualified(path) || path.StartsWith(@"\\", StringComparison.Ordinal) ||
+            path.StartsWith("//", StringComparison.Ordinal)) throw new OneBotProtocolException("image-path-invalid");
+        return new(path);
+    }
+
     public async Task<IReadOnlySet<string>> GetPinnedGroupIdsAsync(string accountId, CancellationToken cancellationToken = default)
     {
         var data = await CallAsync("messagepurify_get_pinned_groups", new { }, cancellationToken);

@@ -99,7 +99,11 @@ public sealed class AppWindow : Window
             core.Settings.AreDevToolsEnabled = false;
             core.Settings.AreDefaultContextMenusEnabled = false;
             core.Settings.IsStatusBarEnabled = false;
-            core.SetVirtualHostNameToFolderMapping(AppBridgeProtocol.Host, Path.Combine(AppContext.BaseDirectory, "ui"), CoreWebView2HostResourceAccessKind.DenyCors);
+            // Virtual folder mappings bypass WebResourceRequested. Serve UI and evidence
+            // through this single local origin so account/generation checks always run.
+            var uiRoot = Path.Combine(AppContext.BaseDirectory, "ui");
+            var staticAssets = Directory.EnumerateFiles(uiRoot, "*", SearchOption.AllDirectories)
+                .ToDictionary(path => Path.GetRelativePath(uiRoot, path).Replace('\\', '/'), StringComparer.Ordinal);
             core.NavigationStarting += (_, args) => { if (!AppBridgeProtocol.IsTrustedSource(args.Uri)) args.Cancel = true; };
             core.NewWindowRequested += (_, args) => args.Handled = true;
             core.PermissionRequested += (_, args) => args.State = CoreWebView2PermissionState.Deny;
@@ -107,7 +111,48 @@ public sealed class AppWindow : Window
             core.WebResourceRequested += (_, args) =>
             {
                 if (!Uri.TryCreate(args.Request.Uri, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.IdnHost != AppBridgeProtocol.Host || uri.Port != 443)
+                {
                     args.Response = environment.CreateWebResourceResponse(Stream.Null, 403, "Forbidden", "");
+                    return;
+                }
+                if (!uri.AbsolutePath.StartsWith("/evidence/", StringComparison.Ordinal))
+                {
+                    try
+                    {
+                        if (!EvidenceImageProtocol.TryReadStatic(args.Request.Uri, args.Request.Method, out var relative, out var type)
+                            || !staticAssets.TryGetValue(relative, out var asset)) throw new FileNotFoundException();
+                        args.Response = environment.CreateWebResourceResponse(new MemoryStream(File.ReadAllBytes(asset)), 200, "OK",
+                            $"Content-Type: {type}\r\nX-Content-Type-Options: nosniff\r\nCache-Control: no-store");
+                    }
+                    catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                    { args.Response = environment.CreateWebResourceResponse(Stream.Null, 404, "Not Found", "Cache-Control: no-store"); }
+                    return;
+                }
+                var workspace = runtime.Workspace;
+                var generation = workspace?.Generation ?? 0;
+                if (workspace is null || runtime.IsRestoring
+                    || !EvidenceImageProtocol.TryRead(args.Request.Uri, args.Request.Method, workspace.AccountId, generation, out var imageId))
+                {
+                    args.Response = environment.CreateWebResourceResponse(Stream.Null, 403, "Forbidden", "Cache-Control: no-store");
+                    return;
+                }
+                Stream? original = null;
+                try
+                {
+                    var path = workspace.OriginalImagePath(imageId, generation);
+                    var contentType = path is null ? null : EvidenceImageProtocol.ContentType(path);
+                    if (contentType is null) throw new FileNotFoundException();
+                    original = File.Open(path!, FileMode.Open, FileAccess.Read, FileShare.Read | FileShare.Delete);
+                    if (runtime.IsRestoring || runtime.Workspace != workspace || workspace.Generation != generation)
+                        throw new FileNotFoundException();
+                    args.Response = environment.CreateWebResourceResponse(original, 200, "OK",
+                        $"Content-Type: {contentType}\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\nCross-Origin-Resource-Policy: same-origin");
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+                {
+                    original?.Dispose();
+                    args.Response = environment.CreateWebResourceResponse(Stream.Null, 404, "Not Found", "Cache-Control: no-store");
+                }
             };
             core.WebMessageReceived += async (_, args) => await HandleAsync(args.Source, args.WebMessageAsJson);
             core.NavigationCompleted += (_, args) =>

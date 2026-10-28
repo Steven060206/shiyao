@@ -5,6 +5,7 @@ using System.Text.Json.Nodes;
 using MessagePurify.Core;
 using MessagePurify.Infrastructure.Application;
 using MessagePurify.Infrastructure.Backup;
+using MessagePurify.Infrastructure.Images;
 using MessagePurify.Infrastructure.Processing;
 using MessagePurify.Infrastructure.Reminders;
 using MessagePurify.Infrastructure.Storage;
@@ -67,6 +68,183 @@ public sealed class AccountBackupTests : IDisposable
         Assert.NotEqual(before, changed);
         Assert.Equal(result, Service().GetLastResult());
         Assert.True(JsonNode.Parse(File.ReadAllText(Path.Combine(root, "interface-preferences.json")))!["theme"]!.GetValue<string>() == "dark");
+    }
+
+    [Fact]
+    public void ExportRestore_IncludesDownloadedOriginalAndRecognitionWithoutChangingRawMessage()
+    {
+        Seed();
+        var saved = SaveImage("saved-image");
+        var imageStore = new AccountImageStore(root, Account);
+        imageStore.SaveRecognition(saved.Id, new("合成识别文字", []), Now);
+        var before = DumpAccount();
+        var raw = new AccountMessageStore(root, Account).Find(saved.Message)!.Message;
+
+        var result = Service().Export(Package, SettingsJson, Preferences, Now);
+
+        Assert.True(result.IsComplete);
+        Assert.Equal(0, result.MissingImageCount);
+        using (var archive = ZipFile.OpenRead(Package))
+        {
+            var entry = Assert.Single(archive.Entries, item => item.FullName.StartsWith("account/images/", StringComparison.Ordinal));
+            using var copied = new MemoryStream();
+            using (var source = entry.Open()) source.CopyTo(copied);
+            Assert.Equal(File.ReadAllBytes(imageStore.GetOriginalPath(saved)!), copied.ToArray());
+            using var manifest = JsonDocument.Parse(archive.GetEntry("manifest.json")!.Open());
+            var evidence = Assert.Single(manifest.RootElement.GetProperty("evidence").EnumerateArray());
+            Assert.Equal("downloaded", evidence.GetProperty("status").GetString());
+            Assert.Equal("account/" + saved.RelativePath, evidence.GetProperty("path").GetString());
+            Assert.Equal(saved.Sha256, evidence.GetProperty("sha256").GetString());
+        }
+        using var prepared = Service().Inspect(Package);
+        File.Delete(imageStore.GetOriginalPath(saved)!);
+        Tasks().CreateManualTask("after-image", "备份之后", "数学", Time, null, "after-image", Now);
+
+        Service().Restore(prepared, SettingsJson, Preferences, Now.AddMinutes(1));
+
+        Assert.Equal(before, DumpAccount());
+        var reopened = new AccountImageStore(root, Account);
+        Assert.True(File.Exists(reopened.GetOriginalPath(reopened.Find(saved.Id)!)));
+        Assert.Equal("合成识别文字", reopened.Find(saved.Id)!.Recognition!.Text);
+        Assert.Equal(JsonSerializer.Serialize(raw), JsonSerializer.Serialize(new AccountMessageStore(root, Account).Find(saved.Message)!.Message));
+    }
+
+    [Fact]
+    public void Export_MissingDownloadedOriginalRemainsExplicitlyIncomplete()
+    {
+        Seed();
+        var saved = SaveImage("missing-original");
+        File.Delete(new AccountImageStore(root, Account).GetOriginalPath(saved)!);
+
+        var result = Service().Export(Package, SettingsJson, Preferences, Now);
+        using var prepared = Service().Inspect(Package);
+
+        Assert.False(result.IsComplete);
+        Assert.Equal(1, result.MissingImageCount);
+        Assert.False(prepared.Preview.IsComplete);
+        using var archive = ZipFile.OpenRead(Package);
+        Assert.DoesNotContain(archive.Entries, entry => entry.FullName.StartsWith("account/images/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ExportRestore_DeduplicatesOriginalFilesAndExcludesUnreferencedFiles()
+    {
+        Seed();
+        var first = SaveImage("shared-first");
+        var second = SaveImage("shared-second");
+        Assert.Equal(first.RelativePath, second.RelativePath);
+        File.WriteAllText(Path.Combine(AccountDirectory, "images", "unreferenced.txt"), "synthetic-unreferenced");
+        var before = DumpAccount();
+
+        var result = Service().Export(Package, SettingsJson, Preferences, Now);
+
+        Assert.True(result.IsComplete);
+        using (var archive = ZipFile.OpenRead(Package))
+        {
+            Assert.Single(archive.Entries, entry => entry.FullName.StartsWith("account/images/", StringComparison.Ordinal));
+            using var manifest = JsonDocument.Parse(archive.GetEntry("manifest.json")!.Open());
+            Assert.Equal(2, manifest.RootElement.GetProperty("evidence").GetArrayLength());
+        }
+        using var prepared = Service().Inspect(Package);
+        Service().Restore(prepared, SettingsJson, Preferences, Now.AddMinutes(1));
+
+        Assert.Equal(before, DumpAccount());
+        var restored = new AccountImageStore(root, Account);
+        Assert.Equal(2, restored.List().Count);
+        Assert.Equal(restored.GetOriginalPath(restored.Find(first.Id)!), restored.GetOriginalPath(restored.Find(second.Id)!));
+        Assert.Single(Directory.EnumerateFiles(Path.Combine(AccountDirectory, "images")));
+    }
+
+    [Fact]
+    public void Restore_SettingsFailureRetainsCurrentOriginalsAndPreRestoreImageBackup()
+    {
+        Seed();
+        SaveImage("first-image");
+        Service().Export(Package, SettingsJson, Preferences, Now);
+        using var prepared = Service().Inspect(Package);
+        var current = SaveImage("current-image", different: true);
+        var imageStore = new AccountImageStore(root, Account);
+        var imagePath = imageStore.GetOriginalPath(current)!;
+        var bytes = File.ReadAllBytes(imagePath);
+        var before = DumpAccount();
+
+        Assert.Throws<IOException>(() => Service().Restore(prepared, SettingsJson, Preferences, Now.AddDays(1),
+            _ => throw new IOException("synthetic-settings-failure")));
+
+        Assert.Equal(before, DumpAccount());
+        Assert.Equal(bytes, File.ReadAllBytes(imagePath));
+        var automaticPath = Service().GetLastResult()!.Path;
+        using var automatic = Service().Inspect(automaticPath);
+        Assert.True(automatic.Preview.IsComplete);
+        using var archive = ZipFile.OpenRead(automaticPath);
+        Assert.Equal(2, archive.Entries.Count(entry => entry.FullName.StartsWith("account/images/", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("changed-bytes")]
+    [InlineData("wrong-owner")]
+    [InlineData("wrong-segment")]
+    [InlineData("record-path")]
+    [InlineData("manifest-path")]
+    [InlineData("unknown-image")]
+    public void Inspect_RejectsInvalidOriginalImageAndPreservesAccount(string corruption)
+    {
+        Seed();
+        var saved = SaveImage("invalid-image");
+        Service().Export(Package, SettingsJson, Preferences, Now);
+        var before = DumpAccount();
+        var unpacked = Path.Combine(root, "image-edit");
+        ZipFile.ExtractToDirectory(Package, unpacked);
+        var manifestPath = Path.Combine(unpacked, "manifest.json");
+        var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!;
+        var path = "account/" + saved.RelativePath;
+        if (corruption == "changed-bytes")
+        {
+            File.AppendAllText(Path.Combine(unpacked, path), "synthetic-change");
+            Rehash(manifest, unpacked, path);
+        }
+        else if (corruption is "wrong-owner" or "wrong-segment" or "record-path")
+        {
+            var record = JsonSerializer.SerializeToNode(saved)!;
+            if (corruption == "wrong-owner") record["Message"]!["AccountId"] = "999";
+            if (corruption == "wrong-segment") record["SegmentIndex"] = 999;
+            if (corruption == "record-path") record["RelativePath"] = "images/../../outside.png";
+            Execute(Path.Combine(unpacked, "account/messages.sqlite3"), "UPDATE image_evidence SET record_json=$json;", ("$json", record.ToJsonString()));
+            Rehash(manifest, unpacked, "account/messages.sqlite3");
+        }
+        else if (corruption == "manifest-path")
+        {
+            manifest["evidence"]![0]!["path"] = "account/images/../../outside.png";
+        }
+        File.WriteAllText(manifestPath, manifest.ToJsonString());
+        File.Delete(Package);
+        ZipFile.CreateFromDirectory(unpacked, Package);
+        if (corruption == "unknown-image")
+        {
+            using var archive = ZipFile.Open(Package, ZipArchiveMode.Update);
+            using var extra = archive.CreateEntry("account/images/" + new string('f', 64) + ".png").Open();
+            extra.WriteByte(0);
+        }
+
+        Assert.Throws<InvalidDataException>(() => Service().Inspect(Package));
+        Assert.Equal(before, DumpAccount());
+        Assert.True(File.Exists(new AccountImageStore(root, Account).GetOriginalPath(saved)!));
+    }
+
+    [Fact]
+    public void Restore_OldPackageWithoutImageEvidenceTableRemainsSupported()
+    {
+        Seed();
+        Execute(Path.Combine(AccountDirectory, "messages.sqlite3"), "DROP TABLE IF EXISTS image_evidence;");
+        Service().Export(Package, SettingsJson, Preferences, Now);
+        using var prepared = Service().Inspect(Package);
+        SaveImage("later-image");
+
+        Service().Restore(prepared, SettingsJson, Preferences, Now.AddDays(1));
+
+        Assert.True(prepared.Preview.IsComplete);
+        Assert.Empty(AccountImageStore.ReadAll(Path.Combine(AccountDirectory, "messages.sqlite3"), Account));
+        Assert.False(Directory.Exists(Path.Combine(AccountDirectory, "images")));
     }
 
     [Theory]
@@ -396,6 +574,19 @@ public sealed class AccountBackupTests : IDisposable
 
     private AccountBackupService Service() => new(root, Account);
     private AccountTaskStore Tasks() => new(root, Account);
+
+    private ImageEvidenceRecord SaveImage(string id, bool different = false)
+    {
+        Route(id, RuleDisposition.Pending, image: true);
+        var message = new AccountMessageStore(root, Account).Find(new(Account, Group, id))!.Message;
+        var images = new AccountImageStore(root, Account);
+        images.Register(message, Now);
+        var entry = Assert.Single(images.List(), item => item.Message == message.Key);
+        var source = Path.Combine(root, "synthetic-" + id + ".png");
+        var bytes = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lS8AAAAASUVORK5CYII=");
+        File.WriteAllBytes(source, different ? [.. bytes, 0] : bytes);
+        return images.SaveOriginal(entry.Id, source, Now);
+    }
 
     private void Seed()
     {

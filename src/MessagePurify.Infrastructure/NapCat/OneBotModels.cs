@@ -8,6 +8,7 @@ public sealed record OneBotStatus(bool Online, bool Good);
 public sealed record OneBotLogin(string AccountId, string Nickname);
 public sealed record OneBotVersion(string AppName, string AppVersion, string ProtocolVersion);
 public sealed record OneBotGroup(string GroupId, string GroupName);
+public sealed record OneBotImage(string FilePath);
 public sealed record OneBotSegment(string Type, JsonElement Data);
 public sealed record ParsedOneBotMessage(SchoolMessage Message, string? MessageSequence,
     string? RealSequence, IReadOnlyList<OneBotSegment> ProtocolSegments);

@@ -76,6 +76,18 @@ public sealed partial class AccountCandidateRouter
                 foreach (var key in notice.Candidate.Evidence) Protect(key);
             }
 
+        using (var table = Command(connection, transaction, "SELECT 1 FROM inbox.sqlite_master WHERE type='table' AND name='image_evidence';"))
+            if (table.ExecuteScalar() is not null)
+            {
+                using var command = Command(connection, transaction, "SELECT account_id,group_id,message_id FROM inbox.image_evidence WHERE json_extract(record_json,'$.Status')<>'recognized';");
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    CheckScan();
+                    Protect(new(reader.GetString(0), reader.GetString(1), reader.GetString(2)));
+                }
+            }
+
         // 窗口内、尚待处理和长期证据的来源均递归保留完整引用链。
         while (references.TryDequeue(out var source))
         {

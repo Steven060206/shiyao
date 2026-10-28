@@ -252,6 +252,16 @@ public sealed class NapCatMessageHost
                     EnsureSyncAllowed();
                     try
                     {
+                        await workspace.DownloadImagesAsync(client.GetImageAsync, DateTimeOffset.UtcNow,
+                            () => !cancellationToken.IsCancellationRequested && syncController?.CanSync != false,
+                            cancellationToken);
+                    }
+                    catch (OperationCanceledException) { throw; }
+                    catch { /* 图片队列不可用时保留原消息，已完成的历史读取仍按实际结果记录。 */ }
+                    cancellationToken.ThrowIfCancellationRequested();
+                    EnsureSyncAllowed();
+                    try
+                    {
                         workspace.CleanMessageCache(DateTimeOffset.UtcNow,
                             () => !cancellationToken.IsCancellationRequested && syncController?.CanSync != false);
                     }

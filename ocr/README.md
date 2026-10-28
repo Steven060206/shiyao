@@ -1,6 +1,6 @@
 # 本地 OCR 工作进程
 
-M3 探针使用 RapidOCR 3.10.0、ONNX Runtime 1.31.0 和随包 CPU 模型。请求顺序处理，不上传图片，不修改输入图片；结果只作证据和建议，不建立正式日期或提醒。
+使用 RapidOCR 3.10.0、ONNX Runtime 1.31.0 和随包 CPU 模型。请求顺序处理，不上传图片，不修改输入图片；结果只作证据和建议，不建立正式日期或提醒。
 
 ## 项目环境
 
@@ -13,7 +13,33 @@ python -m venv .tools/ocr/venv
 & ./.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p ocr_worker_test.py
 ```
 
-当前 venv 依赖开发机已有的 Python；解释器随安装包、无系统 Python 运行及隐藏宿主的进程重启／超时处理在后续集成和发布阶段验证。
+开发 venv 仍依赖本机 Python，不直接分发。便携运行库使用官方 CPython 3.12.10 x64 embeddable ZIP 和相同锁定依赖，不要求用户安装 Python。
+
+## 便携运行库
+
+从[官方发行页](https://www.python.org/downloads/release/python-31210/)取得 `python-3.12.10-embed-amd64.zip`。其 SHA-256 为 `4acbed6dd1c744b0376e3b1cf57ce906f9dc9e95e68824584c8099a63025a3c3`，已与该发行页链接的官方 SPDX 文件核对；发行页 MD5 也一致。准备命令：
+
+```powershell
+python tools/prepare_ocr_runtime.py --python-archive .tools/ocr/python-3.12.10-embed-amd64.zip --site-packages .tools/ocr/venv/Lib/site-packages --output-directory .tools/ocr/portable
+python -m unittest discover -s tests -p ocr_runtime_packaging_test.py
+```
+
+工具拒绝已有目标目录，核对官方解释器和三个模型的固定校验值，以及锁定依赖版本。输出 `worker.py`、`requirements.lock.txt`、`runtime-manifest.json`、`licenses/` 和 `python/`；后者保留解释器、标准库和全部运行依赖及对应 dist-info 许可，排除 pip 与字节码缓存。`python312._pth` 只列包内标准库和 site-packages，不启用系统 site，也不依赖系统 PATH/PYTHONHOME/PYTHONPATH。完整目录在应用发布目录中放为 `ocr/`。
+
+```text
+ocr/
+  worker.py
+  runtime-manifest.json
+  licenses/
+  python/
+    python.exe
+    python312.dll
+    python312.zip
+    python312._pth
+    Lib/site-packages/
+```
+
+`MessagePurify.Infrastructure.Images.LocalOcrProcess` 固定启动指定解释器和 worker，隐藏控制台，通过 UTF-8 JSON Lines 顺序复用一个进程。单请求默认超时 90 秒，取消、超时、进程退出或无效响应后终止旧进程，下个请求重新启动；Dispose 也会终止正在识别的进程。限制响应大小、请求 ID、文字/行数、四角坐标及有限置信度；只返回固定错误码，不返回子进程原始错误、图片路径或识别原文。宿主不调用 QQ、网络或系统注册表。
 
 ## JSON Lines 协议
 
@@ -53,7 +79,7 @@ python -m venv .tools/ocr/venv
 | 方向 | `ch_ppocr_mobile_v2.0_cls_mobile.onnx` | `e47acedf663230f8863ff1ab0e64dd2d82b838fceb5957146dab185a89d6215c` |
 | 识别 | `PP-OCRv6_rec_small.onnx` | `6f327246b50388f3c176ae304bd95767ea6dc0c9ae92153ef8cbe210b3c14884` |
 
-上述值已与安装文件和[官方模型声明](https://rapidai.github.io/RapidOCRDocs/main/model_licenses/)核对。RapidOCR 代码为 Apache-2.0；模型权重归百度及 PaddleOCR 相关权利人，按 Apache-2.0 分发；ONNX Runtime 为 MIT。`licenses/` 保留安装包内的 RapidOCR 原许可证、模型归属及 ONNX Runtime 许可证。ONNX Runtime 的 `ThirdPartyNotices.txt` 和其它锁定依赖各自的许可证目前保留在隔离安装目录；后续分发运行库时须一并保留全部相应文件，不以本说明替代。
+上述值已与安装文件和[官方模型声明](https://rapidai.github.io/RapidOCRDocs/main/model_licenses/)核对。RapidOCR 代码为 Apache-2.0；模型权重归百度及 PaddleOCR 相关权利人，按 Apache-2.0 分发；ONNX Runtime 为 MIT。`licenses/` 保留安装包内的 RapidOCR 原许可证、模型归属及 ONNX Runtime 许可证。便携准备工具保留各依赖原有许可证，包括 ONNX Runtime 的 `ThirdPartyNotices.txt`、OpenCV 第三方许可、NumPy/Shapely/Pillow 等许可，以及 tqdm 的 `LICENCE`。FlatBuffers wheel 缺少完整许可证，准备工具补入 Apache-2.0 全文及 Google 版权归属；Python 官方 ZIP 的 LICENSE.txt 原样保留。
 
 版本和本地配置来源：[RapidOCR PyPI](https://pypi.org/project/rapidocr/3.10.0/)、[ONNX Runtime PyPI](https://pypi.org/project/onnxruntime/1.31.0/)、[官方本地模型使用](https://rapidai.github.io/RapidOCRDocs/main/install_usage/rapidocr/how_to_use_offline_model/)。
 
@@ -61,4 +87,6 @@ python -m venv .tools/ocr/venv
 
 测试用 `tests/fixtures/ocr/generate_synthetic.py` 生成明确标为 synthetic 的中文通知、3300 像素长图和空白图。真实引擎测试检查通知日期文字、长图底部日期、四角位置、置信度、损坏图片后继续及原图不变；另外检查三个实际会话均只用 `CPUExecutionProvider`。
 
-测试子进程通过启动前的 `sitecustomize` 禁止 Python socket 连接／DNS，并检查没有联网尝试，验证随包本地模型和字典足以运行。这不替代整机断网、安装包独立解释器或完整真实学校通知图片的验收。用户截图只按本次明确授权处理；原图及识别全文不进入 Git 或公开验证文档。
+开发 venv 测试通过启动前的 `sitecustomize` 禁止 Python socket 连接／DNS，并检查没有联网尝试。便携解释器的隔离路径忽略 PYTHONPATH，因此便携测试使用包装入口先禁 socket 再运行 worker，避免禁网钩子未实际加载。实际在中文空格解压路径、空 PATH 和无效 PYTHONHOME/PYTHONPATH 下识别中文通知、长图、空白图及坏图后续请求，原图不变；该测试仍不替代整机断网或真实学校图片验收。用户截图只按本次明确授权处理；原图及识别全文不进入 Git 或公开验证文档。
+
+2026-10-28：便携准备工具 5 项、便携引擎 2 项验证通过；宿主 15 项真实子进程/引擎测试通过，包含顺序复用、并发串行、超时、取消、退出/无效响应后重建和 Dispose 无残留。应用集成及最终公开下载包验收由项目交接单独记录，不以本工具测试替代。

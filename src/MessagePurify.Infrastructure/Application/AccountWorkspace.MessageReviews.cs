@@ -20,7 +20,8 @@ public sealed partial class AccountWorkspace
                 if (source?.Extraction is null) continue;
                 var index = Enumerable.Range(0, source.Extraction.Candidates.Count)
                     .FirstOrDefault(index => AccountCandidateRouter.ReviewId(key, index) == review.Id, -1);
-                if (index < 0) continue;
+                // OCR派生审核的原始提取仍可能是Ignored，不能用空白原文重建标题。
+                if (index < 0 || source.Extraction.Candidates[index].Disposition == RuleDisposition.Ignored) continue;
                 if (!groups.TryGetValue(key, out var group)) groups[key] = group = [];
                 group.Add((review, index));
                 break;

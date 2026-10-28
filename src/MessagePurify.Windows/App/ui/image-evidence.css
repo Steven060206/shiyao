@@ -1,0 +1,14 @@
+.image-gallery { display: grid; gap: 14px; margin-block: 12px 18px; }
+.image-evidence { padding: 12px; border: 1px solid var(--line-soft, var(--line)); border-radius: 8px; background: var(--paper-raised, Canvas); }
+.image-preview-button { display: grid; gap: 7px; width: 100%; padding: 0; border: 0; color: var(--moss, var(--accent)); background: transparent; cursor: zoom-in; font: inherit; text-align: left; }
+.image-preview-button:focus-visible { outline: 2px solid var(--moss, var(--accent)); outline-offset: 4px; }
+.evidence-thumbnail { display: block; width: 100%; max-height: 220px; object-fit: contain; object-position: left center; border-radius: 4px; }
+.image-preview-button span, .image-status, .image-ocr summary { font-size: 13px; }
+.image-status { margin: 9px 0; color: var(--muted); }
+.image-ocr { margin-top: 10px; }
+.image-ocr summary { color: var(--moss, var(--accent)); cursor: pointer; }
+.image-ocr pre { max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--ink); font: inherit; font-size: 13px; line-height: 1.7; }
+#image-preview-dialog { box-sizing: border-box; width: min(1120px, 94vw); max-height: 94vh; padding: 16px; border: 1px solid var(--line-soft, var(--line)); border-radius: 12px; color: var(--ink); background: var(--paper-raised, Canvas); }
+#image-preview-dialog::backdrop { background: rgb(0 0 0 / 64%); }
+.image-preview-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+#image-preview-original { display: block; max-width: 100%; height: auto; margin-inline: auto; }

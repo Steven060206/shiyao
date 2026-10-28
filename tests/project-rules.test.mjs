@@ -8,6 +8,25 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('图片接入的当前说明保留本地处理、人工日期确认及历史验证边界', () => {
+  for (const file of ['README.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md',
+    'docs/superpowers/specs/2026-10-10-windows-app-design.md',
+    'docs/superpowers/plans/2026-10-10-windows-app-implementation.md',
+    'docs/superpowers/plans/2026-10-13-backup-restore.md']) {
+    const content = read(file);
+    assert.match(content, /2026-10-28/, file);
+    assert.match(content, /图片下载、本地 OCR 和原图备份/, file);
+    assert.match(content, /(?:图片|OCR).*日期.*(?:用户确认|用户.*确认)/s, file);
+    assert.match(content, /(?:真实图片|真实 QQ 图片).*验收/s, file);
+  }
+  const readme = read('README.md');
+  assert.match(readme, /无需另装系统 Python/);
+  assert.match(readme, /--ocr-runtime-directory/);
+  const notices = read('packaging/release/THIRD-PARTY-NOTICES.md');
+  assert.match(notices, /app\/ocr\//);
+  assert.doesNotMatch(notices, /本 Windows 下载包不包含 OCR/);
+});
+
 test('本机备份验收区分真实副本、用户操作与短时观察范围', () => {
   const report = read('docs/verification/2026-10-28-local-acceptance.md');
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
@@ -27,15 +46,16 @@ test('本机备份验收区分真实副本、用户操作与短时观察范围',
   assert.match(report, /匿名下载 HTTP200/);
 });
 
-test('课程关联重查已交付且保留人工决定，原图OCR仍为后期范围', () => {
+test('课程关联重查保留历史交付证据，图片OCR已获授权接入', () => {
   const requirements = read('docs/requirements.md');
   const current = read('docs/HANDOFF.md').split('### 课程关联历史重查')[1].split('### 自动同步后')[0];
   for (const content of [requirements, current]) {
     assert.match(content, /已实现、部署并发布beta\.10/);
     assert.match(content, /人工忽略.*拒绝不重开/);
     assert.match(content, /旧(?:的)?待确认不自动升级/);
-    assert.match(content, /(?:OCR.*后期|图片辅助（后期项目)/);
   }
+  assert.match(current, /(?:OCR.*后期|图片辅助（后期项目)/);
+  assert.match(requirements.split('## 2.')[0], /(?:已授权|现开始|要求图片识别).*?(?:本地\s*(?:Rapid)?OCR|原图备份)/s);
   assert.match(current, /FieldsEdited\/RelationshipSubmitted\/QQSyncRequested均false/);
   assert.match(current, /139项/);
 });
@@ -166,17 +186,18 @@ test('Windows 登录自动启动已接入，真实登录验收仍后置', () => 
   assert.match(handoff, /自动启动.*(?:已接入|实现)/);
 });
 
-test('OCR 后置且 QQ 只读边界保持为硬约束', () => {
+test('图片OCR接入沿用QQ只读边界，图片日期仍须确认', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md',
     'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
     const content = read(file);
-    assert.match(content, /OCR.*(?:后期独立项目|后期基础|后置)/s, file);
+    assert.match(content, /图片.*本地\s*(?:Rapid)?OCR.*(?:接入|实施)/s, file);
+    assert.match(content, /(?:图片|OCR).*日期.*确认/s, file);
     assert.match(content, /(?:不得|绝不|不向|只读).*QQ.*(?:群聊|群|私聊).*发送|QQ.*只读.*(?:不得|绝不|不向).*发送/s, file);
   }
   const requirements = read('docs/requirements.md');
   assert.match(requirements, /普通通知转任务已实现.*完整编辑已接入.*通过自动回归及 Native 合成验证/s);
   assert.match(requirements, /可读变更记录.*卡片变化标记已接入.*手动新增已接入.*手动合并.*拆分已接入.*跨群可能重复建议已接入.*缓存清理.*(?:正在实施|已接入).*备份恢复.*桌面卡片恢复/s);
-  assert.doesNotMatch(requirements.split('## 4. 图片辅助')[0], /下一项实现图片下载与 OCR 队列/);
+  assert.match(requirements, /(?:已授权|现开始|要求图片识别).*?(?:本地\s*(?:Rapid)?OCR|原图备份)/s);
 });
 
 test('手动新增记录本地来源、日期精度、草稿与真实验收边界', () => {
@@ -663,12 +684,13 @@ test('临时切换方案、自动维护本机游戏名单及真实验收边界�
   assert.match(active, /恢复原本的普通 QQ/);
 });
 
-test('先完成确定功能，再统一进行真实验收', () => {
+test('先完成确定功能再统一真实验收，图片OCR按最新授权接入', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md']) {
     const current = read(file).split('## 2.')[0];
-    assert.match(current, /(?:当前开发顺序|最新工作顺序).*先.*(?:功能|已确定).*统一.*验收/s, file);
+    assert.match(current, /(?:当前开发顺序|(?:最新|历史)工作顺序|历史开发顺序).*先.*(?:功能|已确定).*统一.*验收/s, file);
     assert.match(current, /Windows 登录自动启动.*完整编辑.*(?:手动合并|合并拆分).*备份恢复.*桌面卡片恢复/s, file);
-    assert.match(current, /OCR.*(?:后期独立项目|后置)/s, file);
+    assert.match(current, /图片.*(?:本地\s*(?:Rapid)?OCR|原图备份)/s, file);
+    assert.match(current, /(?:已授权|要求继续|现开始)/, file);
     assert.match(current, /(?:统一|真实).*验收.*(?:后置|完成后)/s, file);
     assert.match(current, /游戏禁止同步.*(?:保持有效|有效需求不变)/, file);
     assert.match(current, /关机\/睡眠漏同步(?:规则|政策).*(?:未决定|待确认|未确认)|取消定时同步后不再补关机或睡眠期间的固定时刻/, file);
@@ -808,13 +830,13 @@ test('跨群重复建议要求人工核对并保留独立与拆分决定', () =>
   }
 });
 
-test('消息缓存保留全部状态证据和递归引用，并区分合成验证及后期图片缓存', () => {
+test('消息缓存保留全部状态证据和递归引用，并区分图片接入及真实验收', () => {
   for (const file of ['docs/requirements.md', 'docs/HANDOFF.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md']) {
     const content = read(file);
     for (const term of ['原消息发送时刻', '全部状态待确认', '递归引用链', '路由回执', '实际删除', '清理消息缓存']) {
       assert.ok(content.includes(term), `${file} 缺少缓存清理规则：${term}`);
     }
-    assert.match(content, /图片.*(?:尚未接入|后期|后置)/s, file);
+    assert.match(content, /图片.*本地\s*(?:Rapid)?OCR.*(?:原图备份|图片备份)/s, file);
     assert.match(content, /真实.*(?:后置|未操作|不操作)/s, file);
   }
   const plan = read('docs/superpowers/plans/2026-10-13-cache-cleanup.md');

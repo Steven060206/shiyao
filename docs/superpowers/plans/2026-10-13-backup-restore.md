@@ -14,7 +14,7 @@
 
 - QQ/NapCat 只读，不发送群聊/私聊或系统通知。
 - 仅验证隔离合成账号；不覆盖真实数据、切换默认入口或运行版本。
-- 原图片当前仅有 AssetId。包记录 not-downloaded、空路径及校验值；有未下载图片时明确显示“不完整：未包含原图”，仍允许用户预览并确认恢复已有本地数据。图片下载和完整图片验收仍随后期 OCR 项目实施。
+- 2026-10-28 已授权图片下载、本地 OCR 和原图备份：包纳入快照引用的已下载原图、长度/SHA256及识别记录；同图去重，保留原消息。图片日期须用户确认，不能因备份恢复变为正式时间。仍未下载或实际缺失的原图继续记录 not-downloaded、空路径及校验值，明确显示“不完整：未包含原图”；旧无图片表备份兼容，真实图片的完整验收单独记录。此前仅 AssetId 的方案保留为历史，不再作为当前实现边界。
 - 不包含 Token、登录材料、其他账号、本机游戏扫描缓存或 active-account.txt。
 - 保存账号课程关系、已读版本、四库全部历史及原撤销期限；应用共用自启动、布局和界面偏好在恢复预览中明确列出。
 - 失败或中断恢复原目录和原共用设置；启动须先恢复未完成切换，再构造工作区。
@@ -30,7 +30,7 @@
 
 - [x] 编写失败测试：所有状态/人工覆盖/关系/历史/撤销期限往返；缺失、校验损坏、账号、版本、无效JSON拒绝；不改原目录；恢复前备份；设置及目录切换失败回滚；启动中断回滚。
 - [x] 根代理运行 `dotnet test tests/MessagePurify.Infrastructure.Tests --configuration Release --no-restore --filter FullyQualifiedName~AccountBackupTests`，确认未实现失败。
-- [x] 固定 ZIP 路径：manifest.json、account 四库与 workspace-settings.json、settings/app-settings.json、settings/interface-preferences.json、可选 desktop-layout.json。文件清单严格核对长度/校验和；四库 integrity/schema/account/table/JSON/证据归属只读校验。
+- [x] 固定 ZIP 路径：manifest.json、account 四库与 workspace-settings.json、settings/app-settings.json、settings/interface-preferences.json、可选 desktop-layout.json；2026-10-28 增加严格清单引用的 account/images/<sha256>.<图片扩展名>。文件清单严格核对长度/校验和；四库 integrity/schema/account/table/JSON/证据归属只读校验。
 - [x] gate 内取得四库保留锁，独立只读源调用 BackupDatabase；校验暂存产物后临时 ZIP 改名。结果持久化到账号外 backup-history.json，不导入旧位置结果。
 - [x] 恢复前导出同格式自动备份；持久化 rollback 记录，整体切目录和共用设置；失败及重启中断回滚，成功后再提交记录。
 

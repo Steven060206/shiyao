@@ -1,5 +1,8 @@
 'use strict';
 
+const imageStyles = document.createElement('link');
+imageStyles.rel = 'stylesheet'; imageStyles.href = 'image-evidence.css'; document.head.append(imageStyles);
+
 const $ = id => document.getElementById(id);
 const html = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 const pages = { tasks: '任务', pending: '待确认', notices: '通知', completed: '已完成', trash: '回收站', settings: '设置' };
@@ -35,6 +38,7 @@ let filters = { search: '', course: '', state: 'active' }, detailSignature = '',
 let detailError = null, hostError = '', toastTimer, undoTimer, undoScheduledFor;
 let manualOpen = false, structureOpen = null, mergedSourceId = null;
 let isRestoring = false, backupPreview = null;
+let imagePreview = null;
 let batchRunning = false, batchResult = '', batchEpoch = 0;
 const batchSelection = new Map();
 const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), structureDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
@@ -147,7 +151,7 @@ function request(operation, parameters, itemId = null, complete = null) {
     else if (pending.operation === 'create-task') {
       const draft = manualDrafts.get(pending.accountId);
       if (draft?.id === pending.itemId) { draft.unconfirmed = true; draft.error = '保存结果尚未确认，草稿已保留。请先重试确认保存，再修改内容。'; }
-    } else if (pending.itemId && pending.operation !== 'confirm-group') detailError = { id: pending.itemId, message: errorLabel('command_timeout') };
+    } else if (pending.itemId && !['confirm-group', 'retry-image'].includes(pending.operation)) detailError = { id: pending.itemId, message: errorLabel('command_timeout') };
     else hostError = errorLabel('command_timeout');
     render();
   }, 15000);
@@ -164,7 +168,7 @@ function request(operation, parameters, itemId = null, complete = null) {
     else hostError = errorLabel('bridge_unavailable');
   }
   updateDetailControls(); renderStatus();
-  if ((operation === 'clean-cache' || backupOperations.includes(operation)) && page === 'settings') renderSettings();
+  if ((['clean-cache', 'retry-image'].includes(operation) || backupOperations.includes(operation)) && page === 'settings') renderSettings();
 }
 function command(operation, item, extra = {}) {
   if (!snapshot || !item || busy.has(item.id)) return;
@@ -285,7 +289,12 @@ function receive(message) {
       }
       if (pending.accountId !== snapshot?.accountId) { render(); return; }
     }
-    if (pending.complete || pending.structural || pending.operation === 'clean-cache') { /* Batch results are summarized beside the selection. */ }
+    if (pending.operation === 'retry-image') {
+      if (pending.accountId !== snapshot?.accountId || message.snapshot && message.snapshot.accountId !== pending.accountId) { render(); return; }
+      hostError = message.success ? '' : errorLabel(message.error);
+      if (message.success) toast('已加入图片处理队列，连接就绪后继续');
+    }
+    if (pending.complete || pending.structural || ['clean-cache', 'retry-image'].includes(pending.operation)) { /* These operations have their own result handling. */ }
     else if (!message.success) {
       if (pending.operation === 'mark-read') { /* Retry only when another item version is viewed. */ }
       else if (pending.operation === 'create-task') { /* Keep the account's manual draft for retry. */ }
@@ -587,8 +596,50 @@ function manualFormHTML(draft) {
     <label class="field">优先级<select name="priority"><option value="auto" ${draft.priority === 'auto' ? 'selected' : ''}>自动（按日期调整）</option>${[0, 1, 2, 3].map(priority => `<option value="${priority}" ${String(priority) === draft.priority ? 'selected' : ''}>P${priority}</option>`).join('')}</select></label>
     <p class="error" id="manual-task-error" role="alert" hidden></p><div class="detail-actions"><button type="submit" class="button primary" data-action="create-task">添加任务</button><button type="button" class="button" data-action="cancel-new-task">取消</button></div></form>`;
 }
+function imageUrl(image) {
+  if (!/^[0-9a-f]{64}$/.test(image?.id || '') || !/^\d{1,64}$/.test(snapshot?.accountId || '')
+    || !Number.isSafeInteger(generation()) || generation() < 0) return null;
+  const url = `/evidence/${snapshot.accountId}/${generation()}/${image.id}`;
+  return image.url === url ? url : null;
+}
+function evidenceImage(id) {
+  return [...(snapshot?.imageQueue || []), ...items().flatMap(item => [...(item.evidence || []), ...(item.changes || []).flatMap(change => change.evidence || [])])]
+    .flatMap(source => source.images || []).find(image => image.id === id);
+}
+function imageHTML(image, index) {
+  const url = imageUrl(image), recognized = image.status === 'recognized';
+  const status = ({ pending: '等待下载原图', downloaded: '原图已保存，等待本地识别',
+    recognized: image.ocrText?.trim() ? '本地识别完成' : '未识别到文字',
+    'download-failed': '原图下载失败，可重试', 'ocr-failed': '文字识别失败，原图已保留' })[image.status] || '图片状态待更新';
+  const retry = image.canRetry && ['download-failed', 'ocr-failed'].includes(image.status) && /^[0-9a-f]{64}$/.test(image.id || '');
+  return `<article class="image-evidence" data-image-id="${html(image.id)}">${url ? `<button type="button" class="image-preview-button" data-action="preview-image" data-image-id="${html(image.id)}" aria-label="查看第 ${index + 1} 张原图"><img class="evidence-thumbnail" src="${html(url)}" alt="原消息图片 ${index + 1}" loading="lazy"><span>查看原图</span></button>` : ''}<p class="image-status" role="status">${html(status)}</p>${recognized && image.ocrText?.trim() ? `<details class="image-ocr"><summary>查看识别文字</summary><pre>${html(image.ocrText)}</pre><p class="hint">识别结果可能有误；图片中的日期仅作建议，请核对后确认。</p></details>` : ''}${retry ? `<button type="button" class="button small" data-action="retry-image" data-image-id="${html(image.id)}">重试图片处理</button>` : ''}</article>`;
+}
 function evidenceHTML(evidence) {
-  return evidence.map(source => `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${source.imageCount > 0 ? `<div class="image-placeholder">原消息含 ${html(source.imageCount)} 张图片 · 图片读取与 OCR 尚未接入，请在 QQ 核对原图。</div>` : ''}`).join('');
+  return evidence.map(source => {
+    const images = source.images || [], missing = Math.max(0, (source.imageCount || 0) - images.length);
+    return `<div class="source-meta">${html(source.groupName || source.groupId || '来源群')} · ${html(source.senderId || '发送者待核对')} · ${html(source.sentAt ? new Date(source.sentAt).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai', hour12: false }) : '发送时间暂缺')}</div><div class="message">${html(source.text)}</div>${images.length ? `<div class="image-gallery">${images.map(imageHTML).join('')}</div>` : ''}${missing ? `<div class="image-placeholder">尚有 ${html(missing)} 张图片待下载原图，请在 QQ 核对原图。</div>` : ''}`;
+  }).join('');
+}
+function closeImagePreview() {
+  $('image-preview-dialog')?.close();
+  $('image-preview-original')?.removeAttribute('src'); imagePreview = null;
+}
+function previewImage(image) {
+  const url = imageUrl(image); if (!url || restoreLocked()) return;
+  let dialog = $('image-preview-dialog');
+  if (!dialog) {
+    dialog = document.createElement('dialog'); dialog.id = 'image-preview-dialog'; dialog.setAttribute('aria-label', '原消息图片');
+    dialog.innerHTML = '<div class="image-preview-toolbar"><span>原消息图片</span><button type="button" class="button small" data-action="close-image-preview" autofocus>关闭原图</button></div><img id="image-preview-original" alt="原消息完整图片">';
+    dialog.addEventListener('close', () => { if (!dialog.open) { $('image-preview-original').removeAttribute('src'); imagePreview = null; } });
+    dialog.addEventListener('click', event => { if (event.target === dialog) closeImagePreview(); });
+    document.body.append(dialog);
+  }
+  imagePreview = { accountId: snapshot.accountId, generation: generation(), id: image.id, url };
+  $('image-preview-original').src = url; if (!dialog.open) dialog.showModal();
+}
+function syncImagePreview() {
+  if (imagePreview && (restoreLocked() || imagePreview.accountId !== snapshot?.accountId || imagePreview.generation !== generation()
+    || imageUrl(evidenceImage(imagePreview.id)) !== imagePreview.url)) closeImagePreview();
 }
 function sourceHTML(item) {
   if (item.source === 'manual' && !item.evidence?.length) return '<section class="source-section"><h3 class="section-label">任务来源</h3><p class="hint">手动添加，使用任务的优先级和完成规则。</p></section>';
@@ -753,7 +804,8 @@ function updateDetailControls() {
     const options = courseOptions().map(course => `<option value="${html(course)}"></option>`).join('');
     if (courseList.innerHTML !== options) courseList.innerHTML = options;
   }
-  $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && (busy.has(item.id) || busy.has(structureBusyKey(snapshot?.accountId, item.id)))) || (button.id === 'pending-confirm-button' && !item?.canAccept && !item?.canAcceptNotice); });
+  $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && (busy.has(item.id) || busy.has(structureBusyKey(snapshot?.accountId, item.id)))) || (button.id === 'pending-confirm-button' && !item?.canAccept && !item?.canAcceptNotice)
+    || button.dataset.action === 'retry-image' && busy.has(`image:${button.dataset.imageId}`); });
   const structuralForm = $('merge-task-form') || $('split-task-form'), structuralDraft = structureDraft();
   if (structuralForm && structuralDraft) {
     const saving = busy.has(structureBusyKey(snapshot.accountId, item.id)) || busy.has(item.id);
@@ -799,19 +851,21 @@ function renderSettings() {
   const result = backupResults.get(snapshot?.accountId), backupError = backupErrors.get(snapshot?.accountId) || '';
   const preview = backupPreview?.preview?.accountId === snapshot?.accountId ? backupPreview : null;
   const backingUp = backupBusy(), restoring = restoreLocked();
+  const imageQueue = snapshot?.imageQueue || [], imageBusy = [...busy].filter(key => key.startsWith('image:'));
   if (!restoring && $('desktop-transparency-setting')?.matches(':active')) return;
-  const signature = JSON.stringify([snapshot?.accountId, generation(), pinnedGroups, recheck, recheckError, cleanup, cleanupError, cleanupBusy, result, preview, backupError, backingUp, restoring, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
+  const signature = JSON.stringify([snapshot?.accountId, generation(), pinnedGroups, recheck, recheckError, cleanup, cleanupError, cleanupBusy, result, preview, backupError, backingUp, restoring, imageQueue, imageBusy, status && { ...status, updatedAt: undefined }, preferences, startupEnabled, desktop]);
   if (signature === settingsSignature) return;
   retainFocus($('settings-panel'), () => {
     $('settings-panel').innerHTML = `<section class="settings-section"><h2>界面</h2><div class="setting-row"><span>主题</span><select id="theme-setting"><option value="system">跟随 Windows</option><option value="light">浅色</option><option value="dark">深色</option></select></div><div class="setting-row"><span>动画</span><select id="motion-setting"><option value="system">跟随系统</option><option value="reduce">减少动画</option></select></div></section>
       <section class="settings-section"><h2>启动</h2><div class="setting-row"><span>登录 Windows 后自动启动</span><select id="autostart-setting"><option value="on">开启</option><option value="off">关闭</option></select></div><p class="hint">开启后登录 Windows 时在托盘后台运行，桌面卡片继续显示。</p></section>
-      <section class="settings-section backup-section"><h2>备份与恢复</h2><p>导出当前 QQ 账号的全部本地数据和历史。恢复会整份覆盖当前账号，并先自动生成恢复前备份。</p><p class="hint">凭据不包含在备份内，恢复后请核对 QQ 连接设置。尚未下载的图片只保留引用，请在 QQ 查看原图。</p><p id="backup-result">${result ? `${result.preRestoreBackupPath ? '恢复完成' : '最近导出'}：${html(syncTimeLabel(result.createdAt, '时间待确认'))} · ${backupCompleteness(result)}<br>${html(result.path)}${result.preRestoreBackupPath ? `<br>恢复前备份：${html(result.preRestoreBackupPath)}` : ''}` : '尚无备份记录。'}</p><p id="backup-error" class="error" role="alert" ${backupError ? '' : 'hidden'}>${html(backupError)}</p><div class="detail-actions"><button class="button small" data-action="export-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>导出备份</button><button class="button small" data-action="inspect-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>恢复备份</button><button class="button small" data-action="open-backup-location" ${!result || backingUp ? 'disabled' : ''}>打开备份位置</button></div>${preview ? `<div id="backup-preview" class="backup-preview" data-account-id="${html(preview.preview.accountId)}" data-created-at="${html(preview.preview.createdAt)}" data-task-count="${html(preview.preview.taskCount)}" data-review-count="${html(preview.preview.reviewCount)}" data-notice-count="${html(preview.preview.noticeCount)}"><h3>确认恢复范围</h3><p>QQ 账号：${html(preview.preview.accountId)} · ${html(syncTimeLabel(preview.preview.createdAt, '时间待确认'))}</p><p>任务 ${html(preview.preview.taskCount)} 项 · 待确认 ${html(preview.preview.reviewCount)} 项 · 通知 ${html(preview.preview.noticeCount)} 项</p><p>覆盖此账号全部数据、所有状态和历史，包括证据引用、课程关联、人工修改、提醒台账及原撤销期限。</p><p>共用设置也将恢复：自动启动、桌面卡片布局、主题与动画。</p><p>${backupCompleteness(preview.preview)}</p><p class="hint">不会合并当前历史，不重置撤销期限，也不发送旧提醒。</p><div class="detail-actions"><button class="button primary" data-action="restore-backup" ${backingUp || restoring ? 'disabled' : ''}>${restoring ? '正在恢复…' : '确认覆盖并恢复'}</button><button class="button" data-action="cancel-backup" ${backingUp || restoring ? 'disabled' : ''}>取消</button></div></div>` : ''}${restoring ? '<p class="hint" role="status">账号正在恢复，请等待结果。事项和卡片操作已暂停。</p>' : backingUp ? '<p class="hint" role="status">正在处理备份，请等待结果。</p>' : ''}</section>
+      <section class="settings-section backup-section"><h2>备份与恢复</h2><p>导出当前 QQ 账号的全部本地数据和历史。恢复会整份覆盖当前账号，并先自动生成恢复前备份。</p><p class="hint">凭据不包含在备份内，恢复后请核对 QQ 连接设置。已保存的原图和识别结果会随备份导出；未下载的图片仅保留引用，恢复预览会列出缺失数量。</p><p id="backup-result">${result ? `${result.preRestoreBackupPath ? '恢复完成' : '最近导出'}：${html(syncTimeLabel(result.createdAt, '时间待确认'))} · ${backupCompleteness(result)}<br>${html(result.path)}${result.preRestoreBackupPath ? `<br>恢复前备份：${html(result.preRestoreBackupPath)}` : ''}` : '尚无备份记录。'}</p><p id="backup-error" class="error" role="alert" ${backupError ? '' : 'hidden'}>${html(backupError)}</p><div class="detail-actions"><button class="button small" data-action="export-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>导出备份</button><button class="button small" data-action="inspect-backup" ${!loadedAccount() || backingUp || restoring ? 'disabled' : ''}>恢复备份</button><button class="button small" data-action="open-backup-location" ${!result || backingUp ? 'disabled' : ''}>打开备份位置</button></div>${preview ? `<div id="backup-preview" class="backup-preview" data-account-id="${html(preview.preview.accountId)}" data-created-at="${html(preview.preview.createdAt)}" data-task-count="${html(preview.preview.taskCount)}" data-review-count="${html(preview.preview.reviewCount)}" data-notice-count="${html(preview.preview.noticeCount)}"><h3>确认恢复范围</h3><p>QQ 账号：${html(preview.preview.accountId)} · ${html(syncTimeLabel(preview.preview.createdAt, '时间待确认'))}</p><p>任务 ${html(preview.preview.taskCount)} 项 · 待确认 ${html(preview.preview.reviewCount)} 项 · 通知 ${html(preview.preview.noticeCount)} 项</p><p>覆盖此账号全部数据、所有状态和历史，包括证据引用、课程关联、人工修改、提醒台账及原撤销期限。</p><p>共用设置也将恢复：自动启动、桌面卡片布局、主题与动画。</p><p>${backupCompleteness(preview.preview)}</p><p class="hint">不会合并当前历史，不重置撤销期限，也不发送旧提醒。</p><div class="detail-actions"><button class="button primary" data-action="restore-backup" ${backingUp || restoring ? 'disabled' : ''}>${restoring ? '正在恢复…' : '确认覆盖并恢复'}</button><button class="button" data-action="cancel-backup" ${backingUp || restoring ? 'disabled' : ''}>取消</button></div></div>` : ''}${restoring ? '<p class="hint" role="status">账号正在恢复，请等待结果。事项和卡片操作已暂停。</p>' : backingUp ? '<p class="hint" role="status">正在处理备份，请等待结果。</p>' : ''}</section>
       <section class="settings-section"><h2>清理消息缓存</h2><p>仅清理最近 7 天分析窗口之外、已处理且没有保留引用的临时消息。任务、待确认、普通通知的原始证据和处理记录长期保留；未处理消息及其引用也会保留。</p><p id="cache-cleanup-result">${cleanup ? `最近成功清理：${html(syncTimeLabel(cleanup.completedAt, '时间待确认'))} · 实际删除 ${html(cleanup.deletedMessages)} 条消息。` : '尚无成功清理记录。'}</p><p id="cache-cleanup-error" class="hint" role="alert" ${cleanupError ? '' : 'hidden'}>${html(cleanupError)}</p><button class="button small" data-action="clean-cache" ${!loadedAccount() || cleanupBusy ? 'disabled' : ''}>${cleanupBusy ? '正在清理…' : '清理消息缓存'}</button></section>
       <section class="settings-section"><h2>课程与置顶群</h2><p>按真实置顶群名称确认课程；无需先填写课程名单。保存关联后重查仍保留的本地消息及任务证据，找回可靠遗漏事项；已有人工处理和任务状态保留，已有待确认仍需逐项核对，课程冲突进入待确认。</p><p id="course-recheck-result">${courseRecheckHTML(recheck)}</p><p id="course-recheck-error" class="hint" role="alert" ${recheckError ? '' : 'hidden'}>${html(recheckError)}</p>
       ${pinnedGroups.length ? pinnedGroups.map(group => {
         if (!groupDrafts.has(group.groupId)) groupDrafts.set(group.groupId, group.course || group.suggestedCourse || '');
         return `<div class="group-setting" data-group-id="${html(group.groupId)}"><h3>${html(group.name)}</h3><p>建议课程：${html(group.suggestedCourse || '请核对群名称')}${group.excluded ? ' · 已排除' : group.course ? ' · 已确认' : ' · 待确认'}</p><label class="field">课程或分类<input name="course" maxlength="80" value="${html(groupDrafts.get(group.groupId))}"></label><div class="detail-actions"><button class="button primary small" data-action="confirm-group">确认关联</button><button class="button small" data-action="exclude-group">${group.excluded ? '恢复接收并确认' : '排除此群'}</button></div></div>`;
       }).join('') : '<p class="hint">尚无置顶群名单。连接 QQ 后会显示可确认的真实群。</p>'}</section>
+      <section class="settings-section" id="image-queue"><h2>待处理图片</h2><p>原图与识别状态可在这里核对；识别出的日期需在待确认中确认。</p>${imageQueue.length ? evidenceHTML(imageQueue) : '<p class="hint">暂无待处理图片。</p>'}</section>
       ${syncSettingsHTML(pinnedGroups)}
       <section class="settings-section"><h2>桌面卡片提醒</h2><p>通过桌面卡片提醒，不播放声音或发送系统通知。</p><p>任务与待确认使用两张常驻桌面卡片，普通群通知仍在通知列表查看。</p><p id="desktop-status">${desktop.state === 'attached' ? '两张桌面卡片已挂载。' : desktop.state === 'unavailable' ? '桌面卡片暂不可用，仍可在主界面查看任务和待确认。' : '桌面卡片正在等待挂载。'}</p></section>`;
     $('theme-setting').value = preferences.theme; $('motion-setting').value = preferences.motion; $('autostart-setting').value = startupEnabled ? 'on' : 'off';
@@ -819,6 +873,8 @@ function renderSettings() {
     $('desktop-status').insertAdjacentHTML('beforebegin', `<div class="setting-row"><label for="desktop-transparency-setting">卡片底色透明度</label><div class="transparency-control"><input id="desktop-transparency-setting" type="range" min="0" max="100" step="1" value="${transparency}"><output id="desktop-transparency-value" for="desktop-transparency-setting">${transparency}%</output></div></div><p class="hint">0%为实色，100%为透明；文字不受影响。拖动卡片靠近另一张时自动吸附，拖离即可解除。</p>`);
     $('settings-panel').querySelectorAll('select,input').forEach(element => { element.disabled = restoring; });
     $('settings-panel').querySelectorAll('.group-setting button,[data-action=clean-cache]').forEach(button => { if (restoring) button.disabled = true; });
+    $('settings-panel').querySelectorAll('[data-action=retry-image]').forEach(button => { button.disabled = restoring || busy.has(`image:${button.dataset.imageId}`); });
+    $('settings-panel').querySelectorAll('[data-action=preview-image]').forEach(button => { button.disabled = restoring; });
   });
   settingsSignature = signature;
 }
@@ -829,9 +885,10 @@ function syncSettingsHTML(pinnedGroups) {
   const failures = status?.historyFailures?.length ? '<p>未完成历史读取：</p>' + status.historyFailures.map(failure => `<p>${html(pinnedGroups.find(group => group.groupId === failure.groupId)?.name || failure.groupId)} · ${html(errorLabel(failure.reason))}</p>`).join('') : '';
   return `<section class="settings-section"><h2>${status?.scheduled || byClick ? '同步状态' : '接收状态'}</h2><p>${html($('connection-status').textContent)} · ${html($('receiving-status').textContent)}</p>${times}${next}${byClick ? '<p class="hint">点击拾要或上方“自动同步”同步一次，完成后自动切回普通 QQ；游戏期间延后同步。</p>' : !status?.scheduled ? `<p>${html($('history-status').textContent)}</p>` : ''}${failures}</section>`;
 }
-function backupCompleteness(result) { return result.isComplete ? '本地备份校验通过。' : `不完整：未包含 ${html(result.missingImageCount)} 张原图，未包含原图文件，仅保留图片引用。`; }
+function backupCompleteness(result) { return result.isComplete ? '本地备份校验通过。' : `不完整：未包含 ${html(result.missingImageCount)} 张原图；这些图片仅保留引用，已保存的原图随备份包含。`; }
 function render() {
   renderStatus(); renderNav(); renderList(); renderDetail();
+  syncImagePreview();
   if (restoreLocked()) document.querySelectorAll('#detail-pane button,#detail-pane input,#detail-pane select,[data-action=new-task]').forEach(element => { element.disabled = true; });
 }
 function validateTime(item) {
@@ -946,6 +1003,14 @@ document.addEventListener('click', event => {
   const button = event.target.closest('button[data-action]');
   if (!button || button.disabled) return;
   const action = button.dataset.action;
+  if (action === 'close-image-preview') { closeImagePreview(); return; }
+  if (action === 'preview-image') { const image = evidenceImage(button.dataset.imageId); if (image) previewImage(image); return; }
+  if (action === 'retry-image') {
+    const image = evidenceImage(button.dataset.imageId);
+    if (!loadedAccount() || restoreLocked() || !image?.canRetry || !['download-failed', 'ocr-failed'].includes(image.status)
+      || !/^[0-9a-f]{64}$/.test(image.id) || busy.has(`image:${image.id}`)) return;
+    hostError = ''; request('retry-image', { accountId: snapshot.accountId, id: image.id, operationId: uuid(), version: 0 }, `image:${image.id}`); return;
+  }
   if (action === 'batch-ignore' || action === 'batch-accept') { void runBatchReview(action === 'batch-ignore' ? 'ignore' : 'accept-review'); return; }
   if (action === 'new-task') {
     if (!loadedAccount()) return;

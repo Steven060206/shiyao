@@ -2,6 +2,7 @@ using System.IO;
 using MessagePurify.Infrastructure.Application;
 using MessagePurify.Infrastructure.NapCat;
 using MessagePurify.Infrastructure.Backup;
+using MessagePurify.Infrastructure.Images;
 
 namespace MessagePurify.Windows.App;
 
@@ -16,6 +17,12 @@ public sealed class AppRuntime
     private readonly Func<CancellationToken, Task<MessageHostStatus>> syncBatch;
     private readonly TimeSpan syncTimeout;
     private readonly bool injectedBatch;
+    private readonly IImageTextRecognizer imageRecognizer;
+    private readonly SemaphoreSlim ocrGate = new(1, 1);
+    private readonly object ocrState = new();
+    private CancellationTokenSource? ocrPass;
+    private Task? ocrRunning;
+    private int qqRestored = 1;
     private Task? running;
     private int restoring;
     private int syncRequested;
@@ -32,7 +39,7 @@ public sealed class AppRuntime
 
     internal AppRuntime(string dataRoot, AccountWorkspace? workspace, Func<IQqSyncSession>? sessionFactory,
         IGameActivityDetector? gameDetector, Func<CancellationToken, Task<MessageHostStatus>>? syncBatch,
-        TimeSpan? syncTimeout)
+        TimeSpan? syncTimeout, IImageTextRecognizer? imageRecognizer = null)
     {
         this.dataRoot = Path.GetFullPath(dataRoot);
         Directory.CreateDirectory(this.dataRoot);
@@ -44,6 +51,9 @@ public sealed class AppRuntime
         this.syncBatch = syncBatch ?? RunBatchAsync;
         this.syncTimeout = syncTimeout ?? TimeSpan.FromMinutes(5);
         injectedBatch = syncBatch is not null;
+        this.imageRecognizer = imageRecognizer ?? new LocalOcrProcess(
+            Path.Combine(AppContext.BaseDirectory, "ocr", "python", "python.exe"),
+            Path.Combine(AppContext.BaseDirectory, "ocr", "worker.py"));
         Workspace = workspace;
         var accountPath = Path.Combine(this.dataRoot, "active-account.txt");
         if (Workspace is null && File.Exists(accountPath))
@@ -60,6 +70,7 @@ public sealed class AppRuntime
         if (running is not null) return;
         if (syncOnStartup) RequestSync();
         running = Task.Run(RunAsync);
+        ocrRunning = Task.Run(RunImageOcrAsync);
     }
 
     // The diagnostic mode reads the existing interface without starting or stopping QQ.
@@ -87,6 +98,7 @@ public sealed class AppRuntime
     public bool RequestSync()
     {
         if (stopping.IsCancellationRequested || IsRestoring || Interlocked.CompareExchange(ref syncRequested, 1, 0) != 0) return false;
+        CancelCurrentOcr();
         var now = DateTimeOffset.UtcNow;
         syncController.Request(new(SyncRequestKind.Startup, now, now));
         SetStatus(Status with { SyncPhase = "queued", Error = null });
@@ -103,6 +115,7 @@ public sealed class AppRuntime
         Changed?.Invoke();
         try
         {
+            await CancelOcrAndWaitAsync();
             var workspace = Workspace ?? throw new InvalidOperationException("尚未连接到 QQ 账号。");
             return await Task.Run(() => workspace.RestoreBackup(prepared, currentSettings,
                 DateTimeOffset.UtcNow, applySettings));
@@ -166,10 +179,12 @@ public sealed class AppRuntime
         string? failure = null;
         try
         {
+            await CancelOcrAndWaitAsync();
             if (!injectedBatch)
                 ReadAccessToken();
             SetStatus(Status with { SyncPhase = "starting", Transport = "connecting", Qq = "unknown", Receiving = "paused", Error = null, HistoryFailures = [] });
             session = sessionFactory();
+            Volatile.Write(ref qqRestored, 0);
             await session.StartAsync(batch.Token);
             batch.Token.ThrowIfCancellationRequested();
             SetStatus(Status with { SyncPhase = "syncing" });
@@ -196,7 +211,7 @@ public sealed class AppRuntime
             if (session is not null)
             {
                 SetStatus(Status with { SyncPhase = "restoring", Transport = "disconnected", Qq = "unknown", Receiving = "paused" });
-                try { await session.DisposeAsync(); }
+                try { await session.DisposeAsync(); Volatile.Write(ref qqRestored, 1); }
                 catch { failure = "qq-restore-failed"; defer = false; }
             }
             var partial = Status.History == "reading" ? "partial" : Status.History;
@@ -297,10 +312,95 @@ public sealed class AppRuntime
         }
     }
 
+    private bool CanRecognizeImages() => !stopping.IsCancellationRequested && !IsRestoring &&
+        Volatile.Read(ref syncRequested) == 0 && Volatile.Read(ref qqRestored) != 0 && syncController.CanSync;
+
+    private void CancelCurrentOcr()
+    {
+        lock (ocrState) ocrPass?.Cancel();
+    }
+
+    private async Task CancelOcrAndWaitAsync()
+    {
+        CancelCurrentOcr();
+        await ocrGate.WaitAsync();
+        ocrGate.Release();
+    }
+
+    private async Task RunImageOcrAsync()
+    {
+        try
+        {
+            while (!stopping.IsCancellationRequested)
+            {
+                var workspace = Workspace;
+                if (workspace is not null && CanRecognizeImages())
+                {
+                    await ocrGate.WaitAsync(stopping.Token);
+                    try
+                    {
+                        if (CanRecognizeImages()) await RecognizeImageQueueAsync(workspace);
+                    }
+                    finally { ocrGate.Release(); }
+                }
+                await Task.Delay(500, stopping.Token);
+            }
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested) { }
+    }
+
+    private async Task RecognizeImageQueueAsync(AccountWorkspace workspace)
+    {
+        using var pass = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
+        lock (ocrState) ocrPass = pass;
+        var recognizer = new OcrAttemptRecognizer(imageRecognizer);
+        var monitor = MonitorOcrPermissionAsync(pass);
+        try
+        {
+            await workspace.RecognizeImagesAsync(recognizer, DateTimeOffset.UtcNow, CanRecognizeImages, pass.Token);
+        }
+        catch (OperationCanceledException) when (pass.IsCancellationRequested) { }
+        catch (IOException) { /* 工作区不可用时保留队列，下一轮重新检查。 */ }
+        finally
+        {
+            pass.Cancel();
+            await monitor;
+            lock (ocrState) ocrPass = null;
+            if (recognizer.Attempted) Changed?.Invoke();
+        }
+    }
+
+    private async Task MonitorOcrPermissionAsync(CancellationTokenSource pass)
+    {
+        try
+        {
+            while (!pass.IsCancellationRequested)
+            {
+                if (!CanRecognizeImages()) { pass.Cancel(); return; }
+                await Task.Delay(100, pass.Token);
+            }
+        }
+        catch (OperationCanceledException) when (pass.IsCancellationRequested) { }
+    }
+
+    private sealed class OcrAttemptRecognizer(IImageTextRecognizer inner) : IImageTextRecognizer
+    {
+        public bool Attempted { get; private set; }
+        public Task<ImageRecognition> RecognizeAsync(string path, CancellationToken cancellationToken = default)
+        {
+            Attempted = true;
+            return inner.RecognizeAsync(path, cancellationToken);
+        }
+    }
+
     public async Task StopAsync()
     {
         stopping.Cancel();
-        if (running is not null) await running;
-        stopping.Dispose();
+        try { await Task.WhenAll(running ?? Task.CompletedTask, ocrRunning ?? Task.CompletedTask); }
+        finally
+        {
+            try { if (imageRecognizer is IAsyncDisposable disposable) await disposable.DisposeAsync(); }
+            finally { ocrGate.Dispose(); stopping.Dispose(); }
+        }
     }
 }

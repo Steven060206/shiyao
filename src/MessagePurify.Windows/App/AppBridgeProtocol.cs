@@ -14,7 +14,7 @@ public static class AppBridgeProtocol
         "snapshot", "sync-now", "complete", "undo-complete", "archive", "restore", "ignore", "undo-ignore",
         "reject", "accept-review", "accept-notice", "accept-time", "edit-task", "create-task", "convert-notice", "confirm-group", "mark-read", "set-appearance", "set-autostart",
         "merge-tasks", "keep-separate", "split-task", "clean-cache", "export-backup", "inspect-backup",
-        "restore-backup", "cancel-backup", "open-backup-location"
+        "restore-backup", "cancel-backup", "open-backup-location", "retry-image"
     };
     private static readonly HashSet<string> ParameterNames = new(StringComparer.Ordinal)
     {
@@ -92,13 +92,21 @@ public static class AppBridgeProtocol
             if (parameters.TryGetProperty("generation", out var commandGeneration)
                 && (!commandGeneration.TryGetInt64(out var generationValue) || generationValue < 0)) return false;
             if (parameters.EnumerateObject().Any(p => p.Name is "theme" or "reducedMotion")) return false;
+            if (operation == "retry-image")
+            {
+                if (parameters.EnumerateObject().Count() != 5
+                    || parameters.EnumerateObject().Any(p => p.Name is not ("accountId" or "id" or "operationId" or "version" or "generation"))
+                    || !Text(parameters, "id", 64, out var imageId) || imageId.Length != 64
+                    || imageId.Any(c => c is not (>= '0' and <= '9') and not (>= 'a' and <= 'f'))
+                    || !parameters.TryGetProperty("generation", out _)) return false;
+            }
             if (operation != "snapshot")
             {
                 if (!Text(parameters, "accountId", 64, out var account) || account.Any(c => c is < '0' or > '9')
                     || !Text(parameters, "id", 1024, out _) || !Text(parameters, "operationId", 128, out _)
                     || !parameters.TryGetProperty("version", out var version) || !version.TryGetInt64(out var number)
-                    || number < (operation is "confirm-group" or "create-task" or "clean-cache" ? 0 : 1)
-                    || operation is "create-task" or "clean-cache" && number != 0) return false;
+                    || number < (operation is "confirm-group" or "create-task" or "clean-cache" or "retry-image" ? 0 : 1)
+                    || operation is "create-task" or "clean-cache" or "retry-image" && number != 0) return false;
             }
             if (operation == "accept-notice" && parameters.EnumerateObject().Any(p =>
                 p.Name is not ("accountId" or "id" or "operationId" or "version" or "generation"))) return false;

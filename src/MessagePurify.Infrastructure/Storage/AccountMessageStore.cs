@@ -85,6 +85,18 @@ public sealed class AccountMessageStore
         return messages;
     }
 
+    public IReadOnlyList<StoredMessage> ListRetained()
+    {
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT {Columns} FROM messages WHERE account_id=$account ORDER BY sent_utc_ticks,rowid;";
+        command.Parameters.AddWithValue("$account", AccountId);
+        using var reader = command.ExecuteReader();
+        var result = new List<StoredMessage>();
+        while (reader.Read()) result.Add(Read(reader));
+        return result;
+    }
+
     public bool TrySaveExtraction(MessageKey key, long expectedVersion,
         RuleExtractionResult extraction, DateTimeOffset processedAt)
     {

@@ -11,7 +11,7 @@
 3. 双击 `Start.cmd` 或桌面“拾要”。首次连接可能需要在 QQ 中重新登录；将想分析的群设为置顶。
 4. 在设置里核对群与课程关系；到“待确认”核对消息，普通通知可直接“确认并加入通知”，无需填写任务日期；需要行动的事项支持逐条或批量加入任务、忽略。任务也可以手动添加。
 
-程序已包含 .NET 运行时，不需要安装开发工具。界面需要 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)；Windows 11 通常已安装，若界面不能加载，请安装官方 Evergreen Runtime 后重试。
+完整下载包包含 .NET 运行时和本地 OCR 所需的 Python、模型及依赖，无需另装系统 Python。界面需要 [Microsoft Edge WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)；Windows 11 通常已安装，若界面不能加载，请安装官方 Evergreen Runtime 后重试。
 
 点击桌面入口或“自动同步”会临时退出普通 QQ，启动 NapCat Framework 读取消息，完成后恢复普通 QQ。托盘打开只显示窗口。关闭主窗口会留在托盘，托盘菜单“退出”才结束程序。游戏期间延后同步。
 
@@ -24,7 +24,7 @@
 - 同步保留已忽略和已确认的处理结果；所有消息按最新原消息时间倒序。已忽略消息位于独立“回收站”，无待办时隐藏提醒卡片，有新待办时自动显示。
 - 只读取置顶群；应用不向 QQ 群或私聊发送消息。消息和事项保存在当前 Windows 用户的 `%LOCALAPPDATA%\MessagePurify\App`。
 - 使用 NapCat Framework **v4.18.37**。现有真实 QQ 验证使用 **9.9.36-53644**；其他 QQ 版本需自行试用反馈。
-- 图片下载与 OCR 尚未接入；消息中的图片标识不能代替原图。真实多屏/睡眠恢复、实际游戏和长期稳定性仍在验收中。
+- beta.12 源码已实现图片下载、本地 OCR 和原图备份（2026-10-28）：原图保存在本机，识别文字与图片日期仅作建议，用户确认后才成为正式时间；原有人工处理和任务保留。发布及真实图片验收结果见交接记录，历史 beta.11 未包含此功能。真实多屏/睡眠恢复、实际游戏和长期稳定性仍在验收中。
 - 下载包不含开发者的聊天记录或登录资料。每位同学配置自己的 QQ；重新配置其他账号请使用新的解压文件夹。
 - 配置后请保留文件夹位置；QQ 安装路径变化时重新运行 `Setup.cmd`。不要将配置后的 `napcat` 目录、账号数据库或导出备份上传到公开仓库。
 
@@ -36,10 +36,18 @@
 dotnet publish src/MessagePurify.Windows/App/MessagePurify.Windows.App.csproj -c Release --self-contained true -o .tools/published/release
 ```
 
-从 [NapCat 官方 v4.18.37 Release](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37) 下载未配置的 `NapCat.Framework.zip`，再用 Python 3 创建同学下载包：
+准备独立 OCR 运行环境：开发机用 Python **3.12.10** 创建虚拟环境，并安装锁定依赖；从 [Python 官方发行目录](https://www.python.org/ftp/python/3.12.10/) 下载 `python-3.12.10-embed-amd64.zip`。准备脚本校验官方解释器哈希、依赖版本和三个本地模型，输出目录必须尚不存在。
 
 ```powershell
-python tools/build_release.py --publish-directory .tools/published/release --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.11
+py -3.12 -m venv .tools/ocr/venv
+.tools/ocr/venv/Scripts/python.exe -m pip install -r ocr/requirements.lock.txt
+python tools/prepare_ocr_runtime.py --python-archive PATH_TO/python-3.12.10-embed-amd64.zip --site-packages .tools/ocr/venv/Lib/site-packages --output-directory .tools/ocr/portable
+```
+
+从 [NapCat 官方 v4.18.37 Release](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37) 下载未配置的 `NapCat.Framework.zip`，再用 Python 3 创建同学下载包。`--ocr-runtime-directory` 将完整 portable 目录复制到干净发布目录的 `ocr` 子目录；已存在时拒绝覆盖，省略此参数则要求发布目录已经包含完整 OCR。
+
+```powershell
+python tools/build_release.py --publish-directory .tools/published/release --ocr-runtime-directory .tools/ocr/portable --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.11
 ```
 
 测试命令：
@@ -50,6 +58,8 @@ dotnet test tests/MessagePurify.Infrastructure.Tests -c Release
 dotnet test tests/MessagePurify.Windows.Tests -c Release
 node --test tests/*.test.mjs
 python -m unittest discover -s tests -p "release_packaging_test.py"
+python -m unittest discover -s tests -p "ocr_runtime_packaging_test.py"
+.tools/ocr/venv/Scripts/python.exe -m unittest discover -s tests -p "ocr_worker_test.py"
 ```
 
 ## 许可证与依赖

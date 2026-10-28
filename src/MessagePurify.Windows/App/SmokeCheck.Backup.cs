@@ -96,7 +96,7 @@ internal static partial class SmokeCheck
             if (dialogs.ExportSelections != 1 || exported.AccountId != workspace.AccountId || exported.IsComplete
                 || exported.MissingImageCount != 1 || exported.CreatedAt < now)
                 throw new InvalidOperationException("设置页导出没有报告当前账号和未下载原图。");
-            await WaitAsync(window, "document.querySelector('#backup-result')?.textContent.includes('未包含原图') === true");
+            await WaitAsync(window, "document.querySelector('#backup-result')?.textContent.includes('不完整') === true && document.querySelector('#backup-result')?.textContent.includes('原图') === true");
             using (var archive = ZipFile.OpenRead(exportPath))
             {
                 string[] required = ["manifest.json", "account/messages.sqlite3", "account/tasks.sqlite3",
@@ -135,7 +135,7 @@ internal static partial class SmokeCheck
             if (BackupFingerprint(dataRoot, workspace, workspace.Snapshot(DateTimeOffset.UtcNow)) != changedFingerprint
                 || workspace.Generation != baselineGeneration)
                 throw new InvalidOperationException("仅预览备份已经覆盖了当前数据。");
-            if (await EvaluateAsync(window, "document.querySelector('#backup-preview').textContent.includes('共用设置') && document.querySelector('#backup-preview').textContent.includes('未包含原图') && document.querySelector('[data-action=restore-backup]').textContent.includes('确认覆盖并恢复')") != "true")
+            if (await EvaluateAsync(window, "document.querySelector('#backup-preview').textContent.includes('共用设置') && document.querySelector('#backup-preview').textContent.includes('不完整') && document.querySelector('#backup-preview').textContent.includes('原图') && document.querySelector('[data-action=restore-backup]').textContent.includes('确认覆盖并恢复')") != "true")
                 throw new InvalidOperationException("恢复预览缺少共用设置、图片范围或显式覆盖确认。");
             await EvaluateAsync(window, "document.querySelector('[data-action=cancel-backup]').click()");
             await WaitAsync(window, "document.querySelector('#backup-preview') === null || document.querySelector('#backup-preview').hidden");

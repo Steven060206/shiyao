@@ -18,7 +18,8 @@ public sealed record ApplicationSnapshot(string AccountId, IReadOnlyList<Applica
     IReadOnlyList<ApplicationGroup> Groups, DateTimeOffset GeneratedAt,
     IReadOnlyList<TaskReminderPlan> Reminders, CacheCleanupResult? CacheCleanup = null,
     string? CacheCleanupError = null, long Generation = 0,
-    CourseRecheckResult? CourseRecheck = null, string? CourseRecheckError = null);
+    CourseRecheckResult? CourseRecheck = null, string? CourseRecheckError = null,
+    IReadOnlyList<ApplicationEvidence>? ImageQueue = null);
 
 public sealed record ApplicationItem(string Id, string Kind, string Title, string? Course,
     string Group, string State, string? Due, string? Time, string TimeKind, int? Priority,
@@ -44,7 +45,10 @@ public sealed record ApplicationPendingChange(string Id, string Label, string? D
     string TimeKind, IReadOnlyList<string> Reasons);
 
 public sealed record ApplicationEvidence(string GroupId, string GroupName, string SenderId,
-    DateTimeOffset? SentAt, string Text, int ImageCount);
+    DateTimeOffset? SentAt, string Text, int ImageCount, IReadOnlyList<ApplicationImage>? Images = null);
+
+public sealed record ApplicationImage(string Id, string Status, string? Url, string? OcrText,
+    string? Error, bool CanRetry);
 
 public sealed record ApplicationGroup(string GroupId, string Name, string SuggestedCourse,
     string? Course, bool Excluded, bool Pinned);

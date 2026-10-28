@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
 using MessagePurify.Core;
+using MessagePurify.Infrastructure.Images;
 using MessagePurify.Infrastructure.Processing;
 using MessagePurify.Infrastructure.Reminders;
 using MessagePurify.Infrastructure.Tasks;
@@ -44,13 +45,15 @@ public sealed class AccountBackupService
             var accountStage = Path.Combine(stage, "account");
             Directory.CreateDirectory(accountStage);
             SnapshotDatabases(accountStage);
+            CopyOriginalImages(AccountDirectory, accountStage, accountId);
             File.WriteAllText(Path.Combine(accountStage, "workspace-settings.json"), workspaceSettingsJson);
             WriteSettings(Path.Combine(stage, "settings"), currentSettings);
             var content = ValidateAccountDirectory(accountStage, accountId);
             var files = PayloadPaths(currentSettings.DesktopLayoutJson is not null)
+                .Concat(content.Images.Where(image => image.Path is not null).Select(image => image.Path!).Distinct(StringComparer.Ordinal))
                 .Select(path => DescribeFile(stage, path)).ToArray();
             var manifest = new Manifest(1, 1, typeof(AccountBackupService).Assembly.GetName().Version?.ToString() ?? "1.0.0.0",
-                MessageRuleExtractor.RuleVersion, accountId, now.ToUniversalTime(), content.Images.Count == 0,
+                MessageRuleExtractor.RuleVersion, accountId, now.ToUniversalTime(), content.Images.All(image => image.Path is not null),
                 content.TaskCount, content.ReviewCount, content.NoticeCount, files, content.Images);
             WriteJson(Path.Combine(stage, "manifest.json"), manifest);
             _ = ValidatePackageDirectory(stage, destination);
@@ -76,7 +79,12 @@ public sealed class AccountBackupService
         {
             using (var archive = ZipFile.OpenRead(source))
             {
-                var allowed = PayloadPaths(includeLayout: true).Append("manifest.json").ToHashSet(StringComparer.Ordinal);
+                var manifests = archive.Entries.Where(entry => entry.FullName == "manifest.json").ToArray();
+                if (manifests.Length != 1) throw new InvalidDataException("备份清单缺失或重复。");
+                Manifest archiveManifest;
+                using (var input = manifests[0].Open())
+                    archiveManifest = JsonSerializer.Deserialize<Manifest>(input, Json) ?? throw new InvalidDataException("备份清单为空。");
+                var allowed = ManifestPayloadPaths(archiveManifest).Append("manifest.json").ToHashSet(StringComparer.Ordinal);
                 var seen = new HashSet<string>(StringComparer.Ordinal);
                 foreach (var entry in archive.Entries)
                 {
@@ -127,6 +135,7 @@ public sealed class AccountBackupService
             Directory.CreateDirectory(restored);
             foreach (var filename in Databases.Append("workspace-settings.json"))
                 File.Copy(Path.Combine(prepared.DirectoryPath, "account", filename), Path.Combine(restored, filename));
+            CopyOriginalImages(Path.Combine(prepared.DirectoryPath, "account"), restored, accountId);
             _ = ValidateAccountDirectory(restored, accountId);
             WriteJson(JournalPath, journal);
             Directory.Move(AccountDirectory, original);
@@ -226,10 +235,8 @@ public sealed class AccountBackupService
             string.IsNullOrWhiteSpace(manifest.ApplicationVersion) || string.IsNullOrWhiteSpace(manifest.RuleVersion) ||
             manifest.CreatedAt == default || manifest.Files is null || manifest.Evidence is null)
             throw new InvalidDataException("备份版本、账号或清单不受支持。");
-        var includeLayout = manifest.Files.Any(file => file.Path == "settings/desktop-layout.json");
-        var expected = PayloadPaths(includeLayout).ToHashSet(StringComparer.Ordinal);
-        if (manifest.Files.Count != expected.Count || !manifest.Files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal).SetEquals(expected))
-            throw new InvalidDataException("备份文件清单缺失或重复。");
+        var expected = ManifestPayloadPaths(manifest).ToHashSet(StringComparer.Ordinal);
+        var includeLayout = expected.Contains("settings/desktop-layout.json");
         foreach (var entry in manifest.Files)
         {
             var path = Path.Combine(directory, entry.Path);
@@ -244,7 +251,7 @@ public sealed class AccountBackupService
         ValidateApplicationSettings(settings);
         var content = ValidateAccountDirectory(Path.Combine(directory, "account"), accountId);
         if (manifest.TaskCount != content.TaskCount || manifest.ReviewCount != content.ReviewCount || manifest.NoticeCount != content.NoticeCount ||
-            manifest.IsComplete != (content.Images.Count == 0) || !manifest.Evidence.SequenceEqual(content.Images))
+            manifest.IsComplete != content.Images.All(image => image.Path is not null) || !manifest.Evidence.SequenceEqual(content.Images))
             throw new InvalidDataException("备份内容与清单不一致。");
         return (manifest, settings);
     }
@@ -279,6 +286,16 @@ public sealed class AccountBackupService
                 }
                 allMessages.Add(key, message);
             }
+        }
+        var imageRecords = ReadImageRecords(directory, owner, allMessages);
+        for (var index = 0; index < images.Count; index++)
+        {
+            var image = images[index];
+            if (!imageRecords.TryGetValue((image.MessageKey, image.SegmentIndex), out var record) || record.RelativePath is null) continue;
+            var localPath = OriginalImagePath(directory, record);
+            if (!File.Exists(localPath)) continue;
+            ValidateOriginalImage(localPath, record);
+            images[index] = image with { Status = "downloaded", Path = "account/" + record.RelativePath, Sha256 = record.Sha256 };
         }
         var tasks = new Dictionary<string, TaskItem>(StringComparer.Ordinal);
         var reviewCount = 0;
@@ -562,6 +579,94 @@ public sealed class AccountBackupService
         if (includeLayout) yield return "settings/desktop-layout.json";
     }
 
+    private static IReadOnlySet<string> ManifestPayloadPaths(Manifest manifest)
+    {
+        if (manifest.Files is null || manifest.Evidence is null || manifest.Files.Any(file => file is null ||
+                file.Length < 0 || !ValidSha256(file.Sha256)))
+            throw new InvalidDataException("备份文件清单无效。");
+        var expected = PayloadPaths(manifest.Files.Any(file => file.Path == "settings/desktop-layout.json"))
+            .ToHashSet(StringComparer.Ordinal);
+        var images = new HashSet<(MessageKey, int)>();
+        foreach (var image in manifest.Evidence)
+        {
+            if (image is null || image.SegmentIndex < 0 || !images.Add((image.MessageKey, image.SegmentIndex)))
+                throw new InvalidDataException("备份图片清单重复或无效。");
+            ValidateKey(image.MessageKey, manifest.AccountId);
+            if (image.Path is null)
+            {
+                if (image.Status != "not-downloaded" || image.Sha256 is not null)
+                    throw new InvalidDataException("备份缺失原图范围无效。");
+            }
+            else
+            {
+                if (image.Status != "downloaded" || !ValidImagePath(image.Path, image.Sha256, "account/images/"))
+                    throw new InvalidDataException("备份图片路径或校验值无效。");
+                expected.Add(image.Path);
+            }
+        }
+        if (manifest.Files.Count != expected.Count || !manifest.Files.Select(file => file.Path).ToHashSet(StringComparer.Ordinal).SetEquals(expected))
+            throw new InvalidDataException("备份文件清单缺失或重复。");
+        foreach (var image in manifest.Evidence.Where(image => image.Path is not null))
+            if (manifest.Files.Single(file => file.Path == image.Path).Sha256 != image.Sha256)
+                throw new InvalidDataException("备份图片与文件清单校验值不一致。");
+        return expected;
+    }
+
+    private static Dictionary<(MessageKey, int), ImageEvidenceRecord> ReadImageRecords(string directory, string owner,
+        IReadOnlyDictionary<MessageKey, SchoolMessage> messages)
+    {
+        var result = new Dictionary<(MessageKey, int), ImageEvidenceRecord>();
+        foreach (var image in AccountImageStore.ReadAll(Path.Combine(directory, "messages.sqlite3"), owner))
+        {
+            if (!messages.TryGetValue(image.Message, out var message) || image.SegmentIndex >= message.Segments.Count ||
+                message.Segments[image.SegmentIndex].Kind != SegmentKind.Image ||
+                message.Segments[image.SegmentIndex].AssetId != image.AssetId || !result.TryAdd((image.Message, image.SegmentIndex), image))
+                throw new InvalidDataException("备份图片与原消息关联不一致。");
+        }
+        return result;
+    }
+
+    private static void CopyOriginalImages(string sourceDirectory, string destination, string owner)
+    {
+        // 数据库快照决定要复制哪些文件，不扫描账号目录中的其他文件。
+        foreach (var image in AccountImageStore.ReadAll(Path.Combine(destination, "messages.sqlite3"), owner))
+        {
+            if (image.RelativePath is null) continue;
+            var source = OriginalImagePath(sourceDirectory, image);
+            if (!File.Exists(source)) continue; // 仍保存引用，清单明确标记不完整。
+            ValidateOriginalImage(source, image);
+            var target = OriginalImagePath(destination, image);
+            if (File.Exists(target)) { ValidateOriginalImage(target, image); continue; }
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(source, target);
+            ValidateOriginalImage(target, image);
+        }
+    }
+
+    private static string OriginalImagePath(string directory, ImageEvidenceRecord image)
+    {
+        if (!ValidImagePath(image.RelativePath, image.Sha256, "images/") || image.Length is null or <= 0 or > 32L * 1024 * 1024)
+            throw new InvalidDataException("备份原图路径或长度无效。");
+        var path = Path.Combine(directory, image.RelativePath!.Replace('/', Path.DirectorySeparatorChar));
+        foreach (var candidate in new[] { directory, Path.GetDirectoryName(path)!, path })
+            if ((File.Exists(candidate) || Directory.Exists(candidate)) && (File.GetAttributes(candidate) & FileAttributes.ReparsePoint) != 0)
+                throw new InvalidDataException("备份原图不能通过目录链接引用。");
+        return path;
+    }
+
+    private static void ValidateOriginalImage(string path, ImageEvidenceRecord image)
+    {
+        using var input = File.OpenRead(path);
+        if (input.Length != image.Length || Convert.ToHexString(SHA256.HashData(input)).ToLowerInvariant() != image.Sha256)
+            throw new InvalidDataException("备份原图校验失败。");
+    }
+
+    private static bool ValidSha256(string? hash) => hash is { Length: 64 } &&
+        hash.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+
+    private static bool ValidImagePath(string? path, string? hash, string prefix) => ValidSha256(hash) &&
+        new[] { "png", "jpg", "gif", "bmp", "tiff", "webp" }.Any(extension => path == prefix + hash + "." + extension);
+
     private static FileEntry DescribeFile(string directory, string path)
     {
         using var file = File.OpenRead(Path.Combine(directory, path));
@@ -569,7 +674,7 @@ public sealed class AccountBackupService
     }
 
     private static BackupResult Result(Manifest manifest, string source) => new(manifest.AccountId, source, manifest.CreatedAt,
-        manifest.IsComplete, manifest.Evidence.Count, manifest.TaskCount, manifest.ReviewCount, manifest.NoticeCount);
+        manifest.IsComplete, manifest.Evidence.Count(image => image.Path is null), manifest.TaskCount, manifest.ReviewCount, manifest.NoticeCount);
 
     private static void ValidateAccount(string account)
     {

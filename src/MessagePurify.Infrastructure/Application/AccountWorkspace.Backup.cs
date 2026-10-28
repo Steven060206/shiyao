@@ -28,6 +28,10 @@ public sealed partial class AccountWorkspace
             });
             cacheCleanupError = null;
             courseRecheckError = null;
+            images.EnsureSchema();
+            RegisterRetainedImages(now);
+            imageAnalysis.Clear();
+            pinnedGroups = new(settings.LastPinnedGroupIds ?? [], StringComparer.Ordinal);
             ConsolidateLegacyMessageReviews(now);
             Generation++;
             return result;

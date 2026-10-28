@@ -1,5 +1,13 @@
 # 项目检查
 
+## 2026-10-28 图片下载、本地 OCR 和原图备份
+
+用户已授权接入，当前实施以 `docs/superpowers/plans/2026-10-28-image-ocr.md` 为准，替代此前 OCR 后期独立项目安排。图片日期只作建议，用户确认后才成为正式时间；原消息、人工处理、任务及历史保留。自动回归、Native 合成、真实 QQ 图片及发布验证分别记录，以下历史测试计数保持其原有范围。
+
+`AccountImageStoreTests`、`OneBotImageTests`、`LocalOcrProcessTests`、`AccountWorkspaceImageTests` 与图片界面专项覆盖本地落盘、来源隔离、重开、失败重试、原图及 OCR 详情和人工保护。备份专项实际运行 `.tools/dotnet/dotnet.exe test tests/MessagePurify.Infrastructure.Tests --configuration Release --verbosity quiet --filter FullyQualifiedName~AccountBackupTests`，45/45 通过：包含原图/OCR往返、同图去重、缺图不完整、旧包兼容和失败回滚。
+
+发布包必须包含独立解释器、worker、三个本地模型、锁定依赖及许可。准备与复制命令见根 README；`python -m unittest discover -s tests -p release_packaging_test.py` 检查缺解释器/模型/依赖/许可拒绝、模型损坏、旧 worker、外部 Python 路径与整目录复制。`python -m unittest discover -s tests -p ocr_runtime_packaging_test.py` 使用中文空格路径、空 PATH、无效系统 Python 路径及网络禁止检查独立 OCR；合成学校通知、长图、空图和坏图结果不能替代真实图片验收。
+
 ## 2026-10-28 课程关联历史重查
 
 `CourseRecheckTests`覆盖保留消息恢复、原发送时间、全部人工决定与任务状态、合并拆分、跨账号/群隔离、非置顶、缺失证据、跨库回滚重试、旧备份与自动冲突往返。`node --test tests/course-recheck-ui.test.mjs`使用真实Chrome DOM检查范围/转义/草稿和课程冲突入口；Native的6项`course-recheck-*`通过正式WebView2修改合成关联、查看原任务并核对数据不变。合成结果不替代真实账号课程操作和跨电脑验收，实际命令与结果见交接。
@@ -69,7 +77,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/wa
 
 按原消息发送时刻与严格 7 天边界清理；专项检查全部状态待确认、任务、通知、合并拆分记录及递归引用链保护，未处理/未路由/处理版本变化消息保留，路由回执保留、重读去重、账号隔离、事务失败及暂停回滚、结果重开。设置页“清理消息缓存”显示最近成功时间和实际删除条数，验证失败、超时、账号切换、迟到响应及草稿焦点。
 
-存储 25 项、工作区 10 项与新增宿主 3 项组合 38/38，桥 38/38。页面新增7项回归，包括后续自动成功及刷新确认清除旧错误，原成功/过期快照/另一账号不能解除新错误；页面最终73/73。Release 全量 Core306/306、Infrastructure649/649、Windows318/318，Node133/133（文档41）均退出0；App build 退出0、0警告/0错误，自包含发布 `.tools/published/app-cache-cleanup/` 退出0。发布版 Native 报告 `.tools/desktop-validation/cache-cleanup-native.json` 为新写入、success=true、synthetic=true、52项通过（原45+新增7），实际删1条旧闲聊并保留3条旧证据，查看原文、工作区及正式页面重开、重读去重通过，最终卡片数量核对并截图查看。失败验证脚本的闲聊诊断、通知入口及初始快照时机已修正；三份失败报告保留在 `.tools/cache-cleanup-validation/`。图片附件缓存尚未接入，随后期 OCR 实施；未操作真实账号缓存，默认入口与运行版本未切换，统一真实验收后置。
+存储 25 项、工作区 10 项与新增宿主 3 项组合 38/38，桥 38/38。页面新增7项回归，包括后续自动成功及刷新确认清除旧错误，原成功/过期快照/另一账号不能解除新错误；页面最终73/73。Release 全量 Core306/306、Infrastructure649/649、Windows318/318，Node133/133（文档41）均退出0；App build 退出0、0警告/0错误，自包含发布 `.tools/published/app-cache-cleanup/` 退出0。发布版 Native 报告 `.tools/desktop-validation/cache-cleanup-native.json` 为新写入、success=true、synthetic=true、52项通过（原45+新增7），实际删1条旧闲聊并保留3条旧证据，查看原文、工作区及正式页面重开、重读去重通过，最终卡片数量核对并截图查看。失败验证脚本的闲聊诊断、通知入口及初始快照时机已修正；三份失败报告保留在 `.tools/cache-cleanup-validation/`。该历史验证时图片附件缓存尚未接入；当前图片下载、本地 OCR 和原图备份按2026-10-28计划实施；未操作真实账号缓存，默认入口与运行版本未切换，统一真实验收后置。
 
 ## 上一段跨群可能重复建议（2026-10-13）
 
@@ -87,7 +95,7 @@ powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File tests/wa
 
 实际 Release 验证：Core 306/306、Infrastructure 550/550（结构存储39项、工作区10项）、Windows 269/269（结构桥33项），Node 全量116/116（正式页面58/58、文档39/39），退出0。发布 `.tools/published/app-task-structure/` 无警告错误；Native 报告 `.tools/desktop-validation/task-structure-native.json` 为 success=true、synthetic=true、36项通过，覆盖从正式WebView2页面操作、重开、原证据/历史、旧ID与关联导航、两卡片刷新。默认入口及正在运行版本未切换，真实QQ统一验收后置；跨群自动合并建议协调尚未实现。
 
-## 当前范围决定（2026-10-12）
+## 历史范围决定（2026-10-12，OCR 后置安排已由2026-10-28接入决定替代）
 
 OCR 图片下载、附件存储、OCR 队列和重分析已调整为后期独立项目，本阶段不以 OCR 完成为门槛。额外的本机数据安全增强同样后置；测试仍必须保持 QQ/NapCat 只读，软件不得向 QQ 群聊或私聊发送消息。普通通知转任务、六字段完整编辑及可读变更记录/卡片变化标记已由工作区、桥协议、正式页面和 Native Smoke 专项覆盖；手动新增已完成并通过自动/Native 合成验证，手动合并/保持独立/拆分已实现并验证，跨群可能重复建议已完成并验证，消息缓存清理已实现并验证，下一阶段继续备份恢复和桌面卡片恢复。
 

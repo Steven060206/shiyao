@@ -6,6 +6,7 @@ using MessagePurify.Infrastructure.Processing;
 using MessagePurify.Infrastructure.Reminders;
 using MessagePurify.Infrastructure.Storage;
 using MessagePurify.Infrastructure.Tasks;
+using MessagePurify.Infrastructure.Images;
 
 namespace MessagePurify.Infrastructure.Application;
 
@@ -18,6 +19,7 @@ public sealed partial class AccountWorkspace
     private readonly AccountCandidateRouter router;
     private readonly LocalMessageProcessor processor;
     private readonly AccountReminderService reminders;
+    private readonly AccountImageStore images;
     private IReminderSink? reminderSink;
     private readonly string settingsPath;
     private WorkspaceSettings settings;
@@ -31,14 +33,17 @@ public sealed partial class AccountWorkspace
     {
         backup = new(dataRoot, accountId);
         messages = new(dataRoot, accountId);
+        images = new(dataRoot, accountId);
         tasks = new(dataRoot, accountId);
         router = new(messages, tasks);
         processor = new(messages);
         AccountId = accountId;
         settingsPath = Path.Combine(Path.GetDirectoryName(tasks.DatabasePath)!, "workspace-settings.json");
         settings = ReadSettings();
+        pinnedGroups = new(settings.LastPinnedGroupIds ?? [], StringComparer.Ordinal);
         reminders = new(dataRoot, accountId, tasks);
         ConsolidateLegacyMessageReviews(DateTimeOffset.UtcNow);
+        RegisterRetainedImages(DateTimeOffset.UtcNow);
     }
 
     public void SetAvailableGroups(IReadOnlyList<OneBotGroup> groups, IReadOnlySet<string> pinnedGroupIds)
@@ -55,6 +60,8 @@ public sealed partial class AccountWorkspace
             }
             availableGroups = names;
             pinnedGroups = new(pinnedGroupIds, StringComparer.Ordinal);
+            if (!(settings.LastPinnedGroupIds ?? []).ToHashSet(StringComparer.Ordinal).SetEquals(pinnedGroups))
+                SaveSettings(settings with { LastPinnedGroupIds = pinnedGroups.Order(StringComparer.Ordinal).ToArray() });
         }
     }
 
@@ -97,6 +104,7 @@ public sealed partial class AccountWorkspace
             try
             {
                 var result = router.CleanMessageCache(now, canContinue);
+                images.CleanUnreferencedOriginals();
                 cacheCleanupError = null;
                 return result;
             }
@@ -119,7 +127,9 @@ public sealed partial class AccountWorkspace
         var context = Context(message.Key.GroupId, now);
         if (context.CourseExcluded) return false;
         if (router.HasRouted(message.Key)) return false;
-        return processor.Ingest(message, pinnedGroupIds, context, origin, batchId, now);
+        var added = processor.Ingest(message, pinnedGroupIds, context, origin, batchId, now);
+        if (added) images.Register(message, now);
+        return added;
     }
 
     private int RouteGroup(string groupId, IReadOnlySet<string> pinnedGroupIds, DateTimeOffset now, Func<bool>? canContinue = null)
@@ -233,7 +243,9 @@ public sealed partial class AccountWorkspace
             }
             return new(AccountId, items, groups, now, reminders.Synchronize(now),
                 router.ReadCacheCleanupResult(), cacheCleanupError, Generation,
-                router.ReadCourseRecheckResult(), courseRecheckError);
+                router.ReadCourseRecheckResult(), courseRecheckError,
+                Evidence(images.List().Where(image => ImageAllowed(image) &&
+                    (image.Status != "recognized" || images.GetOriginalPath(image) is null)).Select(image => image.Message).Distinct().ToArray()));
         }
     }
 
@@ -268,7 +280,8 @@ public sealed partial class AccountWorkspace
             return new ApplicationEvidence(key.GroupId, GroupName(key.GroupId), message?.SenderId ?? "",
                 message?.SentAt, message is null ? "原消息暂不可用" : string.Join("\n",
                     message.Segments.Where(segment => segment.Kind != SegmentKind.Image).Select(segment => segment.Text)),
-                message?.Segments.Count(segment => segment.Kind == SegmentKind.Image) ?? 0);
+                message?.Segments.Count(segment => segment.Kind == SegmentKind.Image) ?? 0,
+                ImagesFor(key));
         }).ToArray();
 
     public void Execute(WorkspaceCommand command, DateTimeOffset now)
@@ -283,6 +296,11 @@ public sealed partial class AccountWorkspace
             ArgumentException.ThrowIfNullOrWhiteSpace(command.OperationId);
             switch (command.Operation)
             {
+                case "retry-image":
+                    if (command.Version != 0 || command.Generation is null)
+                        throw new ArgumentException("图片重试须提供当前代次及版本 0。", nameof(command));
+                    RetryImage(command.Id, command.Generation.Value, now);
+                    return;
                 case "clean-cache":
                     if (command.Id != "cache" || command.Version != 0)
                         throw new ArgumentException("缓存清理须使用 cache 标识及版本 0。", nameof(command));
@@ -400,6 +418,9 @@ public sealed partial class AccountWorkspace
         try
         {
             router.RecheckCourse(Context(command.Id, now), pinnedGroups);
+            imageAnalysis.Clear();
+            foreach (var key in images.List().Where(image => image.Message.GroupId == command.Id && image.Status == "recognized").Select(image => image.Message).Distinct())
+                ApplyImageAnalysis(key, now);
             courseRecheckError = null;
         }
         catch
@@ -424,6 +445,8 @@ public sealed partial class AccountWorkspace
 
     private RuleCandidate ReviewCandidate(PendingReview review)
     {
+        var imageSuggestion = ImageReviewCandidate(review);
+        if (imageSuggestion is not null) return imageSuggestion;
         if (review.State is not (ReviewState.Pending or ReviewState.Accepted) ||
             review.SplitParentTaskId is not null || review.Candidate.Time is not null)
             return review.Candidate;
@@ -524,7 +547,7 @@ public sealed partial class AccountWorkspace
     private static string? FormatTime(TaskTime? time) => time?.Time?.ToString("HH:mm", CultureInfo.InvariantCulture);
     private sealed record GroupRelationship(string Name, string? Course, bool Excluded);
     private sealed record WorkspaceSettings(string AccountId, Dictionary<string, GroupRelationship> Relationships,
-        Dictionary<string, long> ReadVersions);
+        Dictionary<string, long> ReadVersions, string[]? LastPinnedGroupIds = null);
 
     private WorkspaceSettings ReadSettings()
     {
