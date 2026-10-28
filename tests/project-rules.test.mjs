@@ -8,6 +8,19 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('课程关联重查已交付且保留人工决定，原图OCR仍为后期范围', () => {
+  const requirements = read('docs/requirements.md');
+  const current = read('docs/HANDOFF.md').split('### 课程关联历史重查')[1].split('### 自动同步后')[0];
+  for (const content of [requirements, current]) {
+    assert.match(content, /已实现、部署并发布beta\.10/);
+    assert.match(content, /人工忽略.*拒绝不重开/);
+    assert.match(content, /旧(?:的)?待确认不自动升级/);
+    assert.match(content, /(?:OCR.*后期|图片辅助（后期项目)/);
+  }
+  assert.match(current, /FieldsEdited\/RelationshipSubmitted\/QQSyncRequested均false/);
+  assert.match(current, /139项/);
+});
+
 test('软件更新持续同步GitHub源码与下载包，上传验证不足时保留真实状态', () => {
   for (const file of documents) {
     const content = read(file);
