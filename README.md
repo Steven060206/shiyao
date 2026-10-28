@@ -24,7 +24,7 @@
 - 同步保留已忽略和已确认的处理结果；所有消息按最新原消息时间倒序。已忽略消息位于独立“回收站”，无待办时隐藏提醒卡片，有新待办时自动显示。
 - 只读取置顶群；应用不向 QQ 群或私聊发送消息。消息和事项保存在当前 Windows 用户的 `%LOCALAPPDATA%\MessagePurify\App`。
 - 使用 NapCat Framework **v4.18.37**。现有真实 QQ 验证使用 **9.9.36-53644**；其他 QQ 版本需自行试用反馈。
-- beta.12 源码已实现图片下载、本地 OCR 和原图备份（2026-10-28）：原图保存在本机，识别文字与图片日期仅作建议，用户确认后才成为正式时间；原有人工处理和任务保留。发布及真实图片验收结果见交接记录，历史 beta.11 未包含此功能。真实多屏/睡眠恢复、实际游戏和长期稳定性仍在验收中。
+- beta.12 已接入图片下载、本地 OCR 和原图备份（2026-10-28）：原图保存在本机，识别文字与图片日期仅作建议，用户确认后才成为正式时间；原有人工处理和任务保留。发布及真实图片验收结果见交接记录，历史 beta.11 未包含此功能。真实多屏/睡眠恢复、实际游戏和长期稳定性仍在验收中。
 - 下载包不含开发者的聊天记录或登录资料。每位同学配置自己的 QQ；重新配置其他账号请使用新的解压文件夹。
 - 配置后请保留文件夹位置；QQ 安装路径变化时重新运行 `Setup.cmd`。不要将配置后的 `napcat` 目录、账号数据库或导出备份上传到公开仓库。
 
@@ -47,7 +47,7 @@ python tools/prepare_ocr_runtime.py --python-archive PATH_TO/python-3.12.10-embe
 从 [NapCat 官方 v4.18.37 Release](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37) 下载未配置的 `NapCat.Framework.zip`，再用 Python 3 创建同学下载包。`--ocr-runtime-directory` 将完整 portable 目录复制到干净发布目录的 `ocr` 子目录；已存在时拒绝覆盖，省略此参数则要求发布目录已经包含完整 OCR。
 
 ```powershell
-python tools/build_release.py --publish-directory .tools/published/release --ocr-runtime-directory .tools/ocr/portable --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.11
+python tools/build_release.py --publish-directory .tools/published/release --ocr-runtime-directory .tools/ocr/portable --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.12
 ```
 
 测试命令：

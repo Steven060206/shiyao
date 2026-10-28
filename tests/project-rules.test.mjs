@@ -85,6 +85,20 @@ test('最新GitHub测试版、下载附件和构建示例版本一致，保留�
   }
 });
 
+test('图片发布区分随包离线验证与受端口冲突阻碍的真实QQ验收', () => {
+  const report = read('docs/verification/2026-10-28-image-ocr.md');
+  for (const content of [report, read('docs/requirements.md'), read('docs/HANDOFF.md')]) {
+    assert.match(content, /beta\.12/);
+    assert.match(content, /3001.*(?:其他|占用|冲突)/);
+    assert.match(content, /真实QQ图片.*(?:未验收|阻碍)/);
+    assert.match(content, /(?:原消息|原四库|原有人工|人工状态).*(?:原样|不改|保留)/);
+  }
+  assert.match(report, /2177.*完整随包/);
+  assert.match(report, /空PATH.*禁socket.*四图OCR通过/);
+  assert.match(report, /InvokePattern.*失败.*未修改/);
+  assert.match(report, /70图片片段.*pending/);
+});
+
 test('同学分发与GitHub公开发布授权同步，并保留个人数据边界', () => {
   const requirements = read('docs/requirements.md').split('## 11. 同学分发与 GitHub 下载')[1]?.split('## 参考来源')[0];
   const handoff = read('docs/HANDOFF.md').split('### 同学分发与 GitHub 发布准备')[1]?.split('### 本轮修复前 QQ 连接诊断')[0];
