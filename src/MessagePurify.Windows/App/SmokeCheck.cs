@@ -38,17 +38,19 @@ internal static partial class SmokeCheck
     public static async Task RunAsync(AppWindow window, AccountWorkspace workspace, AppRuntime runtime,
         DesktopCardHost desktop, string dataRoot, string reportPath, System.Windows.Forms.NotifyIcon tray)
     {
-        var initiallyVisible = window.IsVisible;
-        window.Hide();
+        var handle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+        if (window.IsVisible || IsAppearanceWindowVisible(handle) || window.ShowInTaskbar || window.ShowActivated)
+            throw new InvalidOperationException("后台主窗口必须真正隐藏，不能留下可最小化的透明窗口。");
         tray.ContextMenuStrip!.Items[0].PerformClick();
         if (!window.IsVisible || runtime.Status.SyncPhase != "idle")
             throw new InvalidOperationException("托盘菜单打开必须只显示窗口，不发起同步。");
+        window.WindowState = WindowState.Minimized;
         window.Hide();
         typeof(System.Windows.Forms.NotifyIcon).GetMethod("OnDoubleClick",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(tray, [EventArgs.Empty]);
-        if (!window.IsVisible || runtime.Status.SyncPhase != "idle")
+        if (!window.IsVisible || window.WindowState != WindowState.Normal || !window.ShowInTaskbar
+            || window.Opacity != 1 || !IsAppearanceWindowVisible(handle) || runtime.Status.SyncPhase != "idle")
             throw new InvalidOperationException("双击托盘必须只显示窗口，不发起同步。");
-        if (!initiallyVisible) window.Hide();
         Marshal.ThrowExceptionForHR(GetCurrentProcessExplicitAppUserModelID(out var appId));
         try
         {
@@ -259,7 +261,7 @@ internal static partial class SmokeCheck
         var capture = Path.ChangeExtension(reportFile, ".png");
         await using (var image = File.Create(capture)) await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
         File.WriteAllText(reportFile, JsonSerializer.Serialize(new { success = true, synthetic = true,
-            checks = new[] { "branding", "taskbar-identity", "tray-menu-no-sync", "tray-double-click-no-sync", "batch-ignore-undo", "batch-accept-task", "batch-reopen-evidence", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
+            checks = new[] { "branding", "taskbar-identity", "background-main-hidden", "tray-minimized-main-restored", "tray-menu-no-sync", "tray-double-click-no-sync", "batch-ignore-undo", "batch-accept-task", "batch-reopen-evidence", "sync-now-button", "sync-now-bridge", "sync-normal-idle", "snapshot", "complete", "undo-complete", "explicit-date", "accept-review", "native-bridge", "reopen",
                 "message-review-one-row", "message-review-full-source", "message-review-single-accept", "message-review-manual-split",
                 "standalone-change-form", "standalone-change-accept-desktop", "standalone-change-reopen-replay",
                 "desktop-data", "desktop-theme", "desktop-open-item", "desktop-complete", "desktop-layout", "pending-hide",

@@ -54,7 +54,7 @@ public sealed class AppWindow : Window
         Width = 1360; Height = 880; MinWidth = 1000; MinHeight = 620;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         Content = Browser;
-        if (hidden) { Opacity = 0; ShowInTaskbar = false; }
+        if (hidden) { Opacity = 0; ShowInTaskbar = false; ShowActivated = false; }
         runtime.Changed += OnChanged;
         Loaded += async (_, _) => await InitializeAsync();
         Closing += (_, args) =>
@@ -82,6 +82,8 @@ public sealed class AppWindow : Window
     {
         Opacity = 1;
         ShowInTaskbar = true;
+        ShowActivated = true;
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
         Show();
         Activate();
     }
@@ -110,7 +112,13 @@ public sealed class AppWindow : Window
             core.WebMessageReceived += async (_, args) => await HandleAsync(args.Source, args.WebMessageAsJson);
             core.NavigationCompleted += (_, args) =>
             {
-                if (args.IsSuccess) { Ready.TrySetResult(true); updates.Start(); }
+                if (args.IsSuccess)
+                {
+                    // WebView2 needs the initial Show; hide its transparent host once navigation is ready.
+                    if (Opacity == 0) Hide();
+                    Ready.TrySetResult(true);
+                    updates.Start();
+                }
                 else Ready.TrySetException(new InvalidOperationException("本地界面加载失败。"));
             };
             core.Navigate(AppBridgeProtocol.PageUrl);

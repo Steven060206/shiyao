@@ -1,8 +1,14 @@
 # 拾要（原消息提纯）：项目交接文档
 
-最后更新：2026-10-26（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
+最后更新：2026-10-28（北京时间）。后续每次需求或实现发生变化，在同一轮工作中更新本文。
 
 当前总览：M3 正在实施；2026-10-26开课关键词误报已修复、部署并发布beta.8，截图误报已通过原有忽略入口移入回收站，保留原文和撤销；2026-10-22待确认共同日期预填已实现、部署并发布beta.7，截图消息已按原发送时间正确保存为10月24日任务；2026-10-18通知日期与活动时间段修复已部署并发布beta.6，已有通知可直接带出明确日期和活动开始时间；2026-10-16无目标补交/改期确认任务、旧待确认/批量加入及自愿消息通知去向已修复、部署并发布beta.5，原文、审核历史及原有数据保留；完整编辑、可读变更记录与桌面卡片变化标记、手动新增任务、手动合并/保持独立/拆分、跨群可能重复建议、消息缓存清理、已接入本地数据的备份恢复及桌面卡片恢复已写入代码，并通过自动回归与 Native Smoke 合成验证。待确认批量忽略和加入任务已实现、部署，真实页面控件已核对，批量修改仅用合成数据验证。消息时间倒序、独立回收站与无待办时隐藏提醒卡片已实现、部署并实机核对，忽略和确认记录保留。从桌面快捷方式启动拾要或点击“自动同步”触发一轮同步并恢复普通 QQ 已实现、部署并实机核对；托盘只显示窗口，定时同步已取消。原图未下载，备份明确不完整；完整图片恢复、真实 QQ 编辑场景、实际游戏、Windows 登录自启动、真实桌面恢复及长期稳定性仍未验收。历史静音呈现显示与用户实际点击通过，对应报告继续保留，仅作历史记录；Windows 系统通知和声音已取消。QQ/NapCat 继续只读，应用不得向 QQ 群聊或私聊发送消息。
+
+### 自动同步后桌面左下角残留标题栏（2026-10-28，已实现并验证，待部署发布beta.9）
+
+用户截图反馈点击“请求自动同步”后桌面左下角多出仅含图标和窗口按钮的小条，已要求修复。只读EnumWindows核对当前正式PID33376：拾要主窗口HWND=0x10900、visible=true、iconic=true、rect=(0,1077,159,1104)、owner为WPF Hidden Window，与截图吻合。根因定位为AppWindow后台启动只设置Opacity=0和ShowInTaskbar=false，Program仍调用Show，未真正Hide；ShowMainWindow也没有还原已有最小化状态。按小任务直接修复、补Native回归并发布beta.9。现有app.css、index.html及application-ui.test.mjs三个视觉改动保留，不混入本次提交或下载包；未修改真实消息和账号数据。
+
+AppWindow后台启动增加ShowActivated=false，WebView2完成首次导航后真正Hide；显式打开恢复Opacity、任务栏和激活能力，只有Minimized状态还原为Normal，保留原生最大化行为。新增background-main-hidden和tray-minimized-main-restored两项Native检查；备份及批量审核截图显式打开合成窗口，适应真实隐藏后WebView2不再执行requestAnimationFrame的行为。新增检查在修复前运行正式命名exe，退出1并准确报“后台主窗口必须真正隐藏”。修复后Release应用build退出0、零警告错误；`.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release --verbosity quiet`428/428，同参数Infrastructure743/743、Windows477/477；`node --test tests/*.test.mjs`181/181；`python -m unittest discover -s tests -p release_packaging_test.py`4/4；设置DOTNET_ROOT后`python tests/app_desktop_test.py --executable src/MessagePurify.Windows/App/bin/Release/net10.0-windows10.0.26100.0/win-x64/MessagePurify.exe`133项Native/真实桌面父窗检查通过、synthetic=true。初次Node文档检查暴露新小节置于总览之前，已移回总览之后；首次修复Native暴露旧备份截图依赖可见透明窗口，已显式打开截图窗口后全量通过。日志、本机保护及发布脚本位于`.tools/background-window-validation/`；maintain-context-hygiene仍未找到，按项目规则人工核对需求、交接和实际实现。下一步从提交源码构建干净自包含beta.9、验包、保留真实四库及设置部署，并同步GitHub；实际QQ同步及游戏/登录/长期验收范围沿用现有边界。
 
 ### 开课关键词误报（2026-10-26，已实现、部署并发布beta.8）
 

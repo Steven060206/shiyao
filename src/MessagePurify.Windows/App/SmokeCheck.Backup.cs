@@ -205,6 +205,7 @@ internal static partial class SmokeCheck
 
     private static async Task CaptureBackupSectionAsync(AppWindow window, string path, bool preview)
     {
+        window.ShowMainWindow();
         await EvaluateAsync(window, "document.querySelector('.backup-section').scrollIntoView({block:'start',behavior:'instant'});"
             + (preview ? "if(document.querySelector('[data-action=restore-backup]').getBoundingClientRect().bottom > innerHeight-20) document.querySelector('#backup-preview').scrollIntoView({block:'center',behavior:'instant'});" : "")
             + "window.__nativeBackupCaptureReady=false;requestAnimationFrame(()=>requestAnimationFrame(()=>{window.__nativeBackupCaptureReady=true;}));");

@@ -47,6 +47,7 @@ internal static partial class SmokeCheck
             await WaitAsync(window, "document.querySelectorAll('[data-batch-id]').length === 2");
             var date = now.ToOffset(TimeSpan.FromHours(8)).AddDays(6).ToString("yyyy-MM-dd");
             await EvaluateAsync(window, "document.querySelector('#batch-select-all').click();document.querySelector('#batch-date').value=" + JsonSerializer.Serialize(date));
+            window.ShowMainWindow();
             await using (var image = File.Create(Path.ChangeExtension(reportFile, ".batch-review.png")))
                 await window.Browser.CoreWebView2.CapturePreviewAsync(CoreWebView2CapturePreviewImageFormat.Png, image);
             await EvaluateAsync(window, "document.querySelector('[data-action=batch-accept]').click()");
