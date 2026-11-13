@@ -1678,6 +1678,20 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await push(saved); await nav('pending'); await change('#state-filter', 'pending');
     });
     await call('Page.reload'); await waitFor('document.readyState === "complete" && !!window.backend'); await evaluate('backend.release()');
+    await t.test('导航分组标题在浅深主题下清楚可辨，最小窗口仍显示全部导航', async () => {
+      const savedPreferences = await evaluate('({...preferences})');
+      await call('Emulation.setDeviceMetricsOverride',{width:1000,height:581,deviceScaleFactor:1.25,mobile:false});
+      for (const theme of ['light','dark']) {
+        await evaluate(`preferences.theme='${theme}';preferences.motion='reduce';applyPreferences()`);
+        const labels = await evaluate(`[...document.querySelectorAll('.nav-group')].map(el=>{const s=getComputedStyle(el),r=el.getBoundingClientRect();return {text:el.textContent,size:parseFloat(s.fontSize),weight:Number(s.fontWeight),color:s.color,ink:getComputedStyle(document.body).color,visible:r.top>=0&&r.bottom<=innerHeight}})`);
+        assert.deepEqual(labels.map(label=>label.text),['处理','记录']);
+        for (const label of labels) { assert.ok(label.size>=16); assert.ok(label.weight>=700); assert.equal(label.color,label.ink); assert.equal(label.visible,true); }
+        assert.equal(await evaluate(`document.querySelectorAll('#nav button').length`),6);
+        assert.ok(await evaluate(`(() => {const nav=document.querySelector('#nav'),buttons=[...nav.querySelectorAll('button')];return nav.scrollHeight<=nav.clientHeight+1&&buttons.every(b=>{const r=b.getBoundingClientRect();return r.top>=0&&r.bottom<=innerHeight&&b.scrollWidth<=b.clientWidth});})()`));
+      }
+      await evaluate(`Object.assign(preferences,${JSON.stringify(savedPreferences)});applyPreferences()`);
+      await call('Emulation.setDeviceMetricsOverride',{width:1200,height:800,deviceScaleFactor:1,mobile:false});
+    });
     await t.test('改版三栏填满窗口，列表工具固定且详情独立滚动', async () => {
       await push({...fixture, items: Array.from({length: 35}, (_, i) => ({...fixture.items[0], id: 'layout-' + i, unread: false}))});
       await nav('tasks');

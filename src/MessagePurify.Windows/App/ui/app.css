@@ -195,7 +195,7 @@ body, .app, .sidebar, .topbar, .detail-pane, .confirmation-bar, .nav button, .co
   --shadow-soft: rgb(0 0 0 / 24%);
   --shadow-hover: rgb(0 0 0 / 34%);
 }
-.nav-group { color: var(--muted); font-size: 12px; padding: 16px 10px 4px; }
+.nav-group { color: var(--ink); font-size: 16px; font-weight: 700; padding: 16px 10px 8px; }
 .nav [data-page="settings"] { margin-top: auto; margin-bottom: 16px; }
 .page-heading { min-width: 0; }
 .page-heading .subline { margin: 2px 0 0; font-size: 12px; }
