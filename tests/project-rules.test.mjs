@@ -100,8 +100,11 @@ test('端口修复交付区分真实连接成功与真实图片仍未验收', ()
   assert.match(report, /追加探针未产生新报告/);
   assert.match(report, /240617086/);
   assert.match(report, /uploaded.*draft=false.*prerelease=true.*HTTP200/s);
+  const portDelivery = requirements.match(/^上一轮交付状态（2026-10-28，beta\.13）.*$/m)?.[0];
+  assert.ok(portDelivery, 'preserve the beta.13 port-delivery record');
+  assert.match(portDelivery, /真实13001连接和登录账号核对通过/);
   const latest = requirements.match(/^最新交付状态.*$/m)?.[0];
-  assert.match(latest, /beta\.13/);
+  assert.ok(latest);
   assert.doesNotMatch(latest, /仍受.*端口冲突/);
 });
 
@@ -155,7 +158,7 @@ test('正式入口已切最新版并保留真实登录与持续观察验收边�
     const currentEntry = file === 'docs/requirements.md'
       ? content.match(/^最新交付状态.*$/m)?.[0]
       : file === 'docs/HANDOFF.md'
-        ? content.split('### 当前接续')[1].split('### 上一段')[0]
+        ? content.split('### 当前界面改版')[1].split('### 本机同步端口调整')[0]
         : content.slice(content.indexOf('正式入口已切换到最新版')).split('\n')[0];
     assert.ok(currentEntry, `${file}: missing current delivery section`);
     assert.match(currentEntry,/\.tools\/published\/app-card-controls\//);

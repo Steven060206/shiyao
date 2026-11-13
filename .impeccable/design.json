@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-13T00:00:00+08:00",
+  "title": "Design System: 拾要",
+  "extensions": {
+    "shadows": [
+      { "name": "button-hover", "value": "0 4px 10px var(--shadow-soft)", "purpose": "按钮悬停。" },
+      { "name": "task-row-hover", "value": "0 2px 6px var(--shadow-soft)", "purpose": "事项悬停。" },
+      { "name": "toast", "value": "0 6px 22px var(--shadow-hover)", "purpose": "页面内短暂反馈条。" }
+    ],
+    "motion": [
+      { "name": "interaction", "value": "160ms ease", "purpose": "按钮和事项反馈。" },
+      { "name": "theme", "value": "320ms ease", "purpose": "主题色过渡。" }
+    ],
+    "breakpoints": [
+      { "name": "compact-width-max", "value": "1199px" },
+      { "name": "single-row-filters-min", "value": "1500px" },
+      { "name": "compact-height-max", "value": "660px" }
+    ]
+  },
+  "components": [],
+  "narrative": {
+    "northStar": "安静的个人助理",
+    "overview": "米白纸张、墨绿主色与少量暖金服务于日常事项处理。标题、时间、来源、待核对问题和下一步操作形成稳定层级；沿用拾要名称和图标。",
+    "keyCharacteristics": [
+      "温润而安静的色彩与系统字体。",
+      "标题、时间、来源和主要动作有稳定层级。",
+      "列表与详情独立滚动，长流程固定提交。",
+      "桌面卡片保留半透明底色和不透明文字。"
+    ],
+    "rules": [
+      { "name": "The 语义配对 Rule", "body": "浅深主题按相同角色切换，状态前景与底色成对使用，状态同时提供文字依据。", "section": "colors" }
+    ],
+    "dos": [
+      "**Do** 保留米白、墨绿、少量暖金与纯黑深色主背景。",
+      "**Do** 保持清晰文字层级、独立滚动、固定提交和可见焦点。",
+      "**Do** 保留桌面圆角、透明外缘和不透明文字。"
+    ],
+    "donts": [
+      "**Don't** 更换拾要名称或图标，引入在线字体或另造品牌表达。",
+      "**Don't** 用重复面包屑、卡片套卡片或整窗阴影增加负担。",
+      "**Don't** 仅靠颜色解释状态，或继续缩小辅助字号。",
+      "**Don't** 让设置定位改变 URL，或让换肤、导航、图片查看触发 QQ 同步。"
+    ]
+  }
+}

@@ -20,7 +20,7 @@
 | 实际命令 | 结果 |
 |---|---|
 | `node --check src/MessagePurify.Windows/App/ui/app.js` | 退出0 |
-| `node --test tests/*.test.mjs` | 214/214，通过 |
+| `node --test tests/*.test.mjs` | 发布源码214/214；收尾工作区216/216，通过 |
 | `node tests/prototype-qa.mjs` | 108项，通过；仅作为旧原型兼容检查 |
 | `.tools/dotnet/dotnet.exe test tests/MessagePurify.Core.Tests --configuration Release --verbosity quiet` | 428/428 |
 | 同参数 `tests/MessagePurify.Infrastructure.Tests` | 865/865 |
@@ -56,7 +56,32 @@ Impeccable检测仅两项：米白配色是用户明确指定；原图对话框�
 
 ## 交付记录
 
-- 实现提交 `869ed00`。第一份干净自包含包240620847字节、2696条目；2673个非PDB文件、2177个OCR文件、官方NapCat原包和隐私文件排除核对通过。
-- 中文空格解压路径中，151项Native、Setup合成CheckOnly/实际配置、空PATH与禁网络的4张OCR图片检查通过，未启动QQ。
-- 干净Node检查暴露Escape的close事件异步时序：对话框open已变false时，焦点恢复事件尚在队列。回归改为等待真实焦点恢复（保留超时失败），不再以open=false当作焦点已恢复。产品代码未改；修正后再运行完整检查。
-- 本机原程序回滚副本`.tools/ui-redesign/rollback/program`，四库与5份设置快照`.tools/ui-redesign/beta14-before-deploy`。实际更新与GitHub公开状态仍待完成后记录。
+- 界面实现提交`869ed00`，随后`0786b40f64dfb825f944f963767b2829ef148f06`仅修正图片关闭焦点回归的等待：对话框open变false时，close事件仍可能在队列，测试改为等待实际焦点恢复并保留超时失败；产品代码未变。
+- 发布使用`git archive`从0786b40重新导出`.tools/release-stage-beta14-final`，同一提交自包含publish到`.tools/published/github-release-0.1.0-beta.14-final`，实际退出0。干净源码`node --test tests/*.test.mjs`214/214，通过；工作区加入设计规范与交付边界回归后216/216（.tools/ui-redesign/node-handoff-final.log），退出0；git diff --check通过。
+- 最终下载包`.tools/releases/Shiyao-0.1.0-beta.14-win-x64.zip`为240620895字节、2696条目。完整ZIP、2673个非PDB发布文件、2177个OCR文件、官方NapCat原包及隐私文件排除验证通过。SHA256：`b45f15f78e4d92bad2bf70c5a5699116dd455c4c7933bd2684758bd702ded392`。
+- 中文空格解压路径`.tools/releases/验包 中文空格 0.1.0-beta.14 final`中，151项Native、Setup合成CheckOnly/实际配置、随包Python空PATH且禁网络的4张OCR图片检查通过，QQ未启动/进程未变。
+- 正式目录`.tools/published/app-card-controls/`已替换2676个程序文件并逐字节核对。先通过无包身份辅助进程保护实际profile四库和5设置，再正常托盘退出旧程序；Explorer以`--background`启动PID53148，无包身份、不在工具Job且响应。后台主窗口visible=false/iconic=false，随后托盘打开visible=true/iconic=false，均有实际报告。
+- 更新后四库16表全行及5份设置与保护快照一致，0待办/0待确认；两卡父窗为SHELLDLL_DefView、child/noActivate=true、topmost=false且隐藏。没有触发真实QQ同步、修改课程或代用户处理事项。
+- [GitHub v0.1.0-beta.14](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.14)已公开，draft=false、prerelease=true、附件uploaded；匿名下载HTTP200、公开摘要与本地一致。[Windows x64下载](https://github.com/Steven060206/shiyao/releases/download/v0.1.0-beta.14/Shiyao-0.1.0-beta.14-win-x64.zip)。发布时main与tag已核对为0786b40，后续设计规范/交付记录单独提交，下载包继续对应上述发布提交。
+- 本机旧程序回滚副本`.tools/ui-redesign/rollback/program`；四库及5设置保护快照`.tools/ui-redesign/beta14-before-deploy`。回滚时正常退出拾要后恢复旧程序文件，保留当前账号数据库、配置和布局；本次没有数据迁移，不将旧快照自动覆盖当前数据。
+- `DESIGN.md`和`.impeccable/design.json`保存24项浅深色tokens及布局规范；新增回归核对正式CSS与8张预览。私有数据、辅助脚本、日志、实际账号截图均留在.tools，不提交公开仓库。
+
+实际交付验证辅助命令（均在项目根执行，结果见同名JSON）：
+
+```powershell
+python .tools/ui-redesign/beta14-verify-archive.py
+python .tools/ui-redesign/beta14-verify-package.py
+pwsh -NoProfile -File .tools/ui-redesign/beta14-run-physical-data.ps1 -Mode verify -FormalProcessId 53148
+python .tools/ui-redesign/beta14-verify-github.py
+git -c http.https://github.com.proxy= ls-remote origin refs/heads/main refs/tags/v0.1.0-beta.14
+```
+
+首两项在最终解压和安装合成检查时执行成功；GitHub核对在收尾再次执行通过。Git命令仅对当前调用停用失效URL代理，不修改用户代理配置。
+
+收尾文档回归曾发现旧测试把beta.13固定为最新版，以及新交付段漏记任务栏身份。修正文档并将端口验证定位到保留的beta.13历史段；保留真实连接、图片未验收、任务栏身份与吸附断言，最终完整Node216/216通过。
+
+## 尚未替代的验收
+
+- 显示清单实测2560×1440、Windows125%（120 DPI）。已完成浏览器100%/125%/150%像素比例矩阵；Windows实际100%/150%切换未完成，不能据此宣称三档系统DPI全部通过。
+- 真实QQ图片下载/OCR闭环、实际游戏、Windows登录、多屏/睡眠恢复、跨电脑及长期稳定性仍为原有独立验收；本轮合成测试不替代这些结果。
+- `maintain-context-hygiene`仍没有可用SKILL.md，已按AGENTS.md人工核对有效需求、真实实现、日志、部署和公开结果，不删除文件或改动无关资料。
