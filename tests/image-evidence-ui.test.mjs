@@ -107,10 +107,30 @@ test('图片证据在正式页面中安全展示、放大、折叠识别文字�
       await click('[data-action=close-image-preview]');
       assert.equal(await evaluate('document.querySelector("#image-preview-dialog").open'), false);
       assert.equal(await evaluate('document.querySelector("#image-preview-original").hasAttribute("src")'), false);
+      assert.equal(await evaluate(`document.activeElement === document.querySelector(${JSON.stringify(selector)})`), true);
       await click(selector);
       await call('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
       await call('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
       await waitFor('!document.querySelector("#image-preview-dialog").open');
+      assert.equal(await evaluate(`document.activeElement === document.querySelector(${JSON.stringify(selector)})`), true);
+    });
+    await t.test('原图打开期间证据快照替换入口，关闭与Escape仍恢复当前图片焦点', async () => {
+      const selector = `[data-action=preview-image][data-image-id="${ids[0]}"]`;
+      for (const escape of [false,true]) {
+        await click(selector);
+        await evaluate(`window.oldImageOpener=document.querySelector(${JSON.stringify(selector)})`);
+        const updated=structuredClone(fixture); updated.items[0].evidence[0].text += escape ? '\n新证据二' : '\n新证据一';
+        await push(updated);
+        assert.equal(await evaluate(`window.oldImageOpener.isConnected`),false);
+        assert.equal(await evaluate(`document.querySelector('#image-preview-dialog').open`),true);
+        if(escape) {
+          await call('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+          await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+          await waitFor('!document.querySelector("#image-preview-dialog").open');
+        } else await click('[data-action=close-image-preview]');
+        assert.equal(await evaluate(`document.activeElement===document.querySelector(${JSON.stringify(selector)})`),true);
+      }
+      await push(fixture);
     });
     await t.test('下载和识别状态分别显示，空识别无空文字折叠，失败才允许重试', async () => {
       const content = await text('#detail-pane');

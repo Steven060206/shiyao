@@ -62,7 +62,7 @@ internal static partial class SmokeCheck
                     || notice.Title != text || notice.Course is not null || notice.TargetTaskId is not null
                     || !notice.Evidence.SequenceEqual(review.Evidence))
                     throw new InvalidDataException("确认普通通知必须移出待确认、保留完整来源，并且不创建任务。");
-                await WaitAsync(window, "document.querySelector('#breadcrumb')?.textContent === '通知'"
+                await WaitAsync(window, "document.querySelector('#page-title')?.textContent === '通知'"
                     + " && document.querySelector('.task-row.selected')?.dataset.id === " + JsonSerializer.Serialize(notice.Id));
                 await WaitAsync(window, "document.querySelector('.source-section .message')?.textContent === "
                     + JsonSerializer.Serialize(text) + " && document.querySelector('#notice-form') !== null");

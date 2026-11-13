@@ -19,23 +19,22 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <div class="breadcrumb">拾要 <span aria-hidden="true"> / </span><strong id="breadcrumb">任务</strong></div>
-        <div class="top-actions"><span class="connection-badge" id="history-status">等待同步</span><button class="button primary small" data-action="sync-now">自动同步</button><button class="button small" data-action="refresh">刷新</button></div>
+        <div class="page-heading"><h1 id="page-title">任务</h1><p class="subline" id="page-subline">正在读取本地事项</p></div>
+        <div class="top-actions"><button class="connection-badge" id="history-status" data-action="sync-details" title="查看同步详情">等待同步</button><button class="button primary small" data-action="sync-now">自动同步</button><button class="button small" data-action="refresh">刷新</button></div>
       </header>
+      <p class="error global-error" id="host-error" role="alert" hidden></p>
       <div class="workarea">
         <section class="list-pane" id="list-pane" aria-label="事项列表">
-          <div class="page-head"><div><h1 id="page-title">任务</h1><p class="subline" id="page-subline">正在读取本地事项</p></div><div class="page-head-actions"><div class="date-stamp" id="date-stamp"></div><button class="button primary small" data-action="new-task" disabled>手动新增</button></div></div>
-          <p class="error" id="host-error" role="alert" hidden></p>
           <div class="filters" id="filters">
             <input id="search" type="search" aria-label="搜索事项" placeholder="搜索标题、课程或来源群">
             <select id="course-filter" aria-label="按课程筛选"><option value="">全部课程</option></select>
             <select id="state-filter" aria-label="按状态筛选"><option value="active">待办</option></select>
+            <button class="button small" data-action="new-task" disabled>手动新增</button>
           </div>
-          <div class="list-summary" id="list-summary"></div>
+          <div class="list-summary"><span id="list-summary"></span><span class="date-stamp" id="date-stamp"></span></div>
           <section id="batch-review" class="batch-review" aria-label="批量审核" hidden>
             <div class="batch-actions"><label class="batch-check"><input type="checkbox" id="batch-select-all">全选当前列表</label><span id="batch-count">已选 0 项</span><button class="button small" data-action="batch-ignore" disabled>批量忽略</button><button class="button primary small" data-action="batch-accept" disabled>批量加入任务</button></div>
-            <div class="batch-options"><label>统一日期（可选）<input type="date" id="batch-date" aria-label="批量任务统一日期"></label><label class="batch-check"><input type="checkbox" id="batch-use-suggestions">使用各项建议日期</label></div>
-            <p class="subline">加入前请核对日期；没有日期或需要单独审核的条目会保留。忽略后可在“回收站”中撤销。</p>
+            <div class="batch-options" hidden><label>统一日期（可选）<input type="date" id="batch-date" aria-label="批量任务统一日期"></label><label class="batch-check"><input type="checkbox" id="batch-use-suggestions">使用各项建议日期</label><p class="subline">没有日期或需要单独核对的条目会保留。忽略后可在回收站撤销。</p></div>
             <p id="batch-result" class="subline" role="status" hidden></p>
           </section>
           <div class="rows" id="rows"></div>

@@ -4,7 +4,7 @@
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="Button">
-          <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="7"
+          <Border x:Name="Surface" Background="{TemplateBinding Background}" CornerRadius="6"
                   BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
             <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                               VerticalAlignment="Center" />

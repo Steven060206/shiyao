@@ -23,11 +23,12 @@ internal static partial class SmokeCheck
         "desktop-slim-scrollbar", "desktop-theme-scroll-preserved", "desktop-snap-horizontal", "desktop-snap-vertical", "desktop-hidden-task-no-snap",
         "desktop-snap-detach", "desktop-snap-layout-reopen", "desktop-hidden-card-no-snap",
         "desktop-transparency-page", "desktop-transparency-text", "desktop-transparency-reopen", "desktop-transparency-backup",
-        "main-titlebar-dark", "main-titlebar-light", "main-titlebar-reopen", "main-native-window-controls"];
+        "main-titlebar-dark", "main-titlebar-light", "main-titlebar-reopen", "main-native-window-controls",
+        "settings-section-trusted-url", "desktop-readable-type", "main-minimum-client-layout", "main-maximize-restore"];
 
     private static bool HasDesktopTheme(Window window, bool dark, int? transparency = null)
     {
-        var expected = (Color)ColorConverter.ConvertFromString(dark ? "#CD182532" : "#DEF4F7FA");
+        var expected = (Color)ColorConverter.ConvertFromString(dark ? "#CD171D19" : "#DEF5F3EC");
         if (transparency is { } value) expected.A = (byte)Math.Round(255 * (100 - value) / 100d);
         return window.AllowsTransparency && window.Background is SolidColorBrush backdrop && backdrop.Color.A == 0
             && window.Content is Border { Background: SolidColorBrush surface } && surface.Color == expected;
@@ -48,6 +49,8 @@ internal static partial class SmokeCheck
             if (!HasDesktopTheme(card, true)
                 || ((long)DesktopNative.GetWindowLongPtr(new WindowInteropHelper(card).Handle, -20) & 0x80000L) == 0)
                 throw new InvalidOperationException("深色卡片未使用透明分层窗口。");
+            if (Descendants(card).OfType<TextBlock>().Any(text => text.FontSize < 12))
+                throw new InvalidOperationException("卡片辅助文字小于12 DIP。");
             var surface = (Border)card.Content;
             if (surface.CornerRadius.TopLeft != 16) throw new InvalidOperationException("卡片圆角未呈现。");
             var pixels = new RenderTargetBitmap((int)card.ActualWidth, (int)card.ActualHeight, 96, 96, PixelFormats.Pbgra32);
@@ -148,7 +151,26 @@ internal static partial class SmokeCheck
             await WaitAsync(window, "snapshot !== null && initialized");
             await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
             await WaitAsync(window, "document.querySelector('#desktop-transparency-setting') !== null");
+            await EvaluateAsync(window, "document.querySelector('[data-action=settings-section][data-section=data]').click()");
+            if (await EvaluateAsync(window, "location.href === 'https://app.messagepurify.local/index.html' && document.activeElement.id === 'settings-data' && getComputedStyle(document.querySelector('#detail-pane')).display === 'none'") != "true")
+                throw new InvalidOperationException("设置定位改变受信任地址、未获得焦点或未隐藏详情栏。");
+            await EvaluateAsync(window, "document.querySelector('[data-action=refresh]').click()");
+            await WaitAsync(window, "![...requests.values()].some(item => item.operation === 'snapshot') && !hostError");
+            await EvaluateAsync(window, "document.querySelector('[data-action=settings-section][data-section=appearance]').click()");
             window.ShowMainWindow();
+            await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=tasks]').click()");
+            var restoredWidth = window.Width;
+            var restoredHeight = window.Height;
+            window.Width = 1000; window.Height = 620;
+            window.UpdateLayout();
+            await WaitAsync(window, "innerWidth <= 1000 && innerHeight < 620 && document.documentElement.scrollWidth <= innerWidth && document.querySelector('.sidebar').getBoundingClientRect().width === 168 && document.querySelector('#detail-pane').getBoundingClientRect().width === 360");
+            window.WindowState = WindowState.Maximized;
+            await WaitAsync(window, "innerWidth > 1000 && document.documentElement.scrollWidth <= innerWidth");
+            window.WindowState = WindowState.Normal;
+            window.Width = restoredWidth; window.Height = restoredHeight;
+            window.UpdateLayout();
+            await WaitAsync(window, "document.documentElement.scrollWidth <= innerWidth");
+            await EvaluateAsync(window, "document.querySelector('[data-action=nav][data-page=settings]').click()");
             await ChangeSettingAsync(window, "theme-setting", "light");
             await WaitAsync(window, "document.documentElement.dataset.theme === 'light' && ![...requests.values()].some(item => item.operation === 'set-appearance')");
             CaptureTitlebar(window, Path.Combine(captureRoot, "main-titlebar-light.png"), false);
@@ -203,7 +225,7 @@ internal static partial class SmokeCheck
         finally { graphics.ReleaseHdc(dc); }
         pixels.Save(capture, System.Drawing.Imaging.ImageFormat.Png);
         var color = pixels.GetPixel(90, 16);
-        var expected = dark ? System.Drawing.Color.Black : System.Drawing.Color.FromArgb(237, 241, 238);
+        var expected = dark ? System.Drawing.Color.Black : System.Drawing.Color.FromArgb(245, 243, 236);
         if (Math.Abs(color.R - expected.R) > 5 || Math.Abs(color.G - expected.G) > 5 || Math.Abs(color.B - expected.B) > 5)
             throw new InvalidOperationException($"主窗口标题栏未跟随主题：dark={dark}、color={color}。");
     }

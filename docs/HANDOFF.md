@@ -9,8 +9,9 @@
 - 用户已确认并明确要求实施[正式版界面重设计计划](superpowers/plans/2026-11-13-shiyao-ui-redesign.md)，保留温润配色、品牌和完整业务。当前分支为`codex/ui-redesign-warm`，基于`codex/m3-integration-probes`的`f60afbe`；当前源码已恢复正式应用，不能再按旧main的demo阶段理解。
 - 已核对需求与实际HTML/CSS/JS/WPF，已知重点为列表/详情独立滚动、原文优先、固定提交、设置全宽且URL不变、草稿/版本保护、WPF主题一致。需求与计划已写入；本轮代码、验证、部署及发布进度在此小节持续更新。
 - 原`git fetch origin`因本机Git URL代理不可用失败；实际`git -c http.https://github.com.proxy= fetch origin`成功，未改代理配置；远端main是当前基准祖先，仅已有配色提交领先。实际运行`node --test tests/*.test.mjs`，基线205/205通过、退出0。文档检查发现新小节必须放在当前总览之后，已按原文档结构调整，未放宽既有边界检查。
-- 计划阶段实际运行`node --test tests/ui-redesign-requirements.test.mjs tests/project-rules.test.mjs tests/message-review-requirements.test.mjs`，58/58通过、退出0；`git diff --check`退出0。新增规则检查覆盖正式版基准、倒序、QQ只读、接口不变、URL稳定和隔离验证。当前只完成计划与文档，UI实现尚未开始。
-- 下一步完成UI与相关回归，运行计划中的全套验证和Native Smoke，再按既有授权进行本机更新与GitHub发布。原QQ图片/游戏/登录/多屏/长期验收边界不变。未对真实账号执行事项或同步操作。
+- 计划阶段实际运行`node --test tests/ui-redesign-requirements.test.mjs tests/project-rules.test.mjs tests/message-review-requirements.test.mjs`，58/58通过、退出0；文档提交c49edff。现在阶段2～4已写入：窗口铺满、分组导航、列表/详情独立滚动、原文优先及六行展开、固定表单提交、批量按需展开、设置四分区且URL稳定、图片关闭焦点恢复、WPF暖色与可读字号。未新增公共API或数据迁移。
+- 当前阶段5验证中：Node214/214、Core428/428、Infrastructure865/865、Windows522/522、OCR worker25/25、运行库7/7、发布打包9/9及原型QA通过。自包含验证版本publish退出0。新增DWM读取属性断言被系统拒绝（E_INVALIDARG），改用已有Native真实像素检查核对标题栏，不宣称该查询受支持。Native首轮因两处旧breadcrumb选择器超时，已更新到唯一page-title；补最小宿主/最大化/还原后151项通过，真实Explorer父窗与两窗样式通过。独立设计复核的一项原图返回焦点问题已用失败用例复现、修复并复核ship。
+- 浅深任务/待确认/设置、最小内容区1000×581及大屏1920×1041集中截图与几何检查无横向溢出/按钮裁切；100/125/150%浏览器像素比例验证已运行，不等同切换操作系统DPI。产物在`.tools/ui-redesign/`。已通过无MSIX身份进程保护本机四库及5份设置，尚未替换正式程序或发布。验证与[预览](verification/ui-redesign/README.md)已写入[本轮记录](verification/2026-11-13-ui-redesign.md)；下一步干净打包、本机更新和GitHub。原QQ图片/游戏/登录/多屏/长期验收边界不变。未对真实账号执行事项或同步操作。
 
 ### 本机同步端口调整（2026-10-28，已验证、部署并发布beta.13）
 

@@ -34,7 +34,7 @@ internal static partial class SmokeCheck
                 || ignored.Select(item => item.UndoOperationId).Distinct().Count() != 2)
                 throw new InvalidDataException("批量忽略未分别保存状态及撤销凭据。");
             await EvaluateAsync(window, "document.querySelector('[data-page=trash]').click()");
-            await WaitAsync(window, "document.querySelector('#breadcrumb').textContent === '回收站' && document.querySelectorAll('.task-row').length === 2");
+            await WaitAsync(window, "document.querySelector('#page-title').textContent === '回收站' && document.querySelectorAll('.task-row').length === 2");
             await EvaluateAsync(window, "document.querySelector('.task-row[data-id=' + " + JsonSerializer.Serialize(ignored[0].Id) + " + ']').click();document.querySelector('[data-action=undo-ignore]').click()");
             await WaitAsync(window, "document.querySelectorAll('.task-row').length === 1");
             if (workspace.Snapshot(DateTimeOffset.UtcNow).Items.Single(item => item.Id == ignored[0].Id).State != "pending")

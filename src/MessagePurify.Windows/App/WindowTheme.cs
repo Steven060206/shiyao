@@ -20,9 +20,9 @@ internal static class WindowTheme
         var applied = true;
         // Unsupported DWM colors on older Windows keep the native frame without blocking startup.
         Set(20, dark ? 1 : 0);            // DWMWA_USE_IMMERSIVE_DARK_MODE
-        Set(35, dark ? 0 : 0xEEF1ED);     // DWMWA_CAPTION_COLOR, matching the page background
-        Set(36, dark ? 0xF1F1F1 : 0x2D3625); // DWMWA_TEXT_COLOR
-        Set(34, dark ? 0x2A2A2A : 0xE3E8E1); // DWMWA_BORDER_COLOR
+        Set(35, dark ? 0 : 0xECF3F5);     // DWMWA_CAPTION_COLOR, matching the page background
+        Set(36, dark ? 0xE3ECEA : 0x2D3325); // DWMWA_TEXT_COLOR
+        Set(34, dark ? 0x31392E : 0xD5DEDB); // DWMWA_BORDER_COLOR
         return applied;
         void Set(int attribute, int value) => applied &= DwmSetWindowAttribute(window, attribute, ref value, sizeof(int)) >= 0;
     }

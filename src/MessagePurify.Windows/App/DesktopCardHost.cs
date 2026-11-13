@@ -389,7 +389,7 @@ public sealed class DesktopCardHost : IDisposable
             heading.Margin = new(0); heading.FontSize = 16; heading.FontWeight = FontWeights.SemiBold;
             heading.Cursor = Cursors.SizeAll;
             var header = new DockPanel { Margin = new(18, 16, 18, 12), LastChildFill = true };
-            count.FontSize = 11; count.FontWeight = FontWeights.SemiBold;
+            count.FontSize = 12; count.FontWeight = FontWeights.SemiBold;
             countBadge.Child = count; countBadge.CornerRadius = new(7); countBadge.Padding = new(8, 2, 8, 2);
             countBadge.VerticalAlignment = VerticalAlignment.Center;
             DockPanel.SetDock(countBadge, Dock.Right); header.Children.Add(countBadge); header.Children.Add(heading);
@@ -397,7 +397,7 @@ public sealed class DesktopCardHost : IDisposable
             var scroll = new ScrollViewer { Content = list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Margin = new(0, 0, 9, 0) };
             list.Margin = new(10, 0, 3, 0); Grid.SetRow(scroll, 1); content.Children.Add(scroll);
-            footer.Margin = new(18, 9, 34, 12); footer.FontSize = 10; footer.TextWrapping = TextWrapping.Wrap;
+            footer.Margin = new(18, 9, 34, 12); footer.FontSize = 12; footer.TextWrapping = TextWrapping.Wrap;
             Grid.SetRow(footer, 2); content.Children.Add(footer);
             resize = new Thumb { Width = 28, Height = 28, HorizontalAlignment = HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Bottom, Cursor = Cursors.SizeNWSE, ToolTip = "拖动调整卡片大小",
@@ -484,20 +484,20 @@ public sealed class DesktopCardHost : IDisposable
         {
             var dark = theme == "dark";
             Brush Brush(string color) => (SolidColorBrush)new BrushConverter().ConvertFromString(color)!;
-            var background = Brush(dark ? "#CD182532" : "#DEF4F7FA");
+            var background = Brush(dark ? "#CD171D19" : "#DEF5F3EC");
             if (desktopTransparency is { } transparency)
             {
                 var color = ((SolidColorBrush)background).Color;
                 background = new SolidColorBrush(System.Windows.Media.Color.FromArgb((byte)Math.Round(255 * (100 - transparency) / 100d), color.R, color.G, color.B));
             }
-            var text = Brush(dark ? "#F3F6FC" : "#182A3B");
-            var muted = Brush(dark ? "#CFD8E5" : "#485D70");
-            var line = Brush(dark ? "#36D1DDED" : "#99FFFFFF");
-            var accent = Brush(dark ? "#A8DEC8" : "#236754");
+            var text = Brush(dark ? "#EAECE3" : "#25332D");
+            var muted = Brush(dark ? "#A7B0A4" : "#5F6B63");
+            var line = Brush(dark ? "#602E3931" : "#99DBDED5");
+            var accent = Brush(dark ? "#A5C8AC" : "#315B46");
             Foreground = text; frame.Background = background; frame.BorderBrush = line;
             heading.Foreground = text; footer.Foreground = muted;
-            Resources["DesktopScrollBrush"] = Brush(dark ? "#88D5DFEA" : "#88627A90");
-            count.Foreground = accent; countBadge.Background = Brush(dark ? "#208FCAB5" : "#17236754");
+            Resources["DesktopScrollBrush"] = Brush(dark ? "#88718575" : "#88788578");
+            count.Foreground = accent; countBadge.Background = Brush(dark ? "#6024382B" : "#99E6EDE3");
             var items = isPending ? snapshot.Pending : snapshot.Tasks;
             heading.Text = isPending ? "待确认" : "提醒事项";
             count.Text = items.Count.ToString(); countBadge.Visibility = items.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -513,34 +513,34 @@ public sealed class DesktopCardHost : IDisposable
                 var body = new StackPanel { Margin = new(10, 10, 10, 11) };
                 var past = DesktopCardProjection.IsPast(item, now);
                 var highlighted = !isPending && (past || item.Priority is 0 or 1);
-                var normalRow = Brush(highlighted ? dark ? "#602D5147" : "#AADEEEE6" : dark ? "#09FFFFFF" : "#44FFFFFF");
-                var row = new Border { Child = body, CornerRadius = new(10), BorderThickness = new(highlighted ? 1 : 0),
-                    BorderBrush = highlighted ? Brush(dark ? "#7795C9B6" : "#6681AC9B") : Brushes.Transparent,
+                var normalRow = Brush(highlighted ? dark ? "#9024382B" : "#AAE6EDE3" : dark ? "#09FFFFFF" : "#44FFFFFF");
+                var row = new Border { Child = body, CornerRadius = new(8), BorderThickness = new(highlighted ? 1 : 0),
+                    BorderBrush = highlighted ? Brush(dark ? "#71718575" : "#66788578") : Brushes.Transparent,
                     Background = normalRow, Margin = new(0, 0, 0, 4) };
-                row.MouseEnter += (_, _) => row.Background = Brush(dark ? "#245A758A" : "#AAFFFFFF");
+                row.MouseEnter += (_, _) => row.Background = Brush(dark ? "#9924382B" : "#AAFFFEFA");
                 row.MouseLeave += (_, _) => row.Background = normalRow;
                 var title = item.Title + (item.Unread ? "  ●" : "");
                 var details = new Button { Content = new TextBlock { Text = title, TextWrapping = TextWrapping.Wrap,
-                    FontWeight = FontWeights.SemiBold, FontSize = 14, MaxHeight = 66 }, Foreground = text,
+                    FontWeight = FontWeights.SemiBold, FontSize = 16, MaxHeight = 76 }, Foreground = text,
                     Background = Brushes.Transparent, BorderThickness = new(0), HorizontalContentAlignment = HorizontalAlignment.Left,
                     Padding = new(0), Cursor = Cursors.Hand, Tag = "open:" + item.Id };
                 details.Click += async (_, _) => await open(snapshot.AccountId!, item);
                 body.Children.Add(details);
                 if (!string.IsNullOrEmpty(item.ChangeLabel))
                     body.Children.Add(new TextBlock { Text = item.ChangeLabel, Foreground = accent,
-                        FontSize = 11, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
+                        FontSize = 12, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
                         Margin = new(0, 6, 0, 0) });
                 body.Children.Add(new TextBlock { Text = item.Source == "manual" ? (item.Course ?? "未分类") + " · 手动添加" : item.Course ?? item.Group, Foreground = muted,
-                    FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new(0, 6, 0, 4) });
+                    FontSize = 12, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new(0, 6, 0, 4) });
                 var label = isPending ? "核对原文，补齐待确认信息" :
                     $"P{item.Priority ?? 3}  ·  {(past ? item.TimeKind == "start" ? "开始时间已过" : "已逾期" : item.TimeKind == "start" ? "开始" : "截止")}  {item.Due}{(item.Time is null ? " · 仅有日期" : " " + item.Time)}";
-                body.Children.Add(new TextBlock { Text = label, Foreground = highlighted ? accent : muted,
-                    FontSize = 11, TextWrapping = TextWrapping.Wrap });
+                body.Children.Add(new TextBlock { Text = label, Foreground = past && item.TimeKind != "start" ? Brush(dark ? "#EF9990" : "#AB3838") : highlighted ? Brush(dark ? "#E0BC74" : "#815A14") : muted,
+                    FontSize = 12, TextWrapping = TextWrapping.Wrap });
                 if (!isPending)
                 {
-                    var done = new Button { Content = "完成", Tag = "complete:" + item.Id, Padding = new(10, 4, 10, 4),
+                    var done = new Button { Content = "完成", MinHeight = 32, FontSize = 13, Tag = "complete:" + item.Id, Padding = new(10, 4, 10, 4),
                         HorizontalAlignment = HorizontalAlignment.Right, Margin = new(0, 8, 0, 0),
-                        Background = Brush(dark ? "#30477B67" : "#DCEDE5"), Foreground = accent, BorderThickness = new(0), Cursor = Cursors.Hand };
+                        Background = Brush(dark ? "#24382B" : "#E6EDE3"), Foreground = accent, BorderThickness = new(0), Cursor = Cursors.Hand };
                     done.Click += async (_, _) => { done.IsEnabled = false; await complete(snapshot.AccountId!, item); };
                     body.Children.Add(done);
                 }

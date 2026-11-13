@@ -225,7 +225,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
           loaded: icon.complete && icon.naturalWidth > 0, local: new URL(icon.src).protocol === 'file:', themes, tokenValues };
       })()`);
       assert.deepEqual(check,{title:'拾要',brand:'拾要',loaded:true,local:true,themes:[true,true],tokenValues:{
-        '--paper':['#f5f3ec','#0c0f0d'], '--paper-raised':['#fffefa','#171d19'], '--ink':['#25332d','#eaece3'], '--muted':['#5f6b63','#a7b0a4'], '--moss':['#315b46','#a5c8ac'], '--brass':['#7b5e2c','#d1b775'], '--selected-bg':['#e6ede3','#24382b'], '--danger':['#ab3838','#ef9990'], '--warning':['#815a14','#e0bc74'], '--focus-ring':['#315b46','#a5c8ac']
+        '--paper':['#f5f3ec','#000000'], '--paper-raised':['#fffefa','#171d19'], '--ink':['#25332d','#eaece3'], '--muted':['#5f6b63','#a7b0a4'], '--moss':['#315b46','#a5c8ac'], '--brass':['#7b5e2c','#d1b775'], '--selected-bg':['#e6ede3','#24382b'], '--danger':['#ab3838','#ef9990'], '--warning':['#815a14','#e0bc74'], '--focus-ring':['#315b46','#a5c8ac']
       }});
     });
 
@@ -238,7 +238,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.deepEqual(await evaluate('backend.messages.map(message=>message.operation)'), ['snapshot', 'set-appearance']);
       assert.deepEqual(await evaluate('backend.messages[1].parameters'), { theme: 'dark', reducedMotion: false, preferenceTheme:'system',preferenceMotion:'system' });
       assert.equal(await evaluate('document.documentElement.dataset.theme'), 'dark');
-      assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(12, 15, 13)');
+      assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(0, 0, 0)');
     });
     await t.test('离线且尚无账号快照时继续显示等待，不生成空账号事项', async () => {
       await evaluate('backend.snapshot=null;backend.status={...backend.status,transport:"disconnected",qq:"offline",receiving:"paused"};backend.release()');
@@ -966,7 +966,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.match(history, /<script>window.compromised=true<\/script>/);
       assert.ok(history.indexOf('已修改') < history.indexOf('已创建'));
       assert.equal(await evaluate('!!window.compromised || !!document.querySelector(".change-history img,.change-history iframe,.change-history script")'), false);
-      assert.equal(await evaluate('document.querySelector(".change-history").compareDocumentPosition(document.querySelector(".source-section")) & Node.DOCUMENT_POSITION_FOLLOWING'), 4);
+      assert.equal(await evaluate('document.querySelector(".source-section").compareDocumentPosition(document.querySelector(".change-history")) & Node.DOCUMENT_POSITION_FOLLOWING'), 4);
     });
     await t.test('待确认变更保留正式值和日期精度，查看建议定位原建议并保留编辑草稿', async () => {
       const changed = structuredClone(fixture);
@@ -1623,7 +1623,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.deepEqual(await evaluate('[...document.querySelectorAll(".task-row")].map(row=>row.dataset.id)'), ['blocked']);
       assert.equal(await evaluate('!!document.querySelector("#state-filter option[value=ignored]")'), false);
       await nav('trash');
-      assert.equal(await evaluate('document.querySelector("#breadcrumb").textContent'), '回收站');
+      assert.equal(await evaluate('document.querySelector("#page-title").textContent'), '回收站');
       assert.equal(await evaluate('document.querySelector("[data-page=trash]").getAttribute("aria-current")'), 'page');
       assert.deepEqual(await evaluate('[...document.querySelectorAll(".task-row")].map(row=>row.dataset.id)'), ['trash-new', 'trash-expired']);
       assert.equal(await evaluate('document.querySelector("#batch-review").hidden'), true);
@@ -1648,7 +1648,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       await push(data); await select('trash-new');
       await capture('ui-trash-dark.png');
       await evaluate('backend.emit({type:"open-item",accountId:snapshot.accountId,id:"trash-new"})');
-      assert.equal(await evaluate('document.querySelector("#breadcrumb").textContent'), '回收站');
+      assert.equal(await evaluate('document.querySelector("#page-title").textContent'), '回收站');
     });
     await t.test('所有列表按最新原消息倒序，忽略筛选及刷新保留顺序', async () => {
       const saved = { ...structuredClone(fixture), accountId: '987654' };
@@ -1676,6 +1676,82 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
         if (targetPage === 'trash') await capture('ui-message-time-descending-dark.png');
       }
       await push(saved); await nav('pending'); await change('#state-filter', 'pending');
+    });
+    await call('Page.reload'); await waitFor('document.readyState === "complete" && !!window.backend'); await evaluate('backend.release()');
+    await t.test('改版三栏填满窗口，列表工具固定且详情独立滚动', async () => {
+      await push({...fixture, items: Array.from({length: 35}, (_, i) => ({...fixture.items[0], id: 'layout-' + i, unread: false}))});
+      await nav('tasks');
+      for (const [width, height, scale] of [[1000,581,1],[1000,581,1.25],[1000,581,1.5],[1360,841,1],[1920,1041,1]]) {
+        await call('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:scale,mobile:false});
+        const layout = await evaluate(`(() => { const rect = s => document.querySelector(s).getBoundingClientRect(); const rows=document.querySelector('#rows'), detail=document.querySelector('.detail-scroll'); const toolbar=rect('#filters').top; rows.scrollTop=240; const listScroll=rows.scrollTop; detail.scrollTop=300; return {app:[rect('#app').x,rect('#app').y,rect('#app').width,rect('#app').height], sidebar:rect('.sidebar').width,detail:rect('#detail-pane').width,overflow:document.documentElement.scrollWidth>innerWidth,fixed:toolbar===rect('#filters').top,listScroll,independent:rows.scrollTop===listScroll}; })()`);
+        assert.deepEqual(layout.app,[0,0,width,height]); assert.equal(layout.sidebar,width>=1200?208:168); assert.equal(layout.detail,width>=1200?420:360);
+        assert.equal(layout.overflow,false); assert.equal(layout.fixed,true); assert.ok(layout.listScroll>0); assert.equal(layout.independent,true);
+      }
+      await call('Emulation.setDeviceMetricsOverride',{width:1200,height:800,deviceScaleFactor:1,mobile:false});
+    });
+    await t.test('待确认原文先于表单并展开，普通原文展开状态与焦点在刷新后保留', async () => {
+      await push(fixture); await nav('pending'); await select('review1');
+      assert.ok(await evaluate(`document.querySelector('.source-section').compareDocumentPosition(document.querySelector('#review-form')) & Node.DOCUMENT_POSITION_FOLLOWING`));
+      assert.equal(await evaluate(`document.querySelector('.source-section [data-action=toggle-source]').getAttribute('aria-expanded')`),'true');
+      await nav('tasks'); await select('task1');
+      assert.equal(await evaluate(`document.querySelector('.source-section [data-action=toggle-source]').getAttribute('aria-expanded')`),'false');
+      await click('.source-section [data-action=toggle-source]');
+      await evaluate(`const title=document.querySelector('#time-form [name=title]');title.value='尚未提交的标题';title.dispatchEvent(new Event('input',{bubbles:true}));title.focus();title.setSelectionRange(2,4);backend.snapshot.items.find(i=>i.id==='task1').changeLabel='有新消息';backend.snapshot.generatedAt=new Date().toISOString();backend.push()`);
+      assert.deepEqual(await evaluate(`({expanded:document.querySelector('.source-section [data-action=toggle-source]').getAttribute('aria-expanded'),value:document.activeElement.value,start:document.activeElement.selectionStart,end:document.activeElement.selectionEnd})`),{expanded:'true',value:'尚未提交的标题',start:2,end:4});
+    });
+    await t.test('固定新增和审核提交区可见，外部表单按钮每次只提交一条命令', async () => {
+      await push(fixture); await nav('tasks'); await click('[data-action=new-task]');
+      await call('Emulation.setDeviceMetricsOverride',{width:1000,height:581,deviceScaleFactor:1,mobile:false});
+      for (const [name,value] of Object.entries({title:'固定底部提交',course:'物理',date:'2026-12-25'})) await change(`#manual-task-form [name=${name}]`,value);
+      assert.ok(await evaluate(`(() => { const b=document.querySelector('[data-action=create-task]'),r=b.getBoundingClientRect();return b.form?.id==='manual-task-form'&&!b.closest('form')&&r.bottom<=innerHeight&&r.top>=0;})()`));
+      const before=await evaluate(`backend.messages.filter(m=>m.operation==='create-task').length`);
+      await click('[data-action=create-task]');
+      assert.equal(await evaluate(`backend.messages.filter(m=>m.operation==='create-task').length`),before+1);
+      await nav('pending'); await select('review1'); await change('#review-form [name=date]','2026-12-25');
+      const count=await evaluate(`backend.messages.filter(m=>m.operation==='accept-review').length`);
+      await click('#pending-confirm-button');
+      assert.equal(await evaluate(`backend.messages.filter(m=>m.operation==='accept-review').length`),count+1);
+      await call('Emulation.setDeviceMetricsOverride',{width:1200,height:800,deviceScaleFactor:1,mobile:false});
+    });
+    await t.test('批量选项按选择展开，收起不清日期且结果独立保留', async () => {
+      await push({...fixture,accountId:'redesign-batch'}); await nav('pending');
+      assert.equal(await evaluate(`document.querySelector('.batch-options').hidden`),true);
+      await click('[data-batch-id=review1]'); await change('#batch-date','2026-12-28');
+      assert.equal(await evaluate(`document.querySelector('.batch-options').hidden`),false, await evaluate(`JSON.stringify({selected:[...batchSelection],busy:[...busy],account:snapshot.accountId,locked:restoreLocked(),check:document.querySelector('[data-batch-id=review1]').outerHTML})`));
+      await click('[data-batch-id=review1]');
+      assert.equal(await evaluate(`document.querySelector('.batch-options').hidden`),true);
+      await click('[data-batch-id=review1]');
+      assert.equal(await evaluate(`document.querySelector('#batch-date').value`),'2026-12-28');
+      await click('[data-action=batch-ignore]'); await waitFor(`!document.querySelector('#batch-result').hidden`);
+      assert.match(await evaluate(`document.querySelector('#batch-result').textContent`),/已忽略 1 项/);
+    });
+    await t.test('设置全宽分区定位不改变URL，刷新保留位置且桥接可用', async () => {
+      await push(fixture); await nav('settings');
+      const url=await evaluate('location.href');
+      assert.equal(await evaluate(`getComputedStyle(document.querySelector('#detail-pane')).display`),'none');
+      await click('[data-action=settings-section][data-section=data]');
+      const position=await evaluate(`({scroll:document.querySelector('#settings-panel').scrollTop,id:document.activeElement.id,top:document.activeElement.getBoundingClientRect().top})`);
+      assert.equal(position.id,'settings-data'); assert.ok(position.scroll>0); assert.ok(position.top>=64);
+      await evaluate('backend.push()');
+      assert.equal(await evaluate('location.href'),url);
+      assert.equal(await evaluate(`document.querySelector('#settings-panel').scrollTop`),position.scroll);
+      const before=await evaluate(`backend.messages.filter(m=>m.operation==='snapshot').length`);
+      await click('[data-action=refresh]');
+      assert.equal(await evaluate(`backend.messages.filter(m=>m.operation==='snapshot').length`),before+1);
+      assert.equal(await evaluate('location.href'),url);
+    });
+    await t.test('空搜索可清除筛选且不会触发QQ同步', async () => {
+      await push(fixture); await nav('tasks'); await change('#search','找不到的事项');
+      const count=await evaluate(`backend.messages.filter(m=>m.operation==='sync-now').length`);
+      await click('[data-action=clear-filters]');
+      assert.ok(await evaluate(`document.querySelectorAll('.task-row').length`)>0);
+      assert.equal(await evaluate(`backend.messages.filter(m=>m.operation==='sync-now').length`),count);
+    });
+    await t.test('原文按实际六行高度折叠，短原文没有多余展开按钮', async () => {
+      await push({...fixture,accountId:'six-line',items:[{...fixture.items[0],evidence:[{...evidence[0],text:'第一行\n第二行\n第三行\n第四行\n第五行\n第六行\n第七行'}]}]}); await nav('tasks');
+      assert.ok(await evaluate(`(() => { const message=document.querySelector('.message'),button=document.querySelector('.source-toggle');return !button.hidden&&message.clientHeight<=parseFloat(getComputedStyle(message).lineHeight)*6+1;})()`));
+      await evaluate(`backend.snapshot.items[0].evidence[0].text='短消息';backend.snapshot.generatedAt=new Date().toISOString();backend.push()`);
+      assert.equal(await evaluate(`document.querySelector('.source-toggle').hidden`),true);
     });
     assert.deepEqual(browserErrors, []);
   } finally {
