@@ -17,6 +17,8 @@
 
 ## 当前测试版
 
+- [beta.15](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.15) 提高侧栏“处理”“记录”的字号、字重与对比度。[导航预览](docs/verification/2026-11-13-nav-groups.md)。
+
 - [beta.14](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.14) 统一主界面、设置、桌面卡片和标题栏；列表与详情独立滚动，长流程提交固定在底部，保留已有数据与操作规则。[浅深主题预览](docs/verification/ui-redesign/README.md) · [验证记录](docs/verification/2026-11-13-ui-redesign.md)。
 - beta.13 修复本机同步端口：新安装默认 13001，拾要读取 NapCat 实际配置，兼容已有端口；真实图片下载与识别闭环仍待验收。
 
