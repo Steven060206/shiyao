@@ -213,10 +213,20 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
           return rect.width >= 24 && rect.height >= 24 && getComputedStyle(icon).display !== 'none';
         });
         document.documentElement.dataset.theme = originalTheme;
+        const tokenValues = ['--paper','--paper-raised','--ink','--muted','--moss','--brass','--selected-bg','--danger','--warning','--focus-ring'].reduce((themes, token) => {
+          themes[token] = ['light', 'dark'].map(theme => {
+            document.documentElement.dataset.theme = theme;
+            return getComputedStyle(document.documentElement).getPropertyValue(token).trim().toLowerCase();
+          });
+          return themes;
+        }, {});
+        document.documentElement.dataset.theme = originalTheme;
         return { title: document.title, brand: document.querySelector('.brand').textContent.trim(),
-          loaded: icon.complete && icon.naturalWidth > 0, local: new URL(icon.src).protocol === 'file:', themes };
+          loaded: icon.complete && icon.naturalWidth > 0, local: new URL(icon.src).protocol === 'file:', themes, tokenValues };
       })()`);
-      assert.deepEqual(check,{title:'拾要',brand:'拾要',loaded:true,local:true,themes:[true,true]});
+      assert.deepEqual(check,{title:'拾要',brand:'拾要',loaded:true,local:true,themes:[true,true],tokenValues:{
+        '--paper':['#f5f3ec','#0c0f0d'], '--paper-raised':['#fffefa','#171d19'], '--ink':['#25332d','#eaece3'], '--muted':['#5f6b63','#a7b0a4'], '--moss':['#315b46','#a5c8ac'], '--brass':['#7b5e2c','#d1b775'], '--selected-bg':['#e6ede3','#24382b'], '--danger':['#ab3838','#ef9990'], '--warning':['#815a14','#e0bc74'], '--focus-ring':['#315b46','#a5c8ac']
+      }});
     });
 
     await t.test('初次请求真实快照与卡片外观，等待时无样例或虚假在线状态', async () => {
@@ -228,7 +238,7 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
       assert.deepEqual(await evaluate('backend.messages.map(message=>message.operation)'), ['snapshot', 'set-appearance']);
       assert.deepEqual(await evaluate('backend.messages[1].parameters'), { theme: 'dark', reducedMotion: false, preferenceTheme:'system',preferenceMotion:'system' });
       assert.equal(await evaluate('document.documentElement.dataset.theme'), 'dark');
-      assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(0, 0, 0)');
+      assert.equal(await evaluate('getComputedStyle(document.body).backgroundColor'), 'rgb(12, 15, 13)');
     });
     await t.test('离线且尚无账号快照时继续显示等待，不生成空账号事项', async () => {
       await evaluate('backend.snapshot=null;backend.status={...backend.status,transport:"disconnected",qq:"offline",receiving:"paused"};backend.release()');
