@@ -128,7 +128,8 @@ test('图片证据在正式页面中安全展示、放大、折叠识别文字�
           await call('Input.dispatchKeyEvent',{type:'keyUp',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
           await waitFor('!document.querySelector("#image-preview-dialog").open');
         } else await click('[data-action=close-image-preview]');
-        assert.equal(await evaluate(`document.activeElement===document.querySelector(${JSON.stringify(selector)})`),true);
+        // Escape closes the dialog before its queued close event restores focus.
+        await waitFor(`document.activeElement===document.querySelector(${JSON.stringify(selector)})`);
       }
       await push(fixture);
     });

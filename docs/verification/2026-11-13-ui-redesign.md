@@ -56,4 +56,7 @@ Impeccable检测仅两项：米白配色是用户明确指定；原图对话框�
 
 ## 交付记录
 
-本机原程序和数据保护、干净源码打包、GitHub上传以及下载核对在完成后填入，不以自动测试代替发布。
+- 实现提交 `869ed00`。第一份干净自包含包240620847字节、2696条目；2673个非PDB文件、2177个OCR文件、官方NapCat原包和隐私文件排除核对通过。
+- 中文空格解压路径中，151项Native、Setup合成CheckOnly/实际配置、空PATH与禁网络的4张OCR图片检查通过，未启动QQ。
+- 干净Node检查暴露Escape的close事件异步时序：对话框open已变false时，焦点恢复事件尚在队列。回归改为等待真实焦点恢复（保留超时失败），不再以open=false当作焦点已恢复。产品代码未改；修正后再运行完整检查。
+- 本机原程序回滚副本`.tools/ui-redesign/rollback/program`，四库与5份设置快照`.tools/ui-redesign/beta14-before-deploy`。实际更新与GitHub公开状态仍待完成后记录。
