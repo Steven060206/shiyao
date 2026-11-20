@@ -79,6 +79,21 @@ public sealed class NoticeReviewAcceptanceTests : IDisposable
     }
 
     [Fact]
+    public void GroupRelayDeadlineDoesNotSupplyAnUnrelatedNoticesDateAfterAcceptance()
+    {
+        const string text = "学校放假通知\n#接龙\n截止时间：11月17日 12:00\n1. 同学甲 已完成选课";
+        var workspace = Workspace();
+        var item = Ingest(workspace, Message(text: text));
+        Assert.True(item.CanAcceptNotice);
+        Assert.Null(item.Due);
+        workspace.Execute(Accept(item), Now);
+        var notice = Assert.Single(workspace.Snapshot(Now).Items);
+        Assert.Equal("notice", notice.Kind);
+        Assert.Null(notice.Due);
+        Assert.Equal(text, Assert.Single(notice.Evidence).Text);
+    }
+
+    [Fact]
     public void ExistingReview_ReopenAndSameRequestRetryKeepOneNoticeAndOneAcceptance()
     {
         var workspace = Workspace();

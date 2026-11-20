@@ -101,6 +101,58 @@ public class RuleExtractionTests
     }
 
     [Theory]
+    [InlineData("#接龙\n截止时间：11月17日 12:00\n1. 同学甲 已完成选课\n2. 同学乙 已完成选课")]
+    [InlineData("＃接龙\r\n截止时间：明天晚上六点\r\n１．同学甲 已提交")]
+    [InlineData("#接龙 截止时间：11月17日 12:00 1. 同学甲 已完成选课 2. 同学乙 已完成选课")]
+    [InlineData("【群接龙】活动报名\n1、同学甲\n2、同学乙")]
+    [InlineData("#接龙\n请在明天完成选课后接龙\n\n1. 同学甲 已完成选课")]
+    public void GroupRelayResponsesDoNotProduceAnyBusinessItem(string text)
+    {
+        foreach (var context in new[] { Context(), Context(course: null) })
+        {
+            var candidate = Single(text, context);
+            Assert.Equal(RuleDisposition.Ignored, candidate.Disposition);
+            Assert.Equal(text, candidate.Title);
+            Assert.Null(candidate.Time);
+        }
+    }
+
+    [Theory]
+    [InlineData("请明天提交作业并接龙")]
+    [InlineData("#接龙\n请明天提交作业并接龙")]
+    [InlineData("1. 明天提交作业")]
+    [InlineData("#接龙\n1. 明天提交作业")]
+    [InlineData("明天提交作业\n#接龙\n截止时间：后天\n1. 同学甲 已完成选课")]
+    [InlineData("#接龙\n截止时间：后天\n1. 同学甲 已完成选课\n2. 同学乙 已完成选课\n另外，明天提交作业")]
+    public void GroupRelayKeepsIndependentInstructionsAndTheirOwnDeadline(string text)
+    {
+        var candidate = Single(text);
+        Assert.Equal(RuleDisposition.Task, candidate.Disposition);
+        Assert.Equal(RuleAction.Submit, candidate.Action);
+        Assert.Equal(new DateOnly(2026, 10, 11), candidate.Time!.Date);
+        Assert.Equal(text, candidate.Title);
+    }
+
+    [Fact]
+    public void GroupRelayDatesWrittenWithDotsAreNotParticipantNumbers()
+    {
+        Assert.NotEqual(RuleDisposition.Ignored, Single("#接龙\n1.15前完成报名").Disposition);
+    }
+
+    [Fact]
+    public void GroupRelayTextDoesNotMaskAnIndependentImageOrPromoteItsDate()
+    {
+        var message = Message("") with { Segments = [new(SegmentKind.Text, "#接龙\n1. 同学甲 已完成选课"),
+            new(SegmentKind.Image, "明天提交实验报告")] };
+        var candidate = Assert.Single(MessageRuleExtractor.Extract(message, Context()).Candidates);
+        Assert.Equal(RuleDisposition.Pending, candidate.Disposition);
+        Assert.Equal("明天提交实验报告", candidate.Title);
+        Assert.Equal(RuleAction.Submit, candidate.Action);
+        Assert.Null(candidate.Time);
+        Assert.Equal(new DateOnly(2026, 10, 11), candidate.SuggestedTime!.Date);
+    }
+
+    [Theory]
     [InlineData("听说明天交作业")]
     [InlineData("可能明天交作业")]
     [InlineData("老师说明天交作业")]

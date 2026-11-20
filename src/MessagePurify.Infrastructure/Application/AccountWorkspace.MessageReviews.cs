@@ -28,7 +28,20 @@ public sealed partial class AccountWorkspace
             }
         }
         foreach (var (key, group) in groups)
-            tasks.ConsolidateMessageReviews(sources[key]!.Message,
-                group.OrderBy(item => item.Index).Select(item => item.Review).ToArray(), now);
+        {
+            var message = sources[key]!.Message;
+            if (!GroupRelay.IsTextResponseList(message))
+            {
+                tasks.ConsolidateMessageReviews(message, group.OrderBy(item => item.Index).Select(item => item.Review).ToArray(), now);
+                continue;
+            }
+            // Version 1 is untouched. An explicit undo creates a newer pending version.
+            foreach (var (review, _) in group.Where(item => item.Review.Version == 1))
+            {
+                try { tasks.IgnoreReview(review.Id, "ignore-group-relay-" + review.Id, review.Version, now); }
+                catch (InvalidOperationException) when (tasks.FindReview(review.Id)?.Version != review.Version)
+                { /* Another workspace has already processed this review. */ }
+            }
+        }
     }
 }

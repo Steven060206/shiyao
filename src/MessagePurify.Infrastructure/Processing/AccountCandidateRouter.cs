@@ -60,8 +60,9 @@ public sealed partial class AccountCandidateRouter
             if (pending is null || pending.Extraction is null && !processUnextracted) break;
 
             ValidateMessage(pending, context);
-            var extraction = pending.Extraction ?? MessageRuleExtractor.Extract(pending.Message,
-                CurrentContext(connection, transaction, context));
+            var extraction = pending.Extraction is null || GroupRelay.IsTextResponseList(pending.Message)
+                ? MessageRuleExtractor.Extract(pending.Message, CurrentContext(connection, transaction, context))
+                : pending.Extraction;
             if (extraction.Candidates.Count > 1)
             {
                 var business = extraction.Candidates.Where(candidate => candidate.Disposition != RuleDisposition.Ignored).ToArray();

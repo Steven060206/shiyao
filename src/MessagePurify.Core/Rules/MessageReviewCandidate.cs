@@ -75,8 +75,7 @@ public static class MessageReviewCandidate
     {
         if (candidate.Time is not null || candidate.Disposition != RuleDisposition.Pending ||
             candidate.TargetTaskId is not null || IsChange(candidate.Action)) return candidate;
-        var text = string.Join("\n", MessageNormalizer.Normalize(message).Segments
-            .Where(segment => segment.Kind == SegmentKind.Text).Select(segment => segment.Text));
+        var text = GroupRelay.AnalysisText(MessageNormalizer.Normalize(message), SegmentKind.Text);
         if (!MessageRuleExtractor.HasAction(text)) return candidate;
         var time = MessageRuleExtractor.ResolveReviewTime(text,
             message.SentAt, timeZoneId, candidate.Action == RuleAction.Attend ? TimeKind.Start : TimeKind.Deadline);
@@ -97,8 +96,8 @@ public static class MessageReviewCandidate
     internal static string FullContent(SchoolMessage message)
     {
         var normalized = MessageNormalizer.Normalize(message);
-        var text = string.Join("\n", normalized.Segments.Where(segment => segment.Kind == SegmentKind.Text).Select(segment => segment.Text));
-        var images = string.Join("\n", normalized.Segments.Where(segment => segment.Kind == SegmentKind.Image).Select(segment => segment.Text));
+        var text = GroupRelay.AnalysisText(normalized, SegmentKind.Text);
+        var images = GroupRelay.AnalysisText(normalized, SegmentKind.Image);
         var kind = !MessageRuleExtractor.HasAction(text) && MessageRuleExtractor.HasAction(images) ? SegmentKind.Image : SegmentKind.Text;
         return string.Join("\n", message.Segments.Where(segment => segment.Kind == kind).Select(segment => segment.Text));
     }

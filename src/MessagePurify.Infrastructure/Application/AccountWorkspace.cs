@@ -468,8 +468,7 @@ public sealed partial class AccountWorkspace
         // the actual source message, using its send time; OCR remains a suggestion.
         var source = messages.Find(notice.Source)?.Message;
         if (source is null) return null;
-        var text = string.Join("\n", source.Segments.Where(segment => segment.Kind == SegmentKind.Text)
-            .Select(segment => segment.Text));
+        var text = GroupRelay.AnalysisText(source, SegmentKind.Text);
         return (notice.Candidate.Action == RuleAction.Attend
             ? MessageDateParser.Parse(text, source.SentAt, "China Standard Time", Core.TimeKind.Start)
             : MessageDateParser.ParseNotice(text, source.SentAt, "China Standard Time")).Time;

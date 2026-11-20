@@ -275,6 +275,51 @@ public sealed class MessageReviewCompatibilityTests : IDisposable
         Assert.Equal(old[0].Id, Tasks().FindReview(old[1].Id)!.ConsolidatedIntoId);
     }
 
+    private const string RelayText = "#接龙\n截止时间：11月17日 12:00\n1. 同学甲 已完成选课\n2. 同学乙 已完成选课";
+    private static SchoolMessage Relay(string id) => Message(id) with { Segments = [new(SegmentKind.Text, RelayText)] };
+
+    [Fact]
+    public void GroupRelay_NewAndPreviouslyExtractedMessagesKeepEvidenceWithoutReminder()
+    {
+        var old = Relay("extracted");
+        SeedLegacy(old, count: 1, saveReviews: false);
+        var workspace = Workspace();
+        Assert.Equal(1, workspace.ProcessPending(Pinned(), Now));
+        var fresh = Relay("fresh");
+        Assert.True(workspace.Ingest(fresh, Pinned(), MessageOrigin.History, "sync", Now));
+        Assert.Empty(workspace.Snapshot(Now).Items);
+        foreach (var key in new[] { old.Key, fresh.Key })
+        {
+            var stored = Messages().Find(key)!;
+            Assert.Equal(RelayText, Assert.Single(stored.Message.Segments).Text);
+            Assert.Equal(RuleDisposition.Ignored, Assert.Single(stored.Extraction!.Candidates).Disposition);
+        }
+        Assert.False(Workspace().Ingest(fresh, Pinned(), MessageOrigin.History, "again", Now));
+    }
+
+    [Fact]
+    public void GroupRelay_LegacyPendingGoesToTrashOnceAndManualUndoSurvivesReopen()
+    {
+        var relay = Relay("relay");
+        var pending = Assert.Single(SeedLegacy(relay, count: 1));
+        var other = Assert.Single(SeedLegacy(Message("homework"), count: 1));
+        var history = Operations();
+        var workspace = Workspace();
+        var item = Tasks().FindReview(pending.Id)!;
+        Assert.Equal(ReviewState.Ignored, item.State);
+        Assert.Equal(item.IgnoredAt!.Value.AddHours(24), item.UndoExpiresAt);
+        Assert.Equal(ReviewState.Pending, Tasks().FindReview(other.Id)!.State);
+        Assert.Equal(RelayText, Assert.Single(Messages().Find(relay.Key)!.Message.Segments).Text);
+        foreach (var (id, entry) in history) Assert.Equal(entry, Operations()[id]);
+        var beforeReopen = Operations();
+        Workspace();
+        Assert.Equal(beforeReopen, Operations());
+        workspace.Execute(new(Account, "undo-ignore", item.Id, "undo-relay", item.Version,
+            UndoOperationId: item.UndoOperationId), item.IgnoredAt.Value.AddMinutes(1));
+        Workspace();
+        Assert.Equal(ReviewState.Pending, Tasks().FindReview(item.Id)!.State);
+    }
+
     private sealed record Operation(string Request, string ResultKind, string ResultId,
         string ProcessedAt, string? Before, string After);
     private Dictionary<string, Operation> Operations()

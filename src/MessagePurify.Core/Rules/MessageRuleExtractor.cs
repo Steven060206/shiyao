@@ -11,8 +11,8 @@ public static class MessageRuleExtractor
     {
         var originalMessage = message;
         message = MessageNormalizer.Normalize(message);
-        var text = string.Join("\n", message.Segments.Where(s => s.Kind == SegmentKind.Text).Select(s => s.Text));
-        var imageText = string.Join("\n", message.Segments.Where(s => s.Kind == SegmentKind.Image).Select(s => s.Text));
+        var text = GroupRelay.AnalysisText(message, SegmentKind.Text);
+        var imageText = GroupRelay.AnalysisText(message, SegmentKind.Image);
         var evidence = new[] { message.Key }.Concat(message.Segments
             .Where(s => s.Kind == SegmentKind.Quote && s.Reference is not null)
             .Select(s => s.Reference!)).Distinct().ToArray();
@@ -168,7 +168,7 @@ public static class MessageRuleExtractor
     {
         if (candidate.TargetTaskId is not null) return false;
         if (candidate.Action == RuleAction.Inform) return true;
-        var parts = SplitActions(candidate.Title);
+        var parts = SplitActions(GroupRelay.WithoutResponses(candidate.Title));
         return parts.Count > 0 && parts.All(part => GetAction(part.Text) == RuleAction.Inform ||
             (GetAction(part.Text) is not (RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Remind)
                 && IsOptional(part.Text)));
