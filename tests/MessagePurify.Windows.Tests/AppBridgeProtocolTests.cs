@@ -81,6 +81,19 @@ public sealed class AppBridgeProtocolTests
     }
     private const string Command = """{"id":"request-1","operation":"complete","parameters":{"accountId":"12345","id":"task-9007199254740993","operationId":"op-1","version":2}}""";
 
+    [Theory]
+    [InlineData("ignore", "true", true)]
+    [InlineData("ignore", "42", false)]
+    [InlineData("accept-review", "true", false)]
+    [InlineData("snapshot", "true", false)]
+    public void Compact_batch_receipts_are_only_available_for_versioned_ignores(string operation, string flag, bool expected)
+    {
+        var json = Command.Replace("\"complete\"", $"\"{operation}\"")
+            .Replace("\"version\":2", $"\"version\":2,\"generation\":0,\"deferSnapshot\":{flag}");
+        Assert.Equal(expected, AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json, out _));
+        Assert.False(AppBridgeProtocol.TryParse(AppBridgeProtocol.PageUrl, json.Replace("\"generation\":0,", ""), out _));
+    }
+
     [Fact]
     public void Parses_versioned_command_without_rounding_identifiers()
     {

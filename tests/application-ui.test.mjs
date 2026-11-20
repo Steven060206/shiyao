@@ -64,10 +64,14 @@ const mockScript = `(() => {
   backend.release = () => { backend.hold=false; for (const command of backend.held.splice(0)) respond(command); };
   function respond(command) {
     const parameters=command.parameters || {};
+    if(command.operation==='snapshot' && backend.failSnapshotOnce) {
+      backend.failSnapshotOnce=false;backend.emit({id:command.id,success:false,error:'读取本地数据失败'});return;
+    }
     if(command.operation==='set-appearance') { backend.appearance=clone(parameters);backend.emit({id:command.id,success:true});return; }
     if(command.operation==='set-autostart') { backend.startupEnabled=parameters.enabled;backend.emit({id:command.id,success:true,startupEnabled:backend.startupEnabled});return; }
     if (backend.failNext && command.operation !== 'snapshot' && command.operation !== 'mark-read') {
-      const error=backend.failNext;backend.failNext=null;backend.emit({id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
+      const error=backend.failNext;backend.failNext=null;
+      backend.emit(parameters.deferSnapshot ? {id:command.id,success:false,error} : {id:command.id,success:false,error,snapshot:backend.snapshot,status:backend.status});return;
     }
     if(command.operation==='export-backup') {
       backend.exportedSnapshot=clone(backend.snapshot);
@@ -150,6 +154,7 @@ const mockScript = `(() => {
     backend.projectMergeSuggestions();
     if(backend.snapshot)backend.snapshot.generatedAt=new Date().toISOString();
     if(backend.failAfterStructureOnce && ['merge-tasks','split-task','keep-separate'].includes(command.operation)){backend.failAfterStructureOnce=false;backend.emit({id:command.id,success:false,error:'本地数据操作失败，原数据已保留。',snapshot:backend.snapshot,status:backend.status});return;}
+    if(command.operation==='ignore' && parameters.deferSnapshot) {backend.emit({id:command.id,success:true});return;}
     backend.emit({id:command.id,success:true,snapshot:backend.snapshot,status:backend.status});
   }
   window.chrome = window.chrome || {};
@@ -1526,6 +1531,35 @@ test('正式页面通过 WebView 桥显示与修改持久化事项', { timeout: 
     const bulkFixture = () => ({ ...structuredClone(fixture), accountId: '54321' });
     const bulkReady = async data => { await evaluate('backend.release();backend.realAcceptIds=true;resetBatchSelection();hostError="";detailError=null'); await push(data); await nav('pending'); await change('#search', ''); };
     const choose = id => click(`[data-batch-id="${id}"]`);
+    await t.test('批量忽略逐条接收保存回执，只在收尾请求完整列表', async () => {
+      const data = bulkFixture();
+      data.items = Array.from({length:8}, (_, i) => ({...structuredClone(data.items[2]), id:'perf-'+i, unread:true}));
+      await bulkReady(data);
+      await waitFor('requests.size===0');
+      const start = await evaluate('backend.messages.length');
+      await click('#batch-select-all'); await click('[data-action=batch-ignore]');
+      await waitFor('document.querySelector("#batch-result").textContent.includes("已忽略 8 项") && document.querySelectorAll("[data-batch-id]").length===0');
+      const sent = await evaluate(`backend.messages.slice(${start})`);
+      const writes = sent.filter(message => message.operation === 'ignore');
+      assert.equal(writes.length, 8);
+      assert.ok(writes.every(message => message.parameters.deferSnapshot === true));
+      assert.equal(new Set(writes.map(message => message.parameters.operationId)).size, 8);
+      assert.equal(sent.filter(message => message.operation === 'snapshot').length, 1);
+      assert.equal(sent.filter(message => message.operation === 'mark-read').length, 0);
+      await nav('trash');
+      assert.equal(await evaluate('document.querySelectorAll(".task-row").length'), 8);
+    });
+    await t.test('批量忽略保存成功后刷新失败，重读列表不会重复忽略', async () => {
+      await bulkReady(bulkFixture()); await choose('review1'); await waitFor('requests.size===0');
+      const start = await evaluate('backend.messages.length');
+      await evaluate('backend.failSnapshotOnce=true'); await click('[data-action=batch-ignore]');
+      await waitFor('document.querySelector("#host-error").textContent.includes("列表暂未刷新")');
+      assert.match(await evaluate('document.querySelector("#batch-result").textContent'), /已忽略 1 项；保留 0 项；失败 0 项/);
+      await click('[data-action=refresh]');
+      await waitFor('snapshot.items.find(item=>item.id==="review1").state==="ignored"');
+      assert.equal(await evaluate('document.querySelector("#host-error").hidden'), true);
+      assert.equal(await evaluate(`backend.messages.slice(${start}).filter(message=>message.operation==='ignore').length`), 1);
+    });
     await t.test('批量忽略只处理当前筛选勾选项，保留逐条撤销和独立操作标识', async () => {
       await bulkReady(bulkFixture()); await change('#search', '图片预习');
       await click('#batch-select-all'); await capture('ui-batch-review-dark.png'); await click('[data-action=batch-ignore]');

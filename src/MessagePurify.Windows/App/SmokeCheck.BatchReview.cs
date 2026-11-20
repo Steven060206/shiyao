@@ -26,9 +26,24 @@ internal static partial class SmokeCheck
             window.Show();
             await window.Ready.Task.WaitAsync(TimeSpan.FromSeconds(30));
             await WaitAsync(window, "document.querySelectorAll('[data-batch-id]').length === 2");
-            await EvaluateAsync(window, "document.querySelector('#batch-select-all').click()");
+            var ignoreRequests = new List<string>();
+            window.Browser.CoreWebView2.WebMessageReceived += (_, args) =>
+            {
+                if (AppBridgeProtocol.TryParse(args.Source, args.WebMessageAsJson, out var request) && request!.Operation == "ignore")
+                    ignoreRequests.Add(request.Id);
+            };
+            await EvaluateAsync(window, """
+                window.compactReplies = [];
+                chrome.webview.addEventListener('message', ({data}) => {
+                    if (data.id && data.success && !('snapshot' in data)) compactReplies.push(data.id);
+                });
+                document.querySelector('#batch-select-all').click();
+                """);
             await EvaluateAsync(window, "document.querySelector('[data-action=batch-ignore]').click()");
             await WaitAsync(window, "document.querySelector('#batch-result').textContent.includes('已忽略 2 项')");
+            if (ignoreRequests.Count != 2 || await EvaluateAsync(window,
+                $"{JsonSerializer.Serialize(ignoreRequests)}.every(id => compactReplies.includes(id))") != "true")
+                throw new InvalidDataException("批量忽略应逐条返回保存结果，列表在批次结束时刷新。");
             var ignored = workspace.Snapshot(DateTimeOffset.UtcNow).Items.Where(item => before.Any(original => original.Id == item.Id)).ToArray();
             if (ignored.Length != 2 || ignored.Any(item => item.State != "ignored" || item.UndoOperationId is null)
                 || ignored.Select(item => item.UndoOperationId).Distinct().Count() != 2)

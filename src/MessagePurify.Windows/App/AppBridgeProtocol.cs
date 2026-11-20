@@ -20,7 +20,7 @@ public static class AppBridgeProtocol
     {
         "accountId", "id", "operationId", "version", "date", "time", "timeKind",
         "undoOperationId", "targetTaskVersion", "course", "excluded", "theme", "reducedMotion", "enabled", "title", "priority",
-        "mergeWithId", "mergeWithVersion", "mergeSelection", "newItemId", "state", "evidenceIndexes", "generation", "motion", "previewId", "preferenceTheme", "preferenceMotion", "desktopTransparency"
+        "mergeWithId", "mergeWithVersion", "mergeSelection", "newItemId", "state", "evidenceIndexes", "generation", "motion", "previewId", "preferenceTheme", "preferenceMotion", "desktopTransparency", "deferSnapshot"
     };
 
     public static bool IsTrustedSource(string source) => Uri.TryCreate(source, UriKind.Absolute, out var uri)
@@ -38,6 +38,8 @@ public static class AppBridgeProtocol
                 || !Text(root, "id", 128, out var id) || !Text(root, "operation", 32, out var operation)
                 || !Operations.Contains(operation) || !root.TryGetProperty("parameters", out var parameters)
                 || !UniqueObject(parameters) || parameters.EnumerateObject().Any(p => !ParameterNames.Contains(p.Name))) return false;
+            if (parameters.TryGetProperty("deferSnapshot", out var deferred) &&
+                (operation != "ignore" || deferred.ValueKind != JsonValueKind.True || !parameters.TryGetProperty("generation", out _))) return false;
             if (operation == "sync-now")
             {
                 if (parameters.EnumerateObject().Any()) return false;

@@ -17,6 +17,8 @@
 
 ## 当前测试版
 
+- beta.17 加快待确认的批量忽略。勾选的消息逐条保存，批次结束时统一刷新列表，每条仍可在回收站单独撤销。
+
 - [beta.16](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.16) 过滤置顶群的接龙回执名单。单独发布的作业和签到要求照常识别；升级时首次纠正的旧待确认可在回收站撤销。
 
 - [beta.15](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.15) 提高侧栏“处理”“记录”的字号、字重与对比度。[导航预览](docs/verification/2026-11-13-nav-groups.md)。

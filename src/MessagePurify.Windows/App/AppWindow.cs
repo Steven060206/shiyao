@@ -261,6 +261,13 @@ public sealed class AppWindow : Window
                 ? "version_conflict" : "事项或连接已变化，请核对最新内容后重试。";
         }
         catch (Exception) { error = "本地数据操作失败，原数据已保留。"; }
+        // Each bulk ignore still commits and invalidates the desktop views independently.
+        // The page requests one authoritative snapshot after the individual receipts.
+        if (request!.Operation == "ignore" && request.Parameters.TryGetProperty("deferSnapshot", out _))
+        {
+            Post(new { id = request.Id, success = error is null, error });
+            return;
+        }
         await PublishAsync(request!.Id, error);
     }
 

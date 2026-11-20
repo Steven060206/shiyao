@@ -40,7 +40,7 @@ let manualOpen = false, structureOpen = null, mergedSourceId = null;
 let isRestoring = false, backupPreview = null;
 let imagePreview = null, imageOpener = null, settingsSection = 'appearance';
 const sourceExpansion = new Map(), ocrExpansion = new Map();
-let batchRunning = false, batchResult = '', batchEpoch = 0;
+let batchOperation = null, batchResult = '', batchEpoch = 0;
 const batchSelection = new Map();
 const requests = new Map(), busy = new Set(), drafts = new Map(), manualDrafts = new Map(), structureDrafts = new Map(), groupDrafts = new Map(), readAttempts = new Set();
 const cacheCleanupErrors = new Map();
@@ -131,6 +131,7 @@ function request(operation, parameters, itemId = null, complete = null) {
   const timer = setTimeout(() => {
     const pending = requests.get(id); if (!pending) return;
     if (pending.complete) {
+      if (pending.operation === 'snapshot') requests.delete(id);
       pending.timedOut = true;
       pending.complete({ success: false, error: 'command_timeout' });
       render(); return;
@@ -156,9 +157,12 @@ function request(operation, parameters, itemId = null, complete = null) {
     else hostError = errorLabel('command_timeout');
     render();
   }, 15000);
-  const refreshTarget = operation === 'snapshot' && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen?.draftKey } : null;
+  const refreshTarget = operation === 'snapshot' && !complete && selected()?.kind === 'task' ? { accountId: snapshot.accountId, id: selectedId, structureDraftKey: structureOpen?.draftKey } : null;
   requests.set(id, { operation, itemId, busyKey, timer, refreshTarget, accountId: parameters.accountId, generation: parameters.generation, structural, structureDraftKey, structureOperationId: parameters.operationId, startedAt, complete });
-  try { bridge.postMessage({ id, operation, parameters }); }
+  try {
+    bridge.postMessage({ id, operation, parameters });
+    if (parameters.deferSnapshot) return;
+  }
   catch {
     complete?.({ success: false, error: 'bridge_unavailable' });
     clearTimeout(timer); requests.delete(id); if (busyKey) busy.delete(busyKey);
@@ -172,7 +176,7 @@ function request(operation, parameters, itemId = null, complete = null) {
   if ((['clean-cache', 'retry-image'].includes(operation) || backupOperations.includes(operation)) && page === 'settings') renderSettings();
 }
 function command(operation, item, extra = {}) {
-  if (!snapshot || !item || busy.has(item.id)) return;
+  if (!snapshot || !item || busy.has(item.id) || (batchOperation === 'ignore' && batchReview(item))) return;
   detailError = null;
   request(operation, { accountId: snapshot.accountId, id: item.id, operationId: uuid(), version: item.version, ...extra }, item.id);
 }
@@ -180,7 +184,7 @@ function releaseBusy(pending) {
   if (pending.busyKey && ![...requests.values()].some(request => request.busyKey === pending.busyKey && !request.timedOut)) busy.delete(pending.busyKey);
 }
 function markRead(item) {
-  if (!item?.unread || !snapshot || restoreLocked()) return;
+  if (!item?.unread || !snapshot || restoreLocked() || (batchOperation === 'ignore' && page === 'pending')) return;
   const key = `${snapshot.accountId}/${item.id}/${item.version}`;
   if (readAttempts.has(key)) return;
   readAttempts.add(key);
@@ -219,9 +223,11 @@ function receive(message) {
     clearTimeout(pending.timer); requests.delete(message.id);
     releaseBusy(pending);
     pending.complete?.(message);
-    if (pending.complete && pending.accountId !== snapshot?.accountId) { render(); return; }
+    if (pending.complete && (pending.accountId !== snapshot?.accountId ||
+        (message.snapshot && message.snapshot.accountId !== pending.accountId))) { render(); return; }
     if (pending.accountId === snapshot?.accountId && pending.generation !== undefined && pending.generation !== generation()
       && pending.operation !== 'restore-backup') { render(); return; }
+    if (pending.operation === 'ignore' && pending.complete && !message.snapshot) return;
     if (backupOperations.includes(pending.operation)) {
       if (pending.accountId !== snapshot?.accountId || message.backupPreview?.preview?.accountId && message.backupPreview.preview.accountId !== pending.accountId) { render(); return; }
       if (!message.success) backupErrors.set(pending.accountId, errorLabel(message.error));
@@ -505,21 +511,24 @@ function renderList() {
   const viewingStructure = structureOpen?.accountId === snapshot?.accountId && structureOpen?.id === selectedId && selected()?.kind === 'task';
   if (!visible.some(item => item.id === selectedId) && !viewingStructure) selectedId = visible[0]?.id || null;
   $('list-summary').textContent = `${visible.length} 项${snapshot ? ' · 按原消息时间倒序' : ' · 等待本地应用'}`;
-  const rowMarkup = visible.length ? visible.map(item => `${page === 'pending' && batchReview(item) ? `<div class="batch-row"><label class="batch-check"><input type="checkbox" data-batch-id="${html(item.id)}" aria-label="选择${html(item.title)}" ${batchSelection.has(item.id) ? 'checked' : ''} ${batchRunning || restoreLocked() || busy.has(item.id) ? 'disabled' : ''}></label>` : ''}<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
+  const rowMarkup = visible.length ? visible.map(item => `${page === 'pending' && batchReview(item) ? `<div class="batch-row"><label class="batch-check"><input type="checkbox" data-batch-id="${html(item.id)}" aria-label="选择${html(item.title)}" ${batchSelection.has(item.id) ? 'checked' : ''} ${batchOperation || restoreLocked() || busy.has(item.id) ? 'disabled' : ''}></label>` : ''}<button class="task-row ${item.id === selectedId ? 'selected' : ''} ${item.kind === 'task' && past(item) && item.timeKind !== 'start' ? 'overdue' : item.due === localDate() ? 'today' : ''}" data-action="select" data-id="${html(item.id)}">
     <div class="row-top"><h2 title="${html(item.title)}">${html(item.title)}${item.unread ? '<i class="unread-dot" aria-label="未读"></i>' : ''}${item.changeLabel ? `<span class="change-badge">${html(item.changeLabel)}</span>` : ''}</h2><span class="tag ${reviewItem(item) ? 'pending' : Number.isInteger(item.priority) ? 'p' + item.priority : ''}">${reviewItem(item) ? html(states[item.state]) : Number.isInteger(item.priority) ? 'P' + item.priority : html(states[item.state])}</span></div>
     <div class="row-meta"><span title="${html(item.course || item.group || '来源待核对')}">${html(item.course || item.group || '来源待核对')}${item.source === 'manual' ? '<span class="manual-source">手动添加</span>' : ''}</span><span>${item.kind === 'task' ? `${item.state === 'active' && past(item) && item.timeKind !== 'start' ? '逾期 · ' : item.due === localDate() ? '今天 · ' : ''}${item.timeKind === 'start' ? '开始' : '截止'} ${html(dateLabel(item))}` : html(states[item.state])}</span></div>
     ${reviewItem(item) && item.reviewReasons?.length ? `<p class="row-note">${html(item.reviewReasons.join(' · '))}</p>` : ''}${page === 'pending' && batchReview(item) && (item.due || item.suggestedDue) ? `<p class="row-note">${item.due ? '日期' : '建议日期'}：${html(item.due || item.suggestedDue)}${html(item.due ? item.time ? ' ' + item.time : '' : item.suggestedTime ? ' ' + item.suggestedTime : '')}</p>` : ''}</button>${page === 'pending' && batchReview(item) ? '</div>' : ''}`).join('') : emptyMessage();
   if ($('rows').innerHTML !== rowMarkup) retainFocus($('rows'), () => { $('rows').innerHTML = rowMarkup; });
 }
 const batchReview = item => item.kind === 'review' && item.state === 'pending' && !item.isCourseConflict;
+function renderBatchResult() {
+  $('batch-result').textContent = batchResult; $('batch-result').hidden = !batchResult;
+}
 function resetBatchSelection() {
-  batchEpoch++; batchRunning = false; batchResult = ''; batchSelection.clear();
+  batchEpoch++; batchOperation = null; batchResult = ''; batchSelection.clear();
   $('batch-date').value = ''; $('batch-use-suggestions').checked = false;
 }
 function renderBatchControls(visible) {
   const eligible = page === 'pending' ? visible.filter(batchReview) : [];
   if (page === 'pending') for (const id of batchSelection.keys()) if (!eligible.some(item => item.id === id)) batchSelection.delete(id);
-  const locked = batchRunning || restoreLocked() || !loadedAccount();
+  const locked = batchOperation || restoreLocked() || !loadedAccount();
   const all = $('batch-select-all');
   all.checked = eligible.length > 0 && eligible.every(item => batchSelection.has(item.id));
   all.indeterminate = !all.checked && batchSelection.size > 0; all.disabled = locked || eligible.length === 0;
@@ -527,25 +536,40 @@ function renderBatchControls(visible) {
   $('batch-count').textContent = `已选 ${batchSelection.size} 项`;
   document.querySelectorAll('[data-action=batch-ignore],[data-action=batch-accept]').forEach(button => { button.disabled = locked || batchSelection.size === 0; });
   $('batch-date').disabled = locked; $('batch-use-suggestions').disabled = locked;
-  $('batch-result').textContent = batchResult; $('batch-result').hidden = !batchResult;
-  $('filters').querySelectorAll('input,select').forEach(control => { control.disabled = batchRunning; });
+  renderBatchResult();
+  $('filters').querySelectorAll('input,select').forEach(control => { control.disabled = batchOperation; });
 }
 async function runBatchReview(operation) {
-  if (batchRunning || restoreLocked() || !loadedAccount() || !batchSelection.size) return;
+  if (batchOperation || restoreLocked() || !loadedAccount() || !batchSelection.size) return;
   const accountId = snapshot.accountId, currentGeneration = generation(), epoch = ++batchEpoch;
   const chosen = [...batchSelection], date = $('batch-date').value, useSuggestions = $('batch-use-suggestions').checked;
   const reasons = new Map(), unconfirmed = new Set(); let success = 0, skipped = 0, failed = 0;
+  const ignoring = operation === 'ignore';
+  const currentBatch = () => epoch === batchEpoch && accountId === snapshot?.accountId && currentGeneration === generation();
+  let receivedIgnore = false;
   const addReason = reason => reasons.set(reason, (reasons.get(reason) || 0) + 1);
   const summarize = () => `${operation === 'ignore' ? '已忽略' : '已加入'} ${success} 项；保留 ${skipped} 项；失败 ${failed} 项${unconfirmed.size ? `；结果未确认 ${unconfirmed.size} 项。请等待回执或刷新核对，剩余条目未处理` : ''}${reasons.size ? '。' + [...reasons].map(([reason, count]) => `${reason}（${count}项）`).join('；') : ''}`;
-  batchRunning = true;
+  async function finishBatch() {
+    if (receivedIgnore && !restoreLocked()) {
+      const reply = await new Promise(resolve => request('snapshot', { accountId }, null, resolve));
+      if (!currentBatch()) return;
+      if (!reply.success || reply.snapshot?.accountId !== accountId) {
+        hostError = '列表暂未刷新，请点击刷新核对。';
+        renderStatus();
+      }
+    }
+    batchResult = summarize(); renderBatchResult();
+  }
+  batchOperation = operation;
+  if (ignoring) render();
   try {
     for (const [id, version] of chosen) {
-      if (epoch !== batchEpoch || accountId !== snapshot?.accountId || currentGeneration !== generation()) return;
+      if (!currentBatch()) return;
       if (restoreLocked()) { skipped += chosen.length - success - skipped - failed; addReason('正在恢复备份，剩余条目未处理'); break; }
       const item = items().find(item => item.id === id);
       const reason = !item || !batchReview(item) ? '条目已处理' : item.version !== version ? '内容已变化，请重新勾选核对' : busy.has(id) ? '条目正在处理' : operation === 'accept-review' && (!item.canAccept || item.targetTaskId) ? '需补信息或单独核对关联变更' : null;
       if (reason) { skipped++; addReason(reason); continue; }
-      const extra = {};
+      const extra = ignoring ? { deferSnapshot: true } : {};
       if (operation === 'accept-review') {
         const formalDate = date || item.due || (useSuggestions ? item.suggestedDue : '');
         const time = date ? '' : item.due ? item.time || '' : item.suggestedTime || '';
@@ -553,23 +577,28 @@ async function runBatchReview(operation) {
         if (!validDate || time && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) { skipped++; addReason('日期或时间待确认'); continue; }
         Object.assign(extra, { date: formalDate, time, timeKind: item.timeKind || 'deadline' });
       }
-      batchResult = `正在处理 ${success + skipped + failed + 1} / ${chosen.length} 项`; render();
+      batchResult = `正在处理 ${success + skipped + failed + 1} / ${chosen.length} 项`;
+      if (ignoring) renderBatchResult(); else render();
       let responded = false;
       const result = await new Promise(resolve => request(operation, { accountId, id, version, operationId: uuid(), ...extra }, id, response => {
         resolve(response);
-        if (epoch !== batchEpoch || accountId !== snapshot?.accountId || currentGeneration !== generation()) return;
+        if (!currentBatch()) return;
         if (responded && !unconfirmed.delete(id)) return;
         responded = true;
         if (response.success) { success++; batchSelection.delete(id); drafts.delete(id); }
         else if (response.error === 'command_timeout') unconfirmed.add(id);
         else { failed++; addReason(errorLabel(response.error)); }
-        if (!batchRunning) { batchResult = summarize(); render(); }
+        if (ignoring && !['command_timeout', 'bridge_unavailable'].includes(response.error)) receivedIgnore = true;
+        if (!batchOperation) void finishBatch();
       }));
-      if (epoch !== batchEpoch || accountId !== snapshot?.accountId || currentGeneration !== generation()) return;
+      if (!currentBatch()) return;
       if (['command_timeout', 'bridge_unavailable'].includes(result.error)) { skipped += chosen.length - success - skipped - failed - unconfirmed.size; break; }
     }
-    batchResult = summarize();
-  } finally { if (epoch === batchEpoch) { batchRunning = false; render(); } }
+    if (unconfirmed.size) {
+      batchResult = summarize();
+      void finishBatch();
+    } else await finishBatch();
+  } finally { if (epoch === batchEpoch) { batchOperation = null; render(); } }
 }
 function draftFor(item) {
   if (!drafts.has(item.id)) drafts.set(item.id, {
@@ -850,6 +879,7 @@ function updateDetailControls() {
     if (courseList.innerHTML !== options) courseList.innerHTML = options;
   }
   $('detail-pane').querySelectorAll('button').forEach(button => { button.disabled = Boolean(item && (busy.has(item.id) || busy.has(structureBusyKey(snapshot?.accountId, item.id)))) || (button.id === 'pending-confirm-button' && !item?.canAccept && !item?.canAcceptNotice)
+    || (batchOperation === 'ignore' && item && batchReview(item) && ['accept-review','accept-notice','ignore','reject'].includes(button.dataset.action))
     || button.dataset.action === 'retry-image' && busy.has(`image:${button.dataset.imageId}`); });
   const confirm = $('pending-confirm-button');
   if (confirm) { if (!confirm.dataset.label) confirm.dataset.label = confirm.textContent; confirm.textContent = item && busy.has(item.id) ? '正在提交…' : confirm.dataset.label; }
@@ -1028,7 +1058,7 @@ document.addEventListener('input', event => {
 document.addEventListener('change', event => {
   const element = event.target;
   if (element.id === 'batch-select-all' || element.dataset.batchId) {
-    if (batchRunning || restoreLocked()) return;
+    if (batchOperation || restoreLocked()) return;
     const candidates = pageItems().filter(batchReview);
     const chosen = element.dataset.batchId ? candidates.filter(item => item.id === element.dataset.batchId) : candidates;
     for (const item of chosen) if (element.checked) batchSelection.set(item.id, item.version); else batchSelection.delete(item.id);
