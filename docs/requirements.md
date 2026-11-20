@@ -1,8 +1,8 @@
 # 拾要（原消息提纯）：第一版已确认需求
 
-更新日期：2026-11-20。本文记录已确认的产品需求，供后续界面设计和开发使用。
+更新日期：2026-11-21。本文记录已确认的产品需求，供后续界面设计和开发使用。
 
-置顶群接龙误报（2026-11-20）：群内接龙回执名单中的截止时间、报名、签到或已完成等内容不产生任务、通知或待确认。独立发布的作业、签到要求及接龙发起通知仍按原规则识别。已有误判的未处理自动待确认应能纠正，保留原文及人工处理记录。
+置顶群接龙误报（2026-11-20）：群内接龙回执名单中的截止时间、报名、签到或已完成等内容不产生任务、通知或待确认。独立发布的作业、签到要求及接龙发起通知仍按原规则识别。已有误判的未处理自动待确认应能纠正，保留原文及人工处理记录。2026-11-21 已随 beta.16 验证、部署并发布。
 
 导航分组可读性（2026-11-13，已实现、验证、部署并发布beta.15）：左侧“处理”“记录”需更醒目，采用16px加粗主文字色与更清楚的组内间距，浅深主题一致；保留导航操作与现有布局。本机与GitHub均已更新，数据与设置保留；预览、测试与交付见docs/verification/2026-11-13-nav-groups.md。
 
@@ -28,11 +28,13 @@
 
 待确认通知修复（2026-10-16，用户已授权实施）：普通通知因课程/群关联等信息需要核对而进入待确认时，必须提供“确认并加入通知”，不能只允许加入任务而将通知永久拦住。确认单条通知不要求填写任务日期，不自动确认整个群的课程关系；保留完整原消息、证据及审核历史，从待确认移入“通知”列表，不创建任务。已有待确认通知沿用相同入口，重试或重新同步不重复生成通知；通知仍可按既有规则补正式日期后转为任务。修复已实现并部署：Core323、Infrastructure718、Windows477、Node177及126项Native/桌面验证通过；原四库14表和4份设置保留，未代用户处理真实消息。GitHub源码与beta.4下载包已发布，附件uploaded、draft=false、prerelease=true，匿名公开下载HTTP200，实际记录见交接。
 
-本机文件保留规则（2026-10-15，用户已确认）：项目继续使用；可删除旧发布副本、诊断和安装测试产物、验包副本及可重新生成的构建输出，只保留现用最新版程序与最新下载包（现为beta.15）。正式入口仍为 `.tools/published/app-card-controls/`，最新下载包为 `.tools/releases/Shiyao-0.1.0-beta.15-win-x64.zip`。本轮另保留更新前程序回滚副本。源码、测试源码、开发运行依赖、QQ/NapCat 配置、账号数据及真实数据保护快照保留；该授权来自2026-10-15本机清理决定，本轮未执行文件清理。
+本机文件保留规则（2026-10-15，用户已确认）：项目继续使用；可删除旧发布副本、诊断和安装测试产物、验包副本及可重新生成的构建输出，只保留现用最新版程序与最新下载包（现为beta.16）。正式入口仍为 `.tools/published/app-card-controls/`，最新下载包为 `.tools/releases/Shiyao-0.1.0-beta.16-win-x64.zip`。本轮另保留更新前程序回滚副本。源码、测试源码、开发运行依赖、QQ/NapCat 配置、账号数据及真实数据保护快照保留；该授权来自2026-10-15本机清理决定，本轮未执行文件清理。
 
 审核粒度反馈（2026-10-15，用户已选择 A，已实现、部署并发布beta.3）：已确认需要减少同一原消息的重复审核。默认一条 QQ 原消息只生成一个完整待确认项，保留完整内容，需要独立管理时由用户手动拆开；不采用多个事项集中一张审核卡的方案。原 MessageRuleExtractor.SplitActions 按标点及动作词产生多个候选、AccountCandidateRouter 逐候选保存，造成重复审核；现内部分析后仅输出完整业务候选。多个独立日期不自动任选其一；多项关联变更不误改某个已有任务。同一原消息已有、尚未处理的自动拆分项原子兼容为一个待确认项，保留已确认、已忽略、已拒绝和手动拆分的处理结果及操作历史。不同群或不同消息 ID 不因此合并。Core323/323、Infrastructure704/704、Windows456/456、Node175/175及正式发布包119项Native/桌面检查通过；beta.3 ZIP和合成Setup验证通过。正式498个文件与已验证产物相同，最终由Explorer独立后台启动PID23888；真实物理profile整理后3条待确认，12条旧拆分子项保留，99条审核、84条原已处理记录、1条原任务及187条其他历史操作核对通过；随后新增1条确认、1条完成和2条忽略操作，当前待确认0，原有处理与历史保留。四库正常、4份设置与使用后快照一致，托盘和卡片按真实数据核对通过。此前82条审核/pending0结论属于Codex MSIX包虚拟profile，已纠正验证范围，两套数据分别保护、未合并。源码和beta.3下载包均已同步GitHub，附件uploaded且匿名下载HTTP200。
 
-最新交付状态（2026-11-13，beta.15）：导航分组标题已加大、加粗并使用主文字色；源码d6c4547、公开包240621079字节，uploaded、draft=false、prerelease=true、匿名HTTP200。正式目录.tools/published/app-card-controls/更新2676文件，Explorer后台PID58356，无包身份且不在工具Job；保留MessagePurify.Shiyao身份与约2 DIP间距。四库16表全行和5设置与更新前快照一致，两张空卡附着隐藏；未触发QQ同步。Node217、Core428、Infrastructure865、Windows522、Python41及Native151通过。回滚程序.tools/nav-labels/rollback/program，数据快照.tools/nav-labels/beta15-before-restart；原有真实验收边界不变。
+最新交付状态（2026-11-21，beta.16）：置顶群接龙回执过滤已部署到 .tools/published/app-card-controls/ 并公开发布。已核对2676个正式程序文件，四库16表和5设置与退出后的保护快照一致，托盘重新打开拾要成功。沿用 MessagePurify.Shiyao 和约2 DIP间距。真实副本的41条接龙在有无已确认课程时均过滤41/41。
+
+上一轮交付状态（2026-11-13，beta.15）：导航分组标题已加大、加粗并使用主文字色；源码d6c4547、公开包240621079字节，uploaded、draft=false、prerelease=true、匿名HTTP200。正式目录.tools/published/app-card-controls/更新2676文件，Explorer后台PID58356，无包身份且不在工具Job；保留MessagePurify.Shiyao身份与约2 DIP间距。四库16表全行和5设置与更新前快照一致，两张空卡附着隐藏；未触发QQ同步。Node217、Core428、Infrastructure865、Windows522、Python41及Native151通过。回滚程序.tools/nav-labels/rollback/program，数据快照.tools/nav-labels/beta15-before-restart；原有真实验收边界不变。
 
 上一轮交付状态（2026-11-13，beta.14）：温润界面改版已实现、验证、部署并公开发布。源码0786b40，正式目录.tools/published/app-card-controls/的2676文件与干净发布一致，保留MessagePurify.Shiyao任务栏身份和约2 DIP吸附间距；Explorer后台启动PID53148、无包身份且不在工具Job，托盘打开通过。四库16表全行及5设置与更新前快照一致，两张空卡附着隐藏；QQ进程未变，未触发真实同步。干净Node214、Core428、Infrastructure865、Windows522、OCR25、运行库7、打包9、Native151及中文空格路径Setup/随包离线OCR验证通过；收尾设计规范及交付边界回归后工作区Node216通过。下载包240620895字节/2696条目，uploaded、draft=false、prerelease=true、匿名HTTP200。回滚程序.tools/ui-redesign/rollback/program，数据保护快照.tools/ui-redesign/beta14-before-deploy。浅深预览及实际验收边界见本轮验证记录。
 
@@ -288,7 +290,7 @@
 - 分发包和公开仓库不得包含用户的 QQ 聊天数据、账号数据库、Token 或登录材料；同学使用各自的 QQ 账号和本地数据。
 - 2026-10-14 用户选择 A：公开源码，同时提供软件下载；明确授权助手直接上传到自己的 GitHub。仓库与打包等普通实现细节由助手处理，无需再次确认上传授权。
 - 后续每次软件更新，都同步 GitHub 源码和 Release 下载包；这是持续要求，无需重复确认。完成测试、验证和 Git commit 后推送 main，并构建、验证、发布新版下载包，核对附件上传状态和公开下载链接。失败或尚未完成时如实记录。
-- 当前最新测试版已发布：Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.13；下载附件`Shiyao-0.1.0-beta.13-win-x64.zip`，240617086字节（约229 MiB），uploaded、draft=false、prerelease=true，匿名下载HTTP200。main已同步端口修复，下载包从提交6f7fd4e干净源码构建，干净Node204、发布版及中文空格解压版各147项Native/合成Setup/随包离线OCR四图通过。原有人工处理保留，真实13001连接和账号核对通过，真实QQ图片下载/OCR仍未验收；其他电脑恢复仍待验收。
+- 当前最新测试版已发布：Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.16，附件 [Shiyao-0.1.0-beta.16-win-x64.zip](https://github.com/Steven060206/shiyao/releases/download/v0.1.0-beta.16/Shiyao-0.1.0-beta.16-win-x64.zip) 为240622072字节。uploaded、draft=false、prerelease=true，匿名下载HTTP200，公开摘要与本地一致。main已同步接龙回执修复，包从功能提交5a68af3干净源码构建。
 - 公开源码与首次测试版已上传：仓库 https://github.com/Steven060206/shiyao，Release https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.1；下载附件`Shiyao-0.1.0-beta.1-win-x64.zip`，119915264字节（约114 MB），状态uploaded、draft=false、prerelease=true。同学完整解压后运行Setup.cmd，再运行Start.cmd或桌面快捷方式。
 
 ## 参考来源

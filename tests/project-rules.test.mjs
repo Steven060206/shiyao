@@ -75,8 +75,11 @@ test('最新GitHub测试版、下载附件和构建示例版本一致，保留�
   assert.ok(currentRelease, '需求必须记录当前已发布测试版');
   const version = currentRelease.match(/releases\/tag\/v([\d.]+-beta\.\d+)/)?.[1];
   assert.ok(version, '必须记录实际Release版本');
-  assert.ok(currentRelease.includes(`Shiyao-${version}-win-x64.zip`));
-  assert.ok(read('README.md').includes(`--version ${version}`));
+  const releases = 'https://github.com/Steven060206/shiyao/releases';
+  assert.ok(currentRelease.includes(`${releases}/download/v${version}/Shiyao-${version}-win-x64.zip`));
+  const readme = read('README.md');
+  assert.ok(readme.includes(`${releases}/tag/v${version}`));
+  assert.ok(readme.includes(`--version ${version}`));
   const handoff = read('docs/HANDOFF.md').split('### GitHub 更新同步')[1]?.split('### 当前接续')[0];
   assert.ok(handoff?.includes(`/releases/tag/v${version}`));
   for (const content of [currentRelease, handoff]) {
