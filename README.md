@@ -17,7 +17,7 @@
 
 ## 当前测试版
 
-- beta.17 加快待确认的批量忽略。勾选的消息逐条保存，批次结束时统一刷新列表，每条仍可在回收站单独撤销。
+- beta.17 加快待确认的批量忽略。勾选的消息逐条保存，批次结束时统一刷新列表，每条仍可在回收站单独撤销。[发布记录](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.17)
 
 - [beta.16](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.16) 过滤置顶群的接龙回执名单。单独发布的作业和签到要求照常识别；升级时首次纠正的旧待确认可在回收站撤销。
 
@@ -56,7 +56,7 @@ python tools/prepare_ocr_runtime.py --python-archive PATH_TO/python-3.12.10-embe
 从 [NapCat 官方 v4.18.37 Release](https://github.com/NapNeko/NapCatQQ/releases/tag/v4.18.37) 下载未配置的 `NapCat.Framework.zip`，再用 Python 3 创建同学下载包。`--ocr-runtime-directory` 将完整 portable 目录复制到干净发布目录的 `ocr` 子目录；已存在时拒绝覆盖，省略此参数则要求发布目录已经包含完整 OCR。
 
 ```powershell
-python tools/build_release.py --publish-directory .tools/published/release --ocr-runtime-directory .tools/ocr/portable --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.16
+python tools/build_release.py --publish-directory .tools/published/release --ocr-runtime-directory .tools/ocr/portable --napcat-archive PATH_TO/NapCat.Framework.zip --output-directory .tools/releases --version 0.1.0-beta.17
 ```
 
 测试命令：
