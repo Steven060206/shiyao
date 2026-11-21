@@ -8,6 +8,19 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const documents = ['AGENTS.md', 'docs/requirements.md', 'docs/HANDOFF.md'];
 
+test('本地判断的交付说明区分开发样本、独立留出周和计时范围', () => {
+  const handoff = read('docs/HANDOFF.md');
+  const start = handoff.indexOf('### 本地行动识别改进');
+  const end = handoff.indexOf('\n### ', start + 4);
+  assert.ok(start >= 0 && end > start);
+  const result = handoff.slice(start, end);
+  assert.match(result, /516 条消息，明确事项可见数从 29\/50 到 37\/50/);
+  assert.match(result, /300 条、5 个群[^。]*15\/26 到 16\/26/);
+  assert.match(result, /计时范围为正文与已有 OCR 的行动判断/);
+  assert.match(result, /本地模型标注，尚待本人核实/);
+  assert.match(read('docs/requirements.md'), /日常使用无需调用云端模型或消耗 API Token/);
+});
+
 test('图片接入的当前说明保留本地处理、人工日期确认及历史验证边界', () => {
   for (const file of ['README.md', 'src/MessagePurify.Windows/App/README.md', 'tests/README.md',
     'docs/superpowers/specs/2026-10-10-windows-app-design.md',
