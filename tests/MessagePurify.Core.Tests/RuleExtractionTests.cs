@@ -17,6 +17,120 @@ public class RuleExtractionTests
     private static RuleCandidate Single(string text, RuleContext? context = null, string sender = "teacher") =>
         Assert.Single(MessageRuleExtractor.Extract(Message(text, sender), context ?? Context()).Candidates);
 
+    [Theory]
+    [InlineData("本周作业：教材第24页第3题", RuleAction.Complete)]
+    [InlineData("请同学们课前阅读实验指导书", RuleAction.Complete)]
+    [InlineData("实训分组每组四人，请各组协商组长", RuleAction.Complete)]
+    [InlineData("同学们记得今天选课", RuleAction.Register)]
+    [InlineData("请在明天之前填写课程反馈表", RuleAction.Register)]
+    [InlineData("各位同学明天在实验室上课", RuleAction.Attend)]
+    public void LocalInstructionsSurfaceForAnUnconfirmedGroup(string text, RuleAction expected)
+    {
+        var result = Single(text, Context(course: null));
+        Assert.Equal(RuleDisposition.Pending, result.Disposition);
+        Assert.Equal(expected, result.Action);
+        Assert.Equal(text, result.Title);
+    }
+
+    [Theory]
+    [InlineData("明天请填写课程反馈表吗？")]
+    [InlineData("我已经填写了课程反馈表")]
+    [InlineData("同学们不用填写课程反馈表")]
+    [InlineData("有兴趣的同学可自行填写课程反馈表")]
+    [InlineData("大家看看选课系统的截图")]
+    [InlineData("明天的选课攻略真有意思")]
+    [InlineData("全班今晚组队打游戏")]
+    [InlineData("大家记得明天去吃饭")]
+    [InlineData("请大家明天扫码领红包")]
+    [InlineData("会议主题：读书会\n会议时间：明天\n这是会议回放和入会链接")]
+    [InlineData("#接龙\n请大家明天前填写课程反馈表\n1. 甲 已填写\n2. 乙 已填写")]
+    public void LocalInstructionsLeaveChatterReceiptsAndQuestionsFiltered(string text) =>
+        Assert.Equal(RuleDisposition.Ignored, Single(text).Disposition);
+
+    [Fact]
+    public void DirectFormAndImageEvidenceKeepSeparateDateAuthority()
+    {
+        const string text = "请于10月13日之前填写课程反馈表";
+        var direct = Single(text);
+        Assert.Equal(RuleDisposition.Task, direct.Disposition);
+        Assert.Equal(new DateOnly(2026, 10, 13), direct.Time?.Date);
+        var image = Message("") with { Segments = [new(SegmentKind.Image, text, AssetId: "form")] };
+        var captured = Assert.Single(MessageRuleExtractor.Extract(image, Context()).Candidates);
+        Assert.Equal(RuleDisposition.Pending, captured.Disposition);
+        Assert.Null(captured.Time);
+        Assert.Equal(direct.Time, captured.SuggestedTime);
+    }
+
+    [Fact]
+    public void AMeetingCardKeepsParticipationOpenAndItsTimeHasAStartRole()
+    {
+        var invite = Single("会议主题：课程答疑\n会议时间：明天18点\n入会链接：见教学平台");
+        Assert.Equal(RuleDisposition.Pending, invite.Disposition);
+        Assert.Equal(RuleAction.Attend, invite.Action);
+        Assert.Equal(TimeKind.Start, invite.Time?.Kind);
+        Assert.False(invite.Assessments.Action.Reliable);
+        Assert.False(MessageRuleExtractor.IsNoticeCandidate(invite));
+    }
+
+    [Fact]
+    public void AnOptionalOfferAndADistinctLocalObligationRemainOneMandatoryReview()
+    {
+        var result = Single("感兴趣可报名讲座。全班明天前填写课程反馈表");
+        Assert.Equal(RuleDisposition.Pending, result.Disposition);
+        Assert.False(MessageRuleExtractor.IsNoticeCandidate(result));
+    }
+
+    [Fact]
+    public void WeakGroupRequestCannotCreateATaskEvenWithAKnownCourseAndDate()
+    {
+        var result = Single("请同学们明天查收班内材料");
+        Assert.Equal(RuleDisposition.Pending, result.Disposition);
+        Assert.False(result.Assessments.Action.Reliable);
+        Assert.Contains(result.ReviewReasons, reason => reason.Contains("核对具体事项"));
+    }
+
+    [Fact]
+    public void AQueryStringInAnInvitationIsPreservedInTheOriginal()
+    {
+        const string text = "会议主题：习题答疑\n会议时间：明天18点\n点击链接入会 https://example.test/room?key=demo";
+        var result = Single(text);
+        Assert.Equal(RuleDisposition.Pending, result.Disposition);
+        Assert.Equal(RuleAction.Attend, result.Action);
+        Assert.Equal(text, result.Title);
+    }
+
+    [Fact]
+    public void ACaptionDisclaimingAnImageDoesNotCreateANewFormRequest()
+    {
+        var message = Message("") with { Segments = [
+            new(SegmentKind.Text, "仅供参考，不用填"), new(SegmentKind.Image, "请明天填写学籍信息表", AssetId: "example")] };
+        Assert.Equal(RuleDisposition.Ignored, Assert.Single(MessageRuleExtractor.Extract(message, Context()).Candidates).Disposition);
+    }
+
+    [Theory]
+    [InlineData("腾讯会议\n扫码入会", RuleAction.Attend)]
+    [InlineData("请在课前阅读实\n验指导书", RuleAction.Complete)]
+    [InlineData("请填\n写课程反馈表", RuleAction.Register)]
+    public void LocalOcrHandlesInvitesAndWrappedInstructions(string text, RuleAction action)
+    {
+        var image = Message("") with { Segments = [new(SegmentKind.Image, text, AssetId: "notice")] };
+        var result = Assert.Single(MessageRuleExtractor.Extract(image, Context()).Candidates);
+        Assert.Equal(RuleDisposition.Pending, result.Disposition);
+        Assert.Equal(action, result.Action);
+        Assert.Null(result.Time);
+    }
+
+    [Fact]
+    public void CompetingWrappedImageDeadlinesDoNotPrefillEitherOne()
+    {
+        var image = Message("") with { Segments = [new(SegmentKind.Image,
+            "请于10月13日填\n写课程反馈表\n\n请于10月14日填\n写学籍信息表", AssetId: "two-forms")] };
+        var result = Assert.Single(MessageRuleExtractor.Extract(image, Context()).Candidates);
+        Assert.Equal(RuleDisposition.Pending, result.Disposition);
+        Assert.Null(result.Time);
+        Assert.Null(result.SuggestedTime);
+    }
+
     [Fact]
     public void ClassMonitorImageSubmissionRequirementKeepsDeadlineAsSuggestion()
     {

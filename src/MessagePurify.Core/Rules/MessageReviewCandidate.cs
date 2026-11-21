@@ -3,7 +3,10 @@ namespace MessagePurify.Core;
 /// <summary>一条原消息只形成一个完整审核项；内部行动分析不自动拆出独立事项。</summary>
 public static class MessageReviewCandidate
 {
-    public static RuleCandidate Combine(SchoolMessage message, IReadOnlyList<RuleCandidate> candidates)
+    public static RuleCandidate Combine(SchoolMessage message, IReadOnlyList<RuleCandidate> candidates) =>
+        Combine(message, candidates, null);
+
+    internal static RuleCandidate Combine(SchoolMessage message, IReadOnlyList<RuleCandidate> candidates, SegmentKind? contentKind)
     {
         if (candidates.Count == 0 || candidates.Any(candidate => candidate.Disposition == RuleDisposition.Ignored))
             throw new ArgumentException("合并输入必须包含至少一个非忽略业务候选。", nameof(candidates));
@@ -12,7 +15,7 @@ public static class MessageReviewCandidate
         var evidence = new[] { message.Key }.Concat(candidates.SelectMany(candidate => candidate.Evidence))
             .Concat(message.Segments.Where(segment => segment.Kind == SegmentKind.Quote && segment.Reference is not null)
                 .Select(segment => segment.Reference!)).Distinct().ToArray();
-        var complete = first with { Title = FullContent(message), Evidence = evidence };
+        var complete = first with { Title = FullContent(message, contentKind), Evidence = evidence };
         if (candidates.Count == 1) return complete;
 
         var reasons = candidates.SelectMany(candidate => candidate.ReviewReasons).Distinct().ToList();
@@ -76,7 +79,6 @@ public static class MessageReviewCandidate
         if (candidate.Time is not null || candidate.Disposition != RuleDisposition.Pending ||
             candidate.TargetTaskId is not null || IsChange(candidate.Action)) return candidate;
         var text = GroupRelay.AnalysisText(MessageNormalizer.Normalize(message), SegmentKind.Text);
-        if (!MessageRuleExtractor.HasAction(text)) return candidate;
         var time = MessageRuleExtractor.ResolveReviewTime(text,
             message.SentAt, timeZoneId, candidate.Action == RuleAction.Attend ? TimeKind.Start : TimeKind.Deadline);
         if (time is null) return candidate;
@@ -93,13 +95,16 @@ public static class MessageReviewCandidate
         };
     }
 
-    internal static string FullContent(SchoolMessage message)
+    internal static string FullContent(SchoolMessage message, SegmentKind? contentKind = null)
     {
-        var normalized = MessageNormalizer.Normalize(message);
-        var text = GroupRelay.AnalysisText(normalized, SegmentKind.Text);
-        var images = GroupRelay.AnalysisText(normalized, SegmentKind.Image);
-        var kind = !MessageRuleExtractor.HasAction(text) && MessageRuleExtractor.HasAction(images) ? SegmentKind.Image : SegmentKind.Text;
-        return string.Join("\n", message.Segments.Where(segment => segment.Kind == kind).Select(segment => segment.Text));
+        if (contentKind is null)
+        {
+            var normalized = MessageNormalizer.Normalize(message);
+            var text = GroupRelay.AnalysisText(normalized, SegmentKind.Text);
+            var image = GroupRelay.AnalysisText(normalized, SegmentKind.Image);
+            contentKind = !MessageRuleExtractor.HasAction(text) && MessageRuleExtractor.HasAction(image) ? SegmentKind.Image : SegmentKind.Text;
+        }
+        return string.Join("\n", message.Segments.Where(segment => segment.Kind == contentKind).Select(segment => segment.Text));
     }
 
     private static bool IsChange(RuleAction action) => action is RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Remind;

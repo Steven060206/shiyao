@@ -5,14 +5,15 @@ namespace MessagePurify.Core;
 /// <summary>只生成可审查的候选，不改变正式事项、状态或通知。</summary>
 public static class MessageRuleExtractor
 {
-    public const string RuleVersion = "m2-local-v2-message-review";
+    public const string RuleVersion = "m2-local-v3-school-instructions";
+    public const string PreviousRuleVersion = "m2-local-v2-message-review";
 
     public static RuleExtractionResult Extract(SchoolMessage message, RuleContext context)
     {
         var originalMessage = message;
         message = MessageNormalizer.Normalize(message);
-        var text = GroupRelay.AnalysisText(message, SegmentKind.Text);
-        var imageText = GroupRelay.AnalysisText(message, SegmentKind.Image);
+        var text = SchoolInstruction.WithoutLinkTargets(GroupRelay.AnalysisText(message, SegmentKind.Text));
+        var imageText = SchoolInstruction.WithoutLinkTargets(GroupRelay.AnalysisText(message, SegmentKind.Image));
         var evidence = new[] { message.Key }.Concat(message.Segments
             .Where(s => s.Kind == SegmentKind.Quote && s.Reference is not null)
             .Select(s => s.Reference!)).Distinct().ToArray();
@@ -29,16 +30,21 @@ public static class MessageRuleExtractor
             return Diagnostic("发布账号已由用户确认排除", RuleDisposition.Ignored);
         if (context.CourseExcluded) return Diagnostic("课程已由用户确认排除", RuleDisposition.Ignored);
 
-        var imageOnly = !HasAction(text) && HasAction(imageText);
-        var content = imageOnly ? imageText : text;
-        var parts = SplitActions(content);
+        var parts = SplitActions(text);
+        var imageOnly = parts.Count == 0 && !string.IsNullOrWhiteSpace(imageText);
+        if (imageOnly)
+        {
+            parts = SplitActions(imageText, fromImage: true);
+            if (text.Length > 0 && SchoolInstruction.IsExcludedCaption(text))
+                parts.RemoveAll(part => part.LocalAction is not null);
+        }
         if (parts.Count == 0) return Diagnostic("没有明确的新行动或学校通知，引用仅保留为证据", RuleDisposition.Ignored);
-        var candidates = parts.Select(part => ExtractPart(part.Text, imageOnly, part.Conditional)).ToArray();
+        var candidates = parts.Select(part => ExtractPart(part, imageOnly)).ToArray();
         var businessCandidates = candidates.Where(candidate => candidate.Disposition != RuleDisposition.Ignored).ToArray();
         if (businessCandidates.Length == 0)
             return Diagnostic(string.Join("；", candidates.SelectMany(candidate => candidate.ReviewReasons).Distinct()), RuleDisposition.Ignored);
         return new(RuleVersion, [MessageReviewCandidate.ResolveTime(originalMessage,
-            MessageReviewCandidate.Combine(originalMessage, businessCandidates), context.TimeZoneId)]);
+            MessageReviewCandidate.Combine(originalMessage, businessCandidates, imageOnly ? SegmentKind.Image : SegmentKind.Text), context.TimeZoneId)]);
 
         RuleExtractionResult Diagnostic(string reason, RuleDisposition disposition)
         {
@@ -48,15 +54,16 @@ public static class MessageRuleExtractor
                     assessment, assessment), [reason], evidence)]);
         }
 
-        RuleCandidate ExtractPart(string part, bool ocr, bool conditional)
+        RuleCandidate ExtractPart(ActionPart match, bool ocr)
         {
-            var action = GetAction(part);
+            var part = match.Text;
+            var action = match.Action;
             var optional = IsOptional(part);
             var question = Match(part, "[?？]|是不是|是否|能否|要不要|有没有|什么时候|几点|啥时候|[吗么呢](?:$|[,，])");
             var negated = Match(part, "(?:不用|无需|不需要|不要求|不必|不要|禁止)(?:再|继续)?(?:提交|交|报名|参加|完成)|不(?:提交|交作业|参加)|不可以(?:参加|报名)|(?:不|未|没有|不会|不能|不必|不要|无需)(?:再)?(?:取消|延期|延后|推迟|改为|改成|补交|重交|重新提交|新增)|(?:取消|延期|推迟)(?:不了|不掉)");
-            var uncertain = conditional || Match(part, "可能|也许|大概|似乎|好像|据说|听说|应该|估计|猜测|传闻|(?:老师|同学|有人|别人)说|转述|如果|假如|假设|倘若|要是|希望(?:取消|延期|改为|改成)|考虑(?:取消|延期|改为|改成)");
+            var uncertain = match.Conditional || Match(part, "可能|也许|大概|似乎|好像|据说|听说|应该|估计|猜测|传闻|(?:老师|同学|有人|别人)说|转述|如果|假如|假设|倘若|要是|希望(?:取消|延期|改为|改成)|考虑(?:取消|延期|改为|改成)");
             var partialCancel = action == RuleAction.Cancel && Match(part, "取消.*(?:格式|纸质版|电子版|打印|附件)");
-            var actionReliable = !ocr && !question && !negated && !uncertain && !partialCancel;
+            var actionReliable = !ocr && !question && !negated && !uncertain && !partialCancel && match.ReviewReason is null;
             var courseReliable = !string.IsNullOrWhiteSpace(context.ConfirmedCourse);
             var restricted = Match(part, "(?:[0-9一二三四五六七八九十]+)(?:年级|级|班)|大[一二三四]|高[一二三]|初[一二三]|补考同学|选(?:了|修|课)|已选|未选|仅限|只面向|只限|其他课程|外校|非本课程");
             var audienceReliable = courseReliable && !restricted;
@@ -85,6 +92,7 @@ public static class MessageRuleExtractor
             if (uncertain) reasons.Add("猜测或无出处转述，需要确认原通知");
             if (partialCancel) reasons.Add("仅取消格式、介质或附件要求，不等于取消整个事项，需要确认要求变更");
             if (ocr) reasons.Add("图片识别仅作建议，需要查看原图确认");
+            if (match.ReviewReason is not null) reasons.Add(match.ReviewReason);
             if (!courseReliable) reasons.Add("课程或群关联尚未确认");
             if (restricted) reasons.Add("明确限定的年级、班级或选课对象尚未确认适用于本人");
             if (!timeReliable) reasons.Add(parsed.Issue switch
@@ -107,7 +115,7 @@ public static class MessageRuleExtractor
             var priority = priorityTime is not null ? PriorityCalculator.Calculate(priorityTime,
                 context.Now, PriorityCalculator.HasClearConsequence(part)) : (int?)null;
             var assessments = new RuleAssessments(
-                new(ocr ? "行动来自图片识别，尚未人工确认" : question ? "疑问" : negated ? "否定行动" : uncertain ? "条件、猜测或转述" : partialCancel ? "仅取消部分要求，不能取消整个事项" : $"明确{action}行动", actionReliable),
+                new(ocr ? "行动来自图片识别，尚未人工确认" : match.ReviewReason ?? (question ? "疑问" : negated ? "否定行动" : uncertain ? "条件、猜测或转述" : partialCancel ? "仅取消部分要求，不能取消整个事项" : $"明确{action}行动"), actionReliable),
                 new(restricted ? "原文限定对象尚未与本人核对" : courseReliable ? "已确认本人课程关系" : "对象相关性尚未确认", audienceReliable),
                 new(courseReliable ? "本账号、本群的已确认课程关系" : "未确认课程关系", courseReliable),
                 new(action == RuleAction.Cancel ? "取消不需要新时间" : timeReliable ? "原文时间或不需要正式时间的通知" : parsed.Detail ?? "正式时间尚未确认", timeReliable),
@@ -118,13 +126,26 @@ public static class MessageRuleExtractor
         }
     }
 
-    private sealed record ActionPart(string Text, bool Conditional);
+    private sealed record ActionPart(string Text, bool Conditional, RuleAction? LocalAction = null, string? ReviewReason = null)
+    {
+        public RuleAction Action => LocalAction ?? GetAction(Text);
+    }
 
-    private static List<ActionPart> SplitActions(string text)
+    private static List<ActionPart> SplitActions(string text, bool fromImage = false)
     {
         var result = new List<ActionPart>();
         foreach (var sentence in Regex.Split(text, @"[;；。\n]+|(?<=[?!？！])"))
         {
+            if (SchoolInstruction.Identify(sentence) is { } localAction && GetAction(sentence) == RuleAction.Inform)
+            {
+                result.Add(new(sentence.Trim(), false, localAction));
+                continue;
+            }
+            if (SchoolInstruction.NeedsReview(sentence) && !HasAction(sentence))
+            {
+                result.Add(new(sentence.Trim(), false, RuleAction.Complete, "群内向同学提出了要求，请核对具体事项及适用对象"));
+                continue;
+            }
             var prefix = "";
             var conditional = false;
             foreach (var clause in Regex.Split(sentence, @"[,，]|(?:以及|同时|并且|然后|并|和)(?=.{0,12}(?:提交|交|完成|考试|参加|报名))"))
@@ -155,6 +176,29 @@ public static class MessageRuleExtractor
                 else prefix += value + "，";
             }
         }
+        if (result.Count == 0)
+        {
+            if (SchoolInstruction.IsMeetingInvitation(text))
+                return [new(text, false, RuleAction.Attend, "识别到入会邀请，请核对是否需要本人出席")];
+            // OCR can put an assignment heading and its page numbers on successive lines.
+            if (text.Contains('\n') && SchoolInstruction.IsPageAssignment(text))
+                result.Add(new(text, false, RuleAction.Complete));
+            else if (fromImage)
+            {
+                // OCR sometimes breaks one instruction in the middle of a phrase.
+                // Consider adjacent lines only, and keep the source as one review.
+                var lines = text.Split('\n', StringSplitOptions.TrimEntries);
+                for (var i = 1; i < lines.Length; i++)
+                {
+                    if (lines[i - 1].Length == 0 || lines[i].Length == 0 ||
+                        "。；;？！!?".Contains(lines[i - 1][^1])) continue;
+                    var pair = lines[i - 1] + lines[i];
+                    var action = SchoolInstruction.Identify(pair);
+                    if (action is null && !SchoolInstruction.NeedsReview(pair)) continue;
+                    result.Add(new(pair, false, action ?? RuleAction.Complete));
+                }
+            }
+        }
         return result;
     }
 
@@ -168,9 +212,9 @@ public static class MessageRuleExtractor
     {
         if (candidate.TargetTaskId is not null) return false;
         if (candidate.Action == RuleAction.Inform) return true;
-        var parts = SplitActions(GroupRelay.WithoutResponses(candidate.Title));
-        return parts.Count > 0 && parts.All(part => GetAction(part.Text) == RuleAction.Inform ||
-            (GetAction(part.Text) is not (RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Remind)
+        var parts = SplitActions(SchoolInstruction.WithoutLinkTargets(GroupRelay.WithoutResponses(candidate.Title)));
+        return parts.Count > 0 && parts.All(part => part.Action == RuleAction.Inform ||
+            (part.Action is not (RuleAction.Cancel or RuleAction.Postpone or RuleAction.NewRequirement or RuleAction.Remind)
                 && IsOptional(part.Text)));
     }
 
@@ -216,13 +260,14 @@ public static class MessageRuleExtractor
 
     internal static TaskTime? ResolveReviewTime(string text, DateTimeOffset sentAt, string timeZoneId, TimeKind kind)
     {
+        text = SchoolInstruction.WithoutLinkTargets(text);
         var parts = SplitActions(text);
-        var sharedDate = parts.Count > 0 && (parts.All(part => GetAction(part.Text) == RuleAction.Attend) ||
+        var sharedDate = parts.Count > 0 && (parts.All(part => part.Action == RuleAction.Attend) ||
             parts.All(part => MessageDateParser.ParseReviewDate(WithoutBackgroundDates(part.Text),
                 sentAt, timeZoneId, TimeKind.Deadline).Time is not null));
         if (!sharedDate) return null;
         var parsedText = WithoutBackgroundDates(text);
-        var sameRole = parts.All(part => (GetAction(part.Text) == RuleAction.Attend) == (kind == TimeKind.Start));
+        var sameRole = parts.All(part => (part.Action == RuleAction.Attend) == (kind == TimeKind.Start));
         var exact = sameRole ? MessageDateParser.Parse(parsedText, sentAt, timeZoneId, kind).Time : null;
         return exact ?? MessageDateParser.ParseReviewDate(parsedText, sentAt, timeZoneId, kind).Time;
     }

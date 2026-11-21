@@ -17,6 +17,24 @@ public sealed class CandidateRoutingTests : IDisposable
     private readonly string dataRoot = Path.Combine(Path.GetTempPath(), "MessagePurify-routing-" + Guid.NewGuid().ToString("N"));
 
     [Fact]
+    public void AStoredBeta17MissIsRecheckedOnceBeforeItsFirstRoute()
+    {
+        var msg = Message(text: "请明天填写课程反馈表");
+        var store = Messages();
+        var context = Context(course: null);
+        Assert.True(new LocalMessageProcessor(store).Ingest(msg, Pinned(), context, MessageOrigin.History, "old", Now));
+        var ignored = MessageRuleExtractor.Extract(Message(text: "你好"), context) with
+            { RuleVersion = MessageRuleExtractor.PreviousRuleVersion };
+        Assert.True(store.TrySaveExtraction(msg.Key, 0, ignored, Now));
+        Assert.Equal(1, Router().RoutePending(context, Pinned()));
+        Assert.Equal(0, Router().RoutePending(context, Pinned()));
+        var review = Assert.Single(Tasks().ListReviews());
+        Assert.Equal(RuleAction.Register, review.Candidate.Action);
+        Assert.Equal(msg.Key, Assert.Single(review.Candidate.Evidence));
+        Assert.Empty(Tasks().ListTasks());
+    }
+
+    [Fact]
     public void RoutePending_OrdinaryReliableTaskDoesNotRequireTrustedPublisher()
     {
         var message = Message();

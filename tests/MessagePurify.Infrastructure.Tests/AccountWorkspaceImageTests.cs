@@ -31,6 +31,25 @@ public sealed class AccountWorkspaceImageTests : IDisposable
     }
     private static readonly ImageRecognition Recognition = new("明天18点前提交数学作业", []);
 
+    [Theory]
+    [InlineData("扫码入会\n腾讯会议")]
+    [InlineData("请在课前阅读实\n验指导书")]
+    public async Task LocalOcrCandidatePersistsOnceAndUsesTheRecognizedText(string recognizedText)
+    {
+        var workspace = Workspace();
+        var message = Image(text: "见图");
+        Assert.True(workspace.Ingest(message, pins, MessageOrigin.History, "local-test", Now));
+        Assert.Equal(1, await workspace.DownloadImagesAsync((_, _) => Task.FromResult(new OneBotImage(Original())), Now));
+        var recognizer = new Recognizer(new(recognizedText, []));
+        Assert.Equal(1, await workspace.RecognizeImagesAsync(recognizer, Now));
+        var review = Assert.Single(workspace.Snapshot(Now).Items, item => item.Kind == "review");
+        Assert.Equal(recognizedText, review.Title);
+        Assert.Equal("pending", review.State);
+        Assert.Null(review.Due);
+        Assert.Equal(0, await workspace.RecognizeImagesAsync(recognizer, Now));
+        Assert.Equal(review.Id, Assert.Single(workspace.Snapshot(Now).Items, item => item.Kind == "review").Id);
+    }
+
     [Fact]
     public async Task ImageOnlyBecomesOneReviewWithSuggestedTimeAndUnchangedOriginal()
     {

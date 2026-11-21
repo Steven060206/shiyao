@@ -17,6 +17,8 @@
 
 ## 当前测试版
 
+- beta.18 在本机识别页码作业、实验分组、选课、填表、听课与会议邀请。普通同步会自动判断正文和已有 OCR 文字，无需配置 API Key。邀请及适用对象不明确的要求进入待确认，图片日期只作建议。[发布记录](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.18)
+
 - beta.17 加快待确认的批量忽略。勾选的消息逐条保存，批次结束时统一刷新列表，每条仍可在回收站单独撤销。[发布记录](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.17)
 
 - [beta.16](https://github.com/Steven060206/shiyao/releases/tag/v0.1.0-beta.16) 过滤置顶群的接龙回执名单。单独发布的作业和签到要求照常识别；升级时首次纠正的旧待确认可在回收站撤销。
